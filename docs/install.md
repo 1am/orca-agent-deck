@@ -14,6 +14,8 @@ About 5 minutes. You need Orca, the Elgato Stream Deck app and a Stream Deck (se
    ```
 
    Orca opens the plugin page. Read and accept the access consent: the plugin runs its own code, reads agent status and workspaces, and stores its own data. Orca updates it from the same catalog.
+
+   Without the terminal: in Orca go to Settings, Plugins, Install from Git, and paste `https://github.com/1am/orca-agent-deck`. Orca installs the newest release tag.
 3. In Orca open the command palette and run "Orca Agent Deck: Show status".
 4. Look at the Status key on the deck. Green "OK" with "live" and the Orca version means everything is connected. Anything else shows a short caption: see [troubleshooting](troubleshooting.md).
 5. Start an agent in an Orca pane. To pin the pane you are in to a key, hold a free Pane key (about 1 second). To pick a pane from a list, or to assign a pane on a paired server, use the key's settings in the Elgato app.

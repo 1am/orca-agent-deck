@@ -4,6 +4,7 @@
 //   release.ts checksums         write dist/SHA256SUMS for the plugins, the Orca zip and the diagnostics script
 //   release.ts validate [tag]    check both manifests agree with package.json (and the tag, in CI)
 //   release.ts strip-debug       turn off the Node inspector in the Stream Deck manifest (make package, CI release)
+//   release.ts root-manifest     write orca-plugin.json at the repository root (scripts/export.sh, public repository)
 import { execFileSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { existsSync, readdirSync, readFileSync, writeFileSync, mkdirSync } from 'node:fs';
@@ -17,6 +18,7 @@ const manifest = join(
   'packages/streamdeck-plugin/pl.1am.orca-agent-deck.sdPlugin/manifest.json',
 );
 const orcaManifest = join(root, 'orca-plugin/orca-plugin.json');
+const rootOrcaManifest = join(root, 'orca-plugin.json');
 const changelog = join(root, 'CHANGELOG.md');
 const dist = join(root, 'dist');
 
@@ -178,12 +180,44 @@ function validate(tag?: string): void {
     if (!orca.main || !existsSync(join(root, 'orca-plugin', orca.main)))
       problems.push(`orca-plugin.json main ${orca.main} not found`);
   }
+  // Only the public repository has the root copy (scripts/export.sh writes it).
+  if (existsSync(rootOrcaManifest) && readFileSync(rootOrcaManifest, 'utf8') !== rootManifestText())
+    problems.push(
+      'root orca-plugin.json does not match orca-plugin/orca-plugin.json (release.ts root-manifest)',
+    );
 
   if (problems.length > 0) {
     for (const p of problems) console.error(`release: ${p}`);
     process.exit(1);
   }
   console.log(`release ${version}: manifests ok${tag ? `, tag ${tag} matches` : ''}`);
+}
+
+// Why a root copy: Orca's "Install from Git" reads orca-plugin.json at the repository root only, and
+// has no way to name a subfolder. The copy is the plugin manifest with its file paths under orca-plugin/.
+function rootManifestText(): string {
+  const orca = readJson(orcaManifest) as {
+    main?: string;
+    icon?: string;
+    cover?: { path: string };
+    screenshots?: Array<{ path: string }>;
+  };
+  const under = (path: string): string => `orca-plugin/${path}`;
+  const copy = {
+    ...orca,
+    ...(orca.main && { main: under(orca.main) }),
+    ...(orca.icon && { icon: under(orca.icon) }),
+    ...(orca.cover && { cover: { ...orca.cover, path: under(orca.cover.path) } }),
+    ...(orca.screenshots && {
+      screenshots: orca.screenshots.map((s) => ({ ...s, path: under(s.path) })),
+    }),
+  };
+  return JSON.stringify(copy, null, 2) + '\n';
+}
+
+function writeRootManifest(): void {
+  writeFileSync(rootOrcaManifest, rootManifestText());
+  console.log('orca-plugin.json written at the repository root');
 }
 
 function stripDebug(): void {
@@ -199,9 +233,10 @@ else if (cmd === 'notes') writeNotes();
 else if (cmd === 'checksums') writeChecksums();
 else if (cmd === 'validate') validate(arg);
 else if (cmd === 'strip-debug') stripDebug();
+else if (cmd === 'root-manifest') writeRootManifest();
 else {
   console.error(
-    'usage: release.ts version <x.y.z> | notes | checksums | validate [tag] | strip-debug',
+    'usage: release.ts version <x.y.z> | notes | checksums | validate [tag] | strip-debug | root-manifest',
   );
   process.exit(1);
 }

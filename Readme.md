@@ -32,7 +32,7 @@ Orca Agent Deck has two parts and needs both: a **Stream Deck plugin** (draws th
 
 ## Install from a release
 
-Download the Stream Deck plugin from the [latest GitHub release](https://github.com/1am/orca-agent-deck/releases/latest) and double-click it. Install the Orca plugin from GitHub with `open 'orca://plugins/1am.agent-deck?catalog=https://github.com/1am/orca-agent-deck.git'`. Details and the offline install: [docs/install.md](docs/install.md).
+Download the Stream Deck plugin from the [latest GitHub release](https://github.com/1am/orca-agent-deck/releases/latest) and double-click it. Install the Orca plugin from GitHub with `open 'orca://plugins/1am.agent-deck?catalog=https://github.com/1am/orca-agent-deck.git'`, or paste `https://github.com/1am/orca-agent-deck` into Orca's Settings, Plugins, Install from Git. Details and the offline install: [docs/install.md](docs/install.md).
 
 ## Install from this repository
 
