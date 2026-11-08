@@ -4,7 +4,7 @@
   "id": "agent-deck",
   "publisher": "1am",
   "name": "Orca Agent Deck",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "Shows Orca agent status on a Stream Deck and focuses panes from it.",
   "icon": "orca-plugin/images/icon.png",
   "cover": {

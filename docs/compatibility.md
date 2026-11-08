@@ -14,7 +14,7 @@
 
 | | Status |
 |---|---|
-| Stream Deck Mobile (6 keys, the bundled profile) | Tested |
+| Stream Deck Mobile (6 keys) | Tested |
 | Stream Deck MK.2 hardware | Tested by the maintainer |
 | Other Stream Deck hardware | Untested |
 | OpenDeck and other hosts | Untested. Each release is meant to pass the dual-host smoke checklist in both hosts; results go in the table below. |

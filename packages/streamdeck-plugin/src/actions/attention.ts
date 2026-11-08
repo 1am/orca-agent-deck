@@ -7,7 +7,7 @@ import { InfoKey } from './info-key.ts';
 export class AttentionKey extends InfoKey {
   protected model(c: DeckController) {
     const o = c.overview();
-    // mobile-6 has no Status key: a failed setup check (Orca off or too old) takes over this one.
+    // A page may have no Status key: a failed setup check (Orca off or too old) takes over this one.
     if (o.mode === 'down' || o.unsupported) return statusInfo(o);
     return attentionInfo(o.urgent, o.topState, o.offDeck);
   }

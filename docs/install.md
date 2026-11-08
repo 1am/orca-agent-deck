@@ -6,7 +6,7 @@ Nothing here needs the repo; only the diagnostics script needs Node 18 or newer.
 
 About 5 minutes. You need Orca, the Elgato Stream Deck app and a Stream Deck (see "You need" below).
 
-1. **Stream Deck plugin.** Download `orca-agent-deck-<version>.streamDeckPlugin` from the [latest GitHub release](https://github.com/1am/orca-agent-deck/releases/latest) and double-click it. The Elgato app installs it and offers the "Orca Agent Deck" key profile. Accept it, or drag the Pane, Status and Attention actions from the "Orca Agent Deck" category onto keys.
+1. **Stream Deck plugin.** Download `orca-agent-deck-<version>.streamDeckPlugin` from the [latest GitHub release](https://github.com/1am/orca-agent-deck/releases/latest) and double-click it. The Elgato app installs it. Drag the Pane, Status and Attention actions from the "Orca Agent Deck" category onto keys.
 2. **Orca plugin.** With Orca running, run this in a terminal:
 
    ```sh
@@ -30,7 +30,7 @@ Versions and platforms that have been tested: [compatibility](compatibility.md).
 ## You need
 
 - Orca 1.4.245 or newer, with the `orca` shell command registered (Orca: Settings, register CLI).
-- The Elgato Stream Deck app 7.1 or newer, and a Stream Deck (the bundled key profile is for Stream Deck Mobile, 6 keys).
+- The Elgato Stream Deck app 7.1 or newer, and a Stream Deck.
 - macOS 13 or newer. Windows and Linux are untested; pane raising on press is macOS only.
 - Orca notifications can stay off. Orca Agent Deck does not use them.
 
