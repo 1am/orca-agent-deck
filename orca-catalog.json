@@ -47,11 +47,7 @@
               "name": "workspace.removed"
             }
           ],
-          "capabilities": [
-            "agent:read",
-            "workspace:read",
-            "storage:own"
-          ],
+          "capabilities": ["agent:read", "workspace:read", "storage:own"],
           "images": {
             "icon": {
               "path": "orca-plugin/images/icon.png",
