@@ -1,0 +1,158 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <title>Pane slot</title>
+    <style>
+      body {
+        margin: 0;
+        padding: 8px;
+        font:
+          11px system-ui,
+          sans-serif;
+        color: #d8d8d8;
+        background: #2d2d2d;
+      }
+      label {
+        display: block;
+        margin: 10px 0 3px;
+        color: #9a9a9a;
+      }
+      input,
+      select,
+      button {
+        width: 100%;
+        box-sizing: border-box;
+        font: inherit;
+        color: inherit;
+        background: #3a3a3a;
+        border: 1px solid #555;
+        border-radius: 3px;
+        padding: 5px;
+      }
+      button {
+        margin-top: 10px;
+        cursor: pointer;
+      }
+      .row {
+        display: flex;
+        gap: 6px;
+      }
+      .row > * {
+        flex: 1;
+      }
+      #hint {
+        margin-top: 8px;
+        color: #9a9a9a;
+      }
+    </style>
+  </head>
+  <body>
+    <label for="search">Search</label>
+    <input id="search" placeholder="repo, branch, tab or pane" autocomplete="off" />
+    <label for="pane">Pane</label>
+    <select id="pane" size="10"></select>
+    <button id="clear">Unassign</button>
+    <button id="unmap">Auto-fill</button>
+    <div id="hint"></div>
+    <script>
+      let ws,
+        uuid,
+        panes = [],
+        config = { mode: 'auto', paneKey: null, autofill: true };
+      const $ = (id) => document.getElementById(id);
+      const ICON = {
+        needs_input: '!',
+        error: 'x',
+        working: '*',
+        done: 'v',
+        idle: '-',
+        unreachable: '?',
+        exited: 'o',
+      };
+
+      function send(msg) {
+        ws.send(JSON.stringify({ event: 'sendToPlugin', context: uuid, payload: msg }));
+      }
+
+      // host > repo > branch > tab > pane as optgroups; the group label carries the path.
+      function render() {
+        const words = $('search').value.toLowerCase().split(/\s+/).filter(Boolean);
+        const sel = $('pane');
+        sel.innerHTML = '';
+        const groups = new Map();
+        for (const p of panes) {
+          const path = [p.remote ? `Remote: ${p.host}` : p.host, p.repo, p.branch]
+            .filter(Boolean)
+            .join(' > ');
+          const text = `${path} ${p.tab} ${p.title} ${p.agent ?? 'shell'}`.toLowerCase();
+          if (!words.every((w) => text.includes(w))) continue;
+          if (!groups.has(path)) groups.set(path, []);
+          groups.get(path).push(p);
+        }
+        for (const [path, list] of groups) {
+          const g = document.createElement('optgroup');
+          g.label = path || 'Other';
+          for (const p of list) {
+            const o = document.createElement('option');
+            o.value = p.paneKey;
+            o.textContent = `[${ICON[p.state] ?? '-'}] ${p.agent ?? 'shell'} · ${[p.tab, p.title].filter(Boolean).join(' / ')}`;
+            o.selected = p.paneKey === config.paneKey;
+            g.appendChild(o);
+          }
+          sel.appendChild(g);
+        }
+        $('unmap').hidden = !config.autofill;
+        $('hint').textContent = !panes.length
+          ? 'No panes found. Is Orca running?'
+          : !sel.children.length
+            ? 'No pane matches the search.'
+            : !config.autofill
+              ? config.paneKey
+                ? 'Pinned: this key stays on the chosen pane. Unassign empties it.'
+                : 'Empty: pick a pane to pin it here, or hold the key while the pane is focused in Orca.'
+              : config.mode === 'pinned' && !config.paneKey
+                ? 'Empty: this key stays empty. Pick a pane to pin it, or Auto-fill to let it follow free agent panes.'
+                : config.mode === 'pinned'
+                  ? 'Pinned: this key stays on the chosen pane. Unassign empties it; Auto-fill lets it follow free agent panes.'
+                  : 'Automatic: this key shows the next agent pane not on another key. Pick a pane to pin it here, or Unassign to empty it.';
+      }
+
+      function apply(paneKey) {
+        send({
+          type: 'configure',
+          paneKey,
+        });
+      }
+
+      $('search').oninput = render;
+      $('clear').onclick = () => {
+        config = { mode: 'pinned', paneKey: null };
+        send({ type: 'clear' });
+      };
+      $('unmap').onclick = () => {
+        config.paneKey = null;
+        apply(null);
+      };
+      $('pane').onchange = () => {
+        apply($('pane').value);
+      };
+
+      window.connectElgatoStreamDeckSocket = (port, id, registerEvent) => {
+        uuid = id;
+        ws = new WebSocket('ws://127.0.0.1:' + port);
+        ws.onopen = () => {
+          ws.send(JSON.stringify({ event: registerEvent, uuid }));
+          send({ type: 'load' });
+        };
+        ws.onmessage = (e) => {
+          const m = JSON.parse(e.data);
+          if (m.event !== 'sendToPropertyInspector' || m.payload.type !== 'state') return;
+          panes = m.payload.panes;
+          config = m.payload.config;
+          render();
+        };
+      };
+    </script>
+  </body>
+</html>

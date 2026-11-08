@@ -1,0 +1,9 @@
+kanban
+pnpm-lock.yaml
+coverage
+dist
+*.md
+test/fixtures
+*.sdPlugin/bin
+out
+agent-deck.code-workspace

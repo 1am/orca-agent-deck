@@ -1,0 +1,80 @@
+{
+  "$schema": "https://schemas.elgato.com/streamdeck/plugins/manifest.json",
+  "UUID": "pl.1am.orca-agent-deck",
+  "Name": "Orca Agent Deck",
+  "Version": "0.1.0.0",
+  "Author": "1am",
+  "Description": "Show the state of Orca terminals and agents on your keys and focus them with one press.",
+  "Category": "Orca Agent Deck",
+  "CategoryIcon": "imgs/category",
+  "Icon": "imgs/plugin",
+  "CodePath": "bin/plugin.js",
+  "SDKVersion": 2,
+  "Nodejs": {
+    "Version": "20",
+    "Debug": "enabled"
+  },
+  "Software": {
+    "MinimumVersion": "7.1"
+  },
+  "OS": [
+    {
+      "Platform": "mac",
+      "MinimumVersion": "13"
+    }
+  ],
+  "Profiles": [
+    {
+      "Name": "profiles/mobile-6",
+      "DeviceType": 3,
+      "Readonly": false,
+      "DontAutoSwitchWhenInstalled": false
+    }
+  ],
+  "Actions": [
+    {
+      "UUID": "pl.1am.orca-agent-deck.pane",
+      "Name": "Pane slot",
+      "Tooltip": "Shows an Orca pane and focuses it when pressed.",
+      "Icon": "imgs/action-pane",
+      "PropertyInspectorPath": "ui/pane.html",
+      "Controllers": ["Keypad"],
+      "States": [
+        {
+          "Image": "imgs/key-pane",
+          "TitleAlignment": "middle",
+          "ShowTitle": false
+        }
+      ]
+    },
+    {
+      "UUID": "pl.1am.orca-agent-deck.status",
+      "Name": "Status",
+      "Tooltip": "Shows whether Orca is reachable. Press to refresh.",
+      "Icon": "imgs/action-status",
+      "PropertyInspectorPath": "ui/status.html",
+      "Controllers": ["Keypad"],
+      "States": [
+        {
+          "Image": "imgs/key-status",
+          "TitleAlignment": "middle",
+          "ShowTitle": false
+        }
+      ]
+    },
+    {
+      "UUID": "pl.1am.orca-agent-deck.attention",
+      "Name": "Attention",
+      "Tooltip": "Number of panes that need you. Press to focus the most urgent.",
+      "Icon": "imgs/action-attention",
+      "Controllers": ["Keypad"],
+      "States": [
+        {
+          "Image": "imgs/key-attention",
+          "TitleAlignment": "middle",
+          "ShowTitle": false
+        }
+      ]
+    }
+  ]
+}

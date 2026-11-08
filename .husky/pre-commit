@@ -1,0 +1,28 @@
+#!/bin/sh
+# Blocks metadata (EXIF, XMP, IPTC, GPS) from being committed in images.
+# Staged (added, modified or renamed) images are stripped with exiftool and re-staged; the commit is blocked when that
+# cannot be done safely (exiftool missing, or the image also has unstaged changes).
+
+images=$(git diff --cached --name-only --diff-filter=ACMR -- \
+  ':(icase)*.jpg' ':(icase)*.jpeg' ':(icase)*.png' ':(icase)*.gif' \
+  ':(icase)*.webp' ':(icase)*.tif' ':(icase)*.tiff' ':(icase)*.heic')
+[ -n "$images" ] || exit 0
+
+if ! command -v exiftool >/dev/null 2>&1; then
+  echo "pre-commit: images are staged but exiftool is missing. Install it (brew install exiftool) and commit again." >&2
+  exit 1
+fi
+
+printf '%s\n' "$images" | while IFS= read -r f; do
+  if ! git diff --quiet -- "$f"; then
+    echo "pre-commit: $f has unstaged changes. Stage all of it (git add) or stash the rest, then commit again." >&2
+    exit 1
+  fi
+done || exit 1
+
+printf '%s\n' "$images" | while IFS= read -r f; do
+  exiftool -q -all= -overwrite_original "$f" || { echo "pre-commit: could not strip $f" >&2; exit 1; }
+  git add -- "$f"
+done || exit 1
+
+exec scripts/check-image-metadata.sh --staged

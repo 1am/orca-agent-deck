@@ -1,0 +1,74 @@
+name: Release
+# A push to main whose package.json version has no tag yet builds and publishes that release; the
+# tag is created with it. Runs in the public repository only (the dev repository exports this file).
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: write
+
+concurrency: release
+
+jobs:
+  version:
+    if: github.repository == '1am/orca-agent-deck'
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.v.outputs.version }}
+      new: ${{ steps.v.outputs.new }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - id: v
+        run: |
+          v=$(node -p "require('./package.json').version")
+          echo "version=$v" >> "$GITHUB_OUTPUT"
+          if git rev-parse -q --verify "refs/tags/v$v" >/dev/null; then
+            echo "v$v is already released: nothing to do"
+            echo "new=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "new=true" >> "$GITHUB_OUTPUT"
+          fi
+
+  release:
+    needs: version
+    if: needs.version.outputs.new == 'true'
+    runs-on: ubuntu-latest
+    env:
+      TAG: v${{ needs.version.outputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # release notes fall back to the commits since the previous tag
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 12
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22 # release.ts runs with --experimental-strip-types (Node 22.6+)
+          cache: pnpm
+      - run: pnpm i --frozen-lockfile
+      - run: pnpm lint
+      - name: Check image metadata
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y libimage-exiftool-perl
+          scripts/check-image-metadata.sh
+      - run: pnpm test:integration
+      # A published build must not open the Node inspector port on the user's machine.
+      - run: node --experimental-strip-types scripts/release.ts strip-debug
+      - run: node --experimental-strip-types scripts/release.ts validate "$TAG"
+      # typecheck, unit tests, build, sd:validate, pack, Orca zip, notes, checksums
+      - run: make package
+      - name: Tag and publish the GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          flags=""
+          case "$TAG" in *-*) flags="--prerelease" ;; esac
+          gh release create "$TAG" $flags --target "$GITHUB_SHA" \
+            --title "Orca Agent Deck ${TAG#v}" \
+            --notes-file dist/RELEASE_NOTES.md \
+            dist/*.streamDeckPlugin dist/*.zip dist/collect-diagnostics.mjs dist/SHA256SUMS

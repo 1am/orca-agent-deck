@@ -1,0 +1,76 @@
+{
+  "id": "5dab45be-ad9f-4766-9592-222507b52907",
+  "ok": true,
+  "result": {
+    "terminals": [
+      {
+        "handle": "term_805bc306-8a2f-4475-9c67-854899a07730",
+        "ptyId": "00000000-0000-4000-8000-000000000001::/Users/dev/projects/agent-deck@@e181ebb6",
+        "incarnationId": "b9247f00-721c-4ac4-b3fd-5d05f243be18",
+        "orphaned": false,
+        "worktreeId": "00000000-0000-4000-8000-000000000001::/Users/dev/projects/agent-deck",
+        "worktreePath": "/Users/dev/projects/agent-deck",
+        "branch": "refs/heads/main",
+        "tabId": "9d92e7bd-9405-48cc-9101-07d85f3b7221",
+        "leafId": "3ee47c9c-41a6-46c5-910b-4b5c6fa05d79",
+        "title": "Pi - agent-deck",
+        "connected": true,
+        "writable": true,
+        "lastOutputAt": 1793349901863,
+        "preview": "─────────────────────────────\nUpdate Available\nNew version 1.4.0 is available. Run pi update\nChangelog: https://pi.dev/changelog\n─────────────────────────────────────────────────────────────────────────────────────\n─────────────────────────────────────────────────────────────────────────────────────",
+        "executionHostId": "local",
+        "agentIdentity": "pi"
+      },
+      {
+        "handle": "term_0ed447e3-9130-4c72-a8ab-3d6459f4e5df",
+        "ptyId": "00000000-0000-4000-8000-000000000001::/Users/dev/projects/agent-deck@@f4fc9fe0",
+        "incarnationId": "86b9bbef-b1fa-45e9-adce-8a7572849ece",
+        "orphaned": false,
+        "worktreeId": "00000000-0000-4000-8000-000000000001::/Users/dev/projects/agent-deck",
+        "worktreePath": "/Users/dev/projects/agent-deck",
+        "branch": "refs/heads/main",
+        "tabId": "9d92e7bd-9405-48cc-9101-07d85f3b7221",
+        "leafId": "99840ce5-52e9-4363-8cd7-febcb022f684",
+        "title": "Claude Code",
+        "connected": true,
+        "writable": true,
+        "lastOutputAt": 1793349952753,
+        "preview": "B",
+        "executionHostId": "local",
+        "agentIdentity": "claude"
+      },
+      {
+        "handle": "term_b941381b-409f-4204-a8a5-7fa59b5c206b",
+        "ptyId": "00000000-0000-4000-8000-000000000001::/Users/dev/projects/agent-deck@@622e5a59",
+        "incarnationId": "43a2b83c-8396-4c25-bafe-c4f724aa1bc0",
+        "orphaned": false,
+        "worktreeId": "00000000-0000-4000-8000-000000000001::/Users/dev/projects/agent-deck",
+        "worktreePath": "/Users/dev/projects/agent-deck",
+        "branch": "refs/heads/main",
+        "tabId": "9d92e7bd-9405-48cc-9101-07d85f3b7221",
+        "leafId": "2a4737ac-ef88-4adb-b453-9a2d9d087863",
+        "title": "Claude Code",
+        "connected": true,
+        "writable": true,
+        "lastOutputAt": 1793349908754,
+        "preview": "",
+        "executionHostId": "local",
+        "agentIdentity": "claude"
+      }
+    ],
+    "hostScope": {
+      "hostIds": [
+        "local"
+      ],
+      "omittedHostIds": []
+    },
+    "topologyRevisions": {
+      "00000000-0000-4000-8000-000000000001::/Users/dev/projects/agent-deck": 0
+    },
+    "totalCount": 3,
+    "truncated": false
+  },
+  "_meta": {
+    "runtimeId": "9c9154b7-a23d-4ca4-b40a-80d85f55bafd"
+  }
+}

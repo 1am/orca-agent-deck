@@ -1,0 +1,100 @@
+import { describe, expect, it } from 'vitest';
+import { MappingStore, MemoryStorage, type SlotSettings } from './mapping.ts';
+
+const slot = (paneKey: string, mode: 'pinned' | 'auto' = 'pinned'): SlotSettings => ({
+  mode,
+  pane: { paneKey, worktreeId: 'w', tabId: 't', leafId: 'l', lastKnown: {} },
+});
+
+it('indexes one pane on several slots', () => {
+  const s = new MappingStore();
+  s.set('s1', slot('a:b'));
+  s.set('s2', slot('a:b'));
+  s.set('s3', slot('c:d'));
+  expect(s.slotsFor('a:b').sort()).toEqual(['s1', 's2']);
+  s.remove('s1');
+  expect(s.slotsFor('a:b')).toEqual(['s2']);
+});
+
+it('keeps a pinned mapping 24 h after the pane vanishes, then clears it', () => {
+  let t = 0;
+  const s = new MappingStore(new MemoryStorage(), () => t);
+  s.set('s1', slot('a:b'));
+  t = 23 * 3600_000;
+  expect(s.reconcile(new Set())).toEqual([]);
+  t = 25 * 3600_000;
+  expect(s.reconcile(new Set())).toEqual(['s1']);
+  expect(s.get('s1')?.pane).toBeUndefined();
+});
+
+it('refreshes retention while the pane is alive', () => {
+  let t = 0;
+  const s = new MappingStore(new MemoryStorage(), () => t);
+  s.set('s1', slot('a:b'));
+  t = 20 * 3600_000;
+  s.reconcile(new Set(['a:b']));
+  t = 40 * 3600_000;
+  expect(s.reconcile(new Set())).toEqual([]);
+});
+
+it('keeps an auto slot through a brief gap, frees it after the grace period', () => {
+  let t = 0;
+  const s = new MappingStore(new MemoryStorage(), () => t, undefined, 60_000);
+  s.set('s1', slot('a:b', 'auto'));
+  t = 30_000;
+  expect(s.reconcile(new Set())).toEqual([]);
+  // The pane comes back: the grace period starts over.
+  s.reconcile(new Set(['a:b']));
+  t = 80_000;
+  expect(s.reconcile(new Set())).toEqual([]);
+  t = 95_000;
+  expect(s.reconcile(new Set())).toEqual(['s1']);
+});
+
+it('persists through the storage abstraction', () => {
+  const st = new MemoryStorage();
+  new MappingStore(st).set('s1', slot('a:b'));
+  expect(new MappingStore(st).get('s1')?.pane?.paneKey).toBe('a:b');
+});
+
+describe('locate (mapping survives a changed action context)', () => {
+  const binding = (paneKey: string) => ({
+    paneKey,
+    worktreeId: 'w',
+    tabId: 't',
+    leafId: 'l',
+    lastKnown: {},
+  });
+  const pos = { device: 'D1', column: 1, row: 0 };
+
+  it('moves the mapping to a new key at the same position', () => {
+    const m = new MappingStore();
+    m.locate('old', pos, new Set());
+    m.set('old', { mode: 'pinned', pane: binding('p1') });
+    expect(m.locate('new', pos, new Set(['new']))).toBe(true);
+    expect(m.get('new')?.pane?.paneKey).toBe('p1');
+    expect(m.get('new')?.mode).toBe('pinned');
+    expect(m.get('old')).toBeUndefined();
+  });
+
+  it('keeps settings of a known key and never takes from a live key', () => {
+    const m = new MappingStore();
+    m.locate('a', pos, new Set());
+    m.set('a', { mode: 'pinned', pane: binding('p1') });
+    expect(m.locate('b', pos, new Set(['a', 'b']))).toBe(false);
+    expect(m.get('a')?.pane?.paneKey).toBe('p1');
+    m.set('b', { mode: 'pinned', pane: binding('p2') });
+    expect(m.locate('b', pos, new Set())).toBe(false);
+    expect(m.get('b')?.pane?.paneKey).toBe('p2');
+  });
+
+  it('does not guess when two vanished keys share the position', () => {
+    const m = new MappingStore();
+    for (const k of ['x', 'y']) {
+      m.locate(k, pos, new Set(['x', 'y']));
+      m.set(k, { mode: 'pinned', pane: binding(`p-${k}`) });
+    }
+    expect(m.locate('new', pos, new Set())).toBe(false);
+    expect(m.get('new')?.pane).toBeUndefined();
+  });
+});

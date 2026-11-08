@@ -1,0 +1,105 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <title>Setup</title>
+    <style>
+      body {
+        margin: 0;
+        padding: 8px;
+        font:
+          11px system-ui,
+          sans-serif;
+        color: #d8d8d8;
+        background: #2d2d2d;
+      }
+      h1 {
+        margin: 0 0 8px;
+        font-size: 12px;
+      }
+      .check {
+        padding: 6px 0;
+        border-top: 1px solid #444;
+      }
+      .head {
+        display: flex;
+        gap: 6px;
+        font-weight: 600;
+      }
+      .ok .mark {
+        color: #5fbf6a;
+      }
+      .warn .mark {
+        color: #e0b030;
+      }
+      .fail .mark {
+        color: #e05a50;
+      }
+      .reason,
+      .hint {
+        margin: 2px 0 0 18px;
+        color: #9a9a9a;
+      }
+      button {
+        margin-top: 10px;
+        width: 100%;
+        font: inherit;
+        color: inherit;
+        background: #3a3a3a;
+        border: 1px solid #555;
+        border-radius: 3px;
+        padding: 5px;
+        cursor: pointer;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>Setup</h1>
+    <div id="checks">Checking...</div>
+    <button id="recheck">Check again</button>
+    <script>
+      let ws, uuid;
+      const MARK = { ok: 'v', warn: '!', fail: 'x' };
+      const send = (msg) =>
+        ws.send(JSON.stringify({ event: 'sendToPlugin', context: uuid, payload: msg }));
+
+      function render(checks) {
+        const root = document.getElementById('checks');
+        root.textContent = '';
+        for (const c of checks) {
+          const el = document.createElement('div');
+          el.className = 'check ' + c.result;
+          const add = (cls, text, parent = el) => {
+            const d = document.createElement('div');
+            d.className = cls;
+            d.textContent = text;
+            parent.appendChild(d);
+            return d;
+          };
+          const head = add('head', '');
+          add('mark', MARK[c.result], head).style.width = '12px';
+          add('', c.label, head);
+          add('reason', c.reason);
+          if (c.result !== 'ok' && c.hint) add('hint', 'Fix: ' + c.hint);
+          root.appendChild(el);
+        }
+      }
+
+      document.getElementById('recheck').onclick = () => send({ type: 'load' });
+
+      window.connectElgatoStreamDeckSocket = (port, id, registerEvent) => {
+        uuid = id;
+        ws = new WebSocket('ws://127.0.0.1:' + port);
+        ws.onopen = () => {
+          ws.send(JSON.stringify({ event: registerEvent, uuid }));
+          send({ type: 'load' });
+        };
+        ws.onmessage = (e) => {
+          const m = JSON.parse(e.data);
+          if (m.event === 'sendToPropertyInspector' && m.payload.type === 'checks')
+            render(m.payload.checks);
+        };
+      };
+    </script>
+  </body>
+</html>

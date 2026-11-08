@@ -1,0 +1,28 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
+    "strict": true,
+    "skipLibCheck": true,
+    "types": ["node"],
+    "allowImportingTsExtensions": true,
+    "paths": {
+      "@orca-agent-deck/core": ["../core/src/index.ts"],
+      "@orca-agent-deck/adapter-cli": ["../adapter-cli/src/index.ts"],
+      "@orca-agent-deck/adapter-runtime": ["../adapter-runtime/src/index.ts"],
+      "@orca-agent-deck/adapter-bridge": ["../adapter-bridge/src/index.ts"],
+      "@orca-agent-deck/window-raiser": ["../window-raiser/src/index.ts"]
+    },
+    "noEmit": true
+  },
+  "include": [
+    "src",
+    "../core/src",
+    "../adapter-cli/src",
+    "../adapter-bridge/src",
+    "../adapter-runtime/src",
+    "../window-raiser/src"
+  ],
+  "exclude": ["../**/*.test.ts"]
+}

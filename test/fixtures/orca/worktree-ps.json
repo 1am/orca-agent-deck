@@ -1,0 +1,108 @@
+{
+  "id": "b4a2602b-ba4d-450d-9382-6b5b495f5339",
+  "ok": true,
+  "result": {
+    "worktrees": [
+      {
+        "workspaceKind": "git",
+        "worktreeId": "00000000-0000-4000-8000-000000000001::/Users/dev/projects/agent-deck",
+        "repoId": "00000000-0000-4000-8000-000000000001",
+        "hostId": "local",
+        "terminalPlatform": "darwin",
+        "repo": "agent-deck",
+        "path": "/Users/dev/projects/agent-deck",
+        "branch": "refs/heads/main",
+        "isArchived": false,
+        "isMainWorktree": true,
+        "hasHostSidebarActivity": true,
+        "defaultBranch": true,
+        "worktreeInstanceId": "f457c7e2-fe51-4945-adab-574151538a2e",
+        "parentWorktreeId": null,
+        "childWorktreeIds": [],
+        "displayName": "main",
+        "workspaceStatus": "in-progress",
+        "sortOrder": 1793349865468,
+        "lastActivityAt": 1793349894764,
+        "linkedIssue": null,
+        "linkedPR": null,
+        "linkedLinearIssue": null,
+        "linkedGitLabMR": null,
+        "linkedGitLabIssue": null,
+        "linkedItems": [],
+        "comment": "",
+        "isPinned": false,
+        "isActive": true,
+        "unread": false,
+        "liveTerminalCount": 3,
+        "hasAttachedPty": true,
+        "unverifiableTerminalCount": 0,
+        "lastOutputAt": 1793349952753,
+        "preview": "B",
+        "status": "active",
+        "agents": [
+          {
+            "paneKey": "9d92e7bd-9405-48cc-9101-07d85f3b7221:2a4737ac-ef88-4adb-b453-9a2d9d087863",
+            "parentPaneKey": null,
+            "state": "done",
+            "agentType": "claude",
+            "prompt": "",
+            "taskTitle": null,
+            "displayName": null,
+            "lastAssistantMessage": null,
+            "toolName": null,
+            "toolInput": null,
+            "interrupted": false,
+            "mainAgent": {
+              "state": "done",
+              "stateStartedAt": 1793349898589
+            },
+            "stateStartedAt": 1793349898391,
+            "updatedAt": 1793349898590,
+            "hasLivePty": true,
+            "programStatus": {
+              "state": "idle",
+              "observedAt": 1793349898386
+            }
+          },
+          {
+            "paneKey": "9d92e7bd-9405-48cc-9101-07d85f3b7221:99840ce5-52e9-4363-8cd7-febcb022f684",
+            "parentPaneKey": null,
+            "state": "done",
+            "agentType": "claude",
+            "prompt": "",
+            "taskTitle": null,
+            "displayName": null,
+            "lastAssistantMessage": null,
+            "toolName": null,
+            "toolInput": null,
+            "interrupted": false,
+            "mainAgent": {
+              "state": "done",
+              "stateStartedAt": 1793349902422
+            },
+            "stateStartedAt": 1793349902400,
+            "updatedAt": 1793349902423,
+            "hasLivePty": true,
+            "programStatus": {
+              "state": "idle",
+              "observedAt": 1793349902398
+            }
+          }
+        ],
+        "sidebarStatus": "done",
+        "terminalVerdict": "live"
+      }
+    ],
+    "hostScope": {
+      "hostIds": [
+        "local"
+      ],
+      "omittedHostIds": []
+    },
+    "totalCount": 1,
+    "truncated": false
+  },
+  "_meta": {
+    "runtimeId": "9c9154b7-a23d-4ca4-b40a-80d85f55bafd"
+  }
+}

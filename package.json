@@ -1,0 +1,53 @@
+{
+  "name": "orca-agent-deck",
+  "version": "0.1.0",
+  "private": true,
+  "license": "MIT",
+  "type": "module",
+  "engines": {
+    "node": ">=22.6"
+  },
+  "scripts": {
+    "test": "vitest run --project unit",
+    "test:integration": "vitest run --project integration --passWithNoTests",
+    "test:contract": "ORCA_CONTRACT=1 vitest run --project contract",
+    "coverage": "vitest run --project unit --coverage",
+    "lint": "eslint . && prettier --check .",
+    "format": "prettier --write .",
+    "typecheck": "tsc --noEmit",
+    "fake-orca": "node --experimental-strip-types packages/fake-orca/src/bin.ts",
+    "orca-deck": "node --experimental-strip-types scripts/orca-deck.ts",
+    "render:gallery": "node --experimental-strip-types scripts/render-gallery.ts",
+    "audit:awaiting": "node --experimental-strip-types scripts/awaiting-audit.ts",
+    "release:notes": "node --experimental-strip-types scripts/release.ts notes",
+    "release:checksums": "node --experimental-strip-types scripts/release.ts checksums",
+    "release:validate": "node --experimental-strip-types scripts/release.ts validate",
+    "sd:build": "pnpm -C packages/streamdeck-plugin build",
+    "sd:validate": "streamdeck validate packages/streamdeck-plugin/pl.1am.orca-agent-deck.sdPlugin",
+    "sd:dev": "pnpm sd:build && streamdeck link packages/streamdeck-plugin/pl.1am.orca-agent-deck.sdPlugin && pnpm -C packages/streamdeck-plugin watch",
+    "diagnostics": "node scripts/collect-diagnostics.mjs",
+    "prepare": "husky",
+    "catalog": "node scripts/catalog.mjs"
+  },
+  "dependencies": {
+    "@elgato/streamdeck": "^3.0.4",
+    "ws": "8.22.0",
+    "zod": "^3.23.8"
+  },
+  "devDependencies": {
+    "@elgato/cli": "^1.10.4",
+    "@eslint/js": "^9.0.0",
+    "@rollup/plugin-commonjs": "^29.0.3",
+    "@rollup/plugin-node-resolve": "^16.0.3",
+    "@types/node": "^22.0.0",
+    "@types/ws": "^8.18.2",
+    "@vitest/coverage-v8": "^2.1.0",
+    "eslint": "^9.0.0",
+    "prettier": "^3.3.0",
+    "rollup": "^4.66.0",
+    "typescript": "^5.6.0",
+    "typescript-eslint": "^8.0.0",
+    "vitest": "^2.1.0",
+    "husky": "^9.0.0"
+  }
+}

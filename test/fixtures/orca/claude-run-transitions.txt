@@ -1,0 +1,6 @@
+# worktree ps polling (1s) while Claude Code pane ran a Bash tool (sleep 8)
+# time  paneKey-suffix state toolName programStatus.state
+09:54:50 f684 working None    working   (prompt sent via `orca terminal send --enter`)
+09:54:59 f684 working Bash    working   (tool started; ~9s after submit)
+09:55:11 f684 done    Bash    done      (toolName is stale after done)
+# before: done/None/idle (fresh pane) or done/None/done
