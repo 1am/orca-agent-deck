@@ -8,16 +8,15 @@
       "source": {
         "kind": "git",
         "url": "https://github.com/1am/orca-agent-deck.git",
-        "ref": "main",
-        "path": "orca-plugin"
+        "ref": "main"
       },
       "description": "Shows Orca agent status on a Stream Deck and focuses panes from it.",
       "categories": [],
       "releases": [
         {
-          "version": "0.1.0",
-          "commit": "25f7f65589f485b9179d316e96c9305869bcb3dc",
-          "contentHash": "e0a994449c59d23ff2fd9524987f623bf3c4abfa1408b6252ddcb4a63b6eda01",
+          "version": "0.1.1",
+          "commit": "71a4c1e562efaac9d2cd4b082ad3bc23b296cba8",
+          "contentHash": "bb35c6a5c6042a3bd51f2724579b6d9dd7dff008e6daa7ebe8390b567e8e32d0",
           "execution": "trusted-worker",
           "minimumOrca": "1.4.245",
           "name": "Orca Agent Deck",
