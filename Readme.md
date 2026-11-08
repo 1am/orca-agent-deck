@@ -6,7 +6,7 @@
 
 Here comes Orca Agent Deck which shows the state of your agents and terminals running in [Orca](https://www.onorca.dev) on a Stream Deck, and focuses a pane when you press its key. Easy to look up where and when your attention is needed.
 
-https://github.com/user-attachments/assets/fced43ae-e469-4561-9301-2026027d7900
+https://github.com/user-attachments/assets/1dfea071-0276-4011-b159-7916241eb2ca
 
 ## License
 
