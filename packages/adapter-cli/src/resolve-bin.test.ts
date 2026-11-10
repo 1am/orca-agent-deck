@@ -67,4 +67,56 @@ describe('resolveOrcaBin', () => {
     );
     expect(r).toMatchObject({ bin: p, source: 'app-bundle' });
   });
+
+  it('treats an empty LOCALAPPDATA as missing on Windows', async () => {
+    const p = 'C:\\Users\\x\\AppData\\Local\\Programs\\orca\\resources\\bin\\orca.exe';
+    const r = await resolveOrcaBin(
+      deps({ platform: 'win32', home: 'C:\\Users\\x', env: { LOCALAPPDATA: '' }, files: [p] }),
+    );
+    expect(r).toMatchObject({ bin: p, source: 'app-bundle' });
+  });
+
+  it('ignores the POSIX fallback dirs on Windows', async () => {
+    const r = await resolveOrcaBin(
+      deps({ platform: 'win32', home: 'C:\\Users\\x', files: ['/usr/local/bin/orca'] }),
+    );
+    expect(r).toMatchObject({ bin: 'orca', source: 'path' });
+  });
+
+  describe('Windows PATH lookup', () => {
+    const win = (over: Partial<ResolveDeps> & { files?: string[] }) =>
+      deps({ platform: 'win32', home: 'C:\\Users\\x', cwd: 'C:\\work', ...over });
+
+    it('resolves orca.exe on an absolute PATH entry', async () => {
+      const p = 'C:\\Tools\\orca.exe';
+      const r = await resolveOrcaBin(win({ env: { Path: 'C:\\Other;C:\\Tools' }, files: [p] }));
+      expect(r).toMatchObject({ bin: p, source: 'path' });
+    });
+
+    it('falls back to orca.cmd', async () => {
+      const p = 'C:\\Tools\\orca.cmd';
+      const r = await resolveOrcaBin(win({ env: { PATH: 'C:\\Tools' }, files: [p] }));
+      expect(r.bin).toBe(p);
+    });
+
+    it('skips empty, relative and cwd entries', async () => {
+      const r = await resolveOrcaBin(
+        win({
+          env: { PATH: ';.;bin;C:\\work;c:\\WORK\\' },
+          files: ['orca.exe', '.\\orca.exe', 'bin\\orca.exe', 'C:\\work\\orca.exe'],
+        }),
+      );
+      expect(r).toMatchObject({ bin: 'orca', source: 'path' });
+    });
+
+    it('reports not found when PATH is unset or has no orca', async () => {
+      expect((await resolveOrcaBin(win({}))).bin).toBe('orca');
+      expect((await resolveOrcaBin(win({ env: { PATH: 'C:\\Tools' } }))).bin).toBe('orca');
+    });
+
+    it('leaves other platforms on the bare name', async () => {
+      const r = await resolveOrcaBin(deps({ env: { PATH: '/x' }, files: ['/x/orca'] }));
+      expect(r.bin).toBe('orca');
+    });
+  });
 });

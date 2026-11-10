@@ -4,16 +4,16 @@ Nothing here needs the repo; only the diagnostics script needs Node 18 or newer.
 
 ## Quick start
 
-About 5 minutes. You need Orca, the Elgato Stream Deck app and a Stream Deck (see "You need" below).
+About 5 minutes. You need Orca, the Elgato Stream Deck app (or OpenDeck on Linux) and a Stream Deck (see "You need" below).
 
-1. **Stream Deck plugin.** Download `orca-agent-deck-<version>.streamDeckPlugin` from the [latest GitHub release](https://github.com/1am/orca-agent-deck/releases/latest) and double-click it. The Elgato app installs it. Drag the Pane, Status and Attention actions from the "Orca Agent Deck" category onto keys.
+1. **Stream Deck plugin.** Download `orca-agent-deck-<version>.streamDeckPlugin` from the [latest GitHub release](https://github.com/1am/orca-agent-deck/releases/latest) and double-click it. The Elgato app installs it. On Linux, install the same file from OpenDeck's plugin manager. Drag the Pane, Status and Attention actions from the "Orca Agent Deck" category onto keys.
 2. **Orca plugin.** With Orca running, run this in a terminal:
 
    ```sh
    open 'orca://plugins/1am.agent-deck?catalog=https://github.com/1am/orca-agent-deck.git'
    ```
 
-   Orca opens the plugin page. Read and accept the access consent: the plugin runs its own code, reads agent status and workspaces, and stores its own data. Orca updates it from the same catalog.
+   On Linux use `xdg-open` instead of `open`. Orca opens the plugin page. Read and accept the access consent: the plugin runs its own code, reads agent status and workspaces, and stores its own data. Orca updates it from the same catalog.
 
    Without the terminal: in Orca go to Settings, Plugins, Install from Git, and paste `https://github.com/1am/orca-agent-deck`. Orca installs the newest release tag.
 3. In Orca open the command palette and run "Orca Agent Deck: Show status".
@@ -30,8 +30,9 @@ Versions and platforms that have been tested: [compatibility](compatibility.md).
 ## You need
 
 - Orca 1.4.245 or newer, with the `orca` shell command registered (Orca: Settings, register CLI).
-- The Elgato Stream Deck app 7.1 or newer, and a Stream Deck.
-- macOS 13 or newer, or Windows 10 or newer. Linux is untested; pane raising on press is macOS only.
+- The Elgato Stream Deck app 7.1 or newer (macOS, Windows) or [OpenDeck](https://github.com/nekename/opendeck) (Linux), and a Stream Deck.
+- Linux only, to raise the Orca window on press: `xdotool` or `wmctrl` (`sudo apt install xdotool`), under an X11 session. Not available on Wayland.
+- macOS 13 or newer, Windows 10 or newer, or Linux (tested on Ubuntu 22.04). Pane raising on press works on macOS, and on Linux under X11 with `xdotool` or `wmctrl` installed.
 - Orca notifications can stay off. Orca Agent Deck does not use them.
 
 ## Release files
@@ -39,7 +40,7 @@ Versions and platforms that have been tested: [compatibility](compatibility.md).
 - `orca-agent-deck-<version>.streamDeckPlugin` - the Stream Deck plugin
 - `orca-agent-deck-orca-plugin-<version>.zip` - the Orca plugin, for the offline install only
 - `collect-diagnostics.mjs` - for bug reports (see Logs); needs Node 18 or newer
-- `SHA256SUMS` - check with `shasum -a 256 -c SHA256SUMS`
+- `SHA256SUMS` - check with `shasum -a 256 -c SHA256SUMS` (`sha256sum -c SHA256SUMS` on Linux)
 
 The packages are unsigned, so macOS may warn when you open them.
 
@@ -49,7 +50,7 @@ Unzip `orca-agent-deck-orca-plugin-<version>.zip` into a folder you keep, since 
 
 ## Permissions
 
-Orca Agent Deck needs no macOS permission of its own. It reads Orca through the local runtime socket, finds the `orca` command at fixed paths (no login shell), and raises the Orca window with `open -b`, which needs nothing. You should see no Files and Folders, Automation, Accessibility or Local Network dialog from it. If you do, please report it with the dialog text.
+Orca Agent Deck needs no macOS permission of its own. It reads Orca through the local runtime socket, finds the `orca` command at fixed paths (no login shell), and raises the Orca window with `open -b` (macOS), which needs nothing. You should see no Files and Folders, Automation, Accessibility or Local Network dialog from it. If you do, please report it with the dialog text.
 
 ## tmux
 

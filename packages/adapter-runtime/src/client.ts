@@ -19,8 +19,8 @@ export function defaultMetaPath(
   if (platform === 'darwin')
     return join(home, 'Library/Application Support/orca/orca-runtime.json');
   if (platform === 'win32')
-    return join(env['APPDATA'] ?? join(home, 'AppData/Roaming'), 'orca/orca-runtime.json');
-  return join(env['XDG_CONFIG_HOME'] ?? join(home, '.config'), 'orca/orca-runtime.json');
+    return join(env['APPDATA'] || join(home, 'AppData/Roaming'), 'orca/orca-runtime.json');
+  return join(env['XDG_CONFIG_HOME'] || join(home, '.config'), 'orca/orca-runtime.json');
 }
 
 /** Orca is not running, the runtime file is gone/garbled, or the socket cannot be reached. */
@@ -50,11 +50,11 @@ export interface RuntimeFrame {
 
 /**
  * The runtime file holds Orca's auth token: use it only when it is a regular file of this user that
- * group and other cannot read (Orca writes it 0600). Not enforced on Windows.
+ * group and other cannot read (Orca writes it 0600). On Windows only the regular-file check applies.
  */
 async function isPrivateFile(path: string): Promise<boolean> {
-  if (process.platform === 'win32') return true;
   const st = await lstat(path);
+  if (process.platform === 'win32') return st.isFile();
   return st.isFile() && st.uid === process.getuid?.() && (st.mode & 0o077) === 0;
 }
 
