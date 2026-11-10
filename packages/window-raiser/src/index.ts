@@ -60,9 +60,10 @@ class X11Raiser implements WindowRaiser {
   private readonly strategies = [
     {
       probe: ['xdotool', ['version']],
-      raise: ['xdotool', ['search', '--class', 'orca', 'windowactivate']],
+      // Anchored: the class is a regex and would also match other apps such as `orca-ide`.
+      raise: ['xdotool', ['search', '--class', '^orca$', 'windowactivate']],
     },
-    { probe: ['wmctrl', ['-m']], raise: ['wmctrl', ['-x', '-a', 'orca']] },
+    { probe: ['wmctrl', ['-m']], raise: ['wmctrl', ['-x', '-a', 'orca.orca']] },
   ] as const;
   private usable: (typeof this.strategies)[number] | null | undefined;
 

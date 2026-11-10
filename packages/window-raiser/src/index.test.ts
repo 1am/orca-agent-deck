@@ -42,7 +42,7 @@ describe('window-raiser', () => {
       expect((await makeRaiser('linux', exec, env).raise()).ok).toBe(true);
       expect(calls).toEqual([
         ['xdotool', 'version'],
-        ['xdotool', 'search', '--class', 'orca', 'windowactivate'],
+        ['xdotool', 'search', '--class', '^orca$', 'windowactivate'],
       ]);
     });
 
@@ -52,7 +52,7 @@ describe('window-raiser', () => {
       await r.raise();
       calls.length = 0;
       await r.raise();
-      expect(calls).toEqual([['wmctrl', '-x', '-a', 'orca']]);
+      expect(calls).toEqual([['wmctrl', '-x', '-a', 'orca.orca']]);
     });
 
     it('reports a missing tool instead of throwing', async () => {
