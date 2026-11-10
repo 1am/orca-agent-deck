@@ -20,11 +20,11 @@ https://github.com/user-attachments/assets/1dfea071-0276-4011-b159-7916241eb2ca
 - Only [Elgato Stream Deck](https://www.elgato.com/ww/en/p/stream-deck) is currently tested, but other decks may work as well.
 
 > [!WARNING]
-> This is an experimental project built for personal use and it is at a very early stage (`0.1.0`). Expect breaking changes, rough edges and missing features. It has been tested only on macOS with Stream Deck MK.2 and Stream Deck Mobile. Use it at your own risk.
+> This is an experimental project built for personal use and it is at a very early stage (`0.1.0`). Expect breaking changes, rough edges and missing features. It has been tested on macOS with Stream Deck MK.2 and Stream Deck Mobile, and on Windows 11 with Stream Deck Neo. Use it at your own risk.
 
 ## Requirements
 
-- macOS 13 or newer. Windows and Linux are untested.
+- macOS 13 or newer, or Windows 10 or newer. Linux is untested. Pane raising on press is macOS only.
 - Orca 1.4.245 or newer, with the `orca` shell command registered (Orca: Settings, register CLI).
 - The Elgato Stream Deck app 7.1 or newer and a Stream Deck (hardware or Stream Deck Mobile).
 
@@ -78,7 +78,13 @@ Committing images needs `exiftool` (`brew install exiftool`): the pre-commit hoo
 
 Other dev scripts: `pnpm fake-orca` (a fake Orca for local runs), `pnpm render:gallery` (every key state in `out/gallery.html`), `pnpm audit:awaiting` (how the "awaiting reply" classifier judges the running agents; prints verdicts only).
 
-`pnpm sd:dev` needs Stream Deck developer mode (`npx streamdeck dev`, once). Load the Orca plugin in development mode with `orca plugin dev load orca-plugin`.
+`pnpm sd:dev` needs Stream Deck developer mode (`npx streamdeck dev`, once). Load the Orca plugin from its own folder, not the repository root:
+
+```sh
+orca plugin dev load orca-plugin
+```
+
+Orca watches every file under a development folder. The Stream Deck plugin writes its logs under `packages/streamdeck-plugin/`, so a repository-root dev folder reloads the Orca plugin on every log line (agent connect, key press), and Orca's plugin panel never finishes loading. The `orca-plugin/` folder has its own manifest and none of those logs.
 
 - Architecture, network surface and timings: [docs/architecture.md](docs/architecture.md)
 

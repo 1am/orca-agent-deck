@@ -12,10 +12,15 @@ export const PROTOCOL_VERSION = 1;
 export const PLUGIN_VERSION = '0.1.0';
 const GUID = '258EAFA5-E914-47DA-95CA-C5AB0DC85B11';
 
-export const defaultDiscoveryPath = () =>
-  process.platform === 'win32' && process.env.APPDATA
-    ? join(process.env.APPDATA, 'orca-deck', 'bridge.json')
-    : join(homedir(), '.orca-deck', 'bridge.json');
+export const defaultDiscoveryPath = () => {
+  if (process.platform !== 'win32') return join(homedir(), '.orca-deck', 'bridge.json');
+  // Orca's worker can start without APPDATA in its environment: use the same per-user folder.
+  return join(
+    process.env.APPDATA ?? join(homedir(), 'AppData', 'Roaming'),
+    'orca-deck',
+    'bridge.json',
+  );
+};
 
 /** Regular file (no symlink) of the current user, not readable by group or other. Mirrors B's check. */
 export async function isPrivateFile(path) {

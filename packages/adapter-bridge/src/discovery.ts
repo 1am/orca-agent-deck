@@ -16,8 +16,13 @@ export const discoveryFile = z.object({
 export type Discovery = z.infer<typeof discoveryFile>;
 
 export function defaultDiscoveryPath(): string {
-  if (process.platform === 'win32' && process.env.APPDATA) {
-    return join(process.env.APPDATA, 'orca-deck', 'bridge.json');
+  if (process.platform === 'win32') {
+    // A worker can start without APPDATA in its environment: fall back to the same per-user folder.
+    return join(
+      process.env.APPDATA ?? join(homedir(), 'AppData', 'Roaming'),
+      'orca-deck',
+      'bridge.json',
+    );
   }
   return join(homedir(), '.orca-deck', 'bridge.json');
 }

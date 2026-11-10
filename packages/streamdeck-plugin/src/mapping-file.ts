@@ -5,10 +5,15 @@ import type { SlotSettings, SlotStorage } from '@orca-agent-deck/core';
 
 type Slots = Record<string, SlotSettings>;
 
-export const defaultMappingsPath = (): string =>
-  process.platform === 'win32' && process.env.APPDATA
-    ? join(process.env.APPDATA, 'orca-deck', 'mappings.json')
-    : join(homedir(), '.orca-deck', 'mappings.json');
+export const defaultMappingsPath = (): string => {
+  if (process.platform === 'win32')
+    return join(
+      process.env.APPDATA ?? join(homedir(), 'AppData', 'Roaming'),
+      'orca-deck',
+      'mappings.json',
+    );
+  return join(homedir(), '.orca-deck', 'mappings.json');
+};
 
 /**
  * Slot mappings in `~/.orca-deck/mappings.json`, shared by every Stream Deck host (Elgato app,

@@ -20,7 +20,8 @@ it('saves privately and loads what it saved, also into the host cache', () => {
   const cache = new MemoryStorage();
   const f = new FileSlotStorage(path, cache);
   f.save({ a: slot('p:1') });
-  expect(statSync(path).mode & 0o077).toBe(0);
+  // Windows has no POSIX mode bits; the privacy check does not apply there.
+  if (process.platform !== 'win32') expect(statSync(path).mode & 0o077).toBe(0);
   expect(new FileSlotStorage(path, new MemoryStorage()).load()).toEqual({ a: slot('p:1') });
   expect(cache.load()).toEqual({ a: slot('p:1') });
 });
@@ -49,6 +50,9 @@ it('falls back to the cache for a damaged file, a symlink or a file others can r
   cache.save({ a: slot('p:1') });
   writeFileSync(path, '{not json', { mode: 0o600 });
   expect(Object.keys(new FileSlotStorage(path, cache).load())).toEqual(['a']);
+
+  // Windows has no private-mode bits, and creating symlinks needs extra rights.
+  if (process.platform === 'win32') return;
 
   const link = join(dir, 'link.json');
   writeFileSync(join(dir, 'real.json'), JSON.stringify({ v: 1, slots: { x: slot('p:9') } }), {

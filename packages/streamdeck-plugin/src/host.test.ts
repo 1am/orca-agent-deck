@@ -1,5 +1,6 @@
 import { readFileSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 import { SDK_CALLS, canUse, detectHost } from './host.ts';
 
@@ -35,7 +36,7 @@ describe('canUse', () => {
 });
 
 it('the sources call only SDK members listed in the allowlist', () => {
-  const dir = new URL('.', import.meta.url).pathname;
+  const dir = fileURLToPath(new URL('.', import.meta.url));
   const files: string[] = [];
   const walk = (d: string) => {
     for (const e of readdirSync(d, { withFileTypes: true })) {

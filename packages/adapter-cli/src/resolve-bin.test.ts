@@ -54,4 +54,17 @@ describe('resolveOrcaBin', () => {
     );
     expect(r.source).toBe('app-bundle');
   });
+
+  it('finds the per-user Windows install', async () => {
+    const p = 'C:\\Users\\x\\AppData\\Local\\Programs\\orca\\resources\\bin\\orca.exe';
+    const r = await resolveOrcaBin(
+      deps({
+        platform: 'win32',
+        home: 'C:\\Users\\x',
+        env: { LOCALAPPDATA: 'C:\\Users\\x\\AppData\\Local' },
+        files: [p],
+      }),
+    );
+    expect(r).toMatchObject({ bin: p, source: 'app-bundle' });
+  });
 });

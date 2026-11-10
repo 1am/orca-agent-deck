@@ -20,7 +20,11 @@ export interface ResolveDeps {
 
 const FALLBACK_DIRS = ['/usr/local/bin', '/opt/homebrew/bin'];
 
-function bundleCandidates(platform: NodeJS.Platform, home: string): string[] {
+function bundleCandidates(
+  platform: NodeJS.Platform,
+  home: string,
+  env: Record<string, string | undefined>,
+): string[] {
   if (platform === 'darwin') {
     return [
       '/Applications/Orca.app/Contents/Resources/bin/orca',
@@ -35,6 +39,12 @@ function bundleCandidates(platform: NodeJS.Platform, home: string): string[] {
       `${home}/.local/bin/orca`,
     ];
   }
+  if (platform === 'win32') {
+    return [
+      `${env['LOCALAPPDATA'] ?? `${home}\\AppData\\Local`}\\Programs\\orca\\resources\\bin\\orca.exe`,
+      `${env['ProgramFiles'] ?? 'C:\\Program Files'}\\Orca\\resources\\bin\\orca.exe`,
+    ];
+  }
   return [];
 }
 
@@ -45,7 +55,7 @@ export async function resolveOrcaBin(deps: ResolveDeps): Promise<ResolvedBin> {
   const fromEnv = deps.env['ORCA_BIN'];
   if (fromEnv) return { bin: fromEnv, source: 'env', reason: `ORCA_BIN=${fromEnv}` };
 
-  for (const p of bundleCandidates(deps.platform, deps.home)) {
+  for (const p of bundleCandidates(deps.platform, deps.home, deps.env)) {
     if (deps.isExecutable(p))
       return { bin: p, source: 'app-bundle', reason: `Orca app bundle at ${p}` };
   }
