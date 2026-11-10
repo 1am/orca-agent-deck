@@ -1,4 +1,5 @@
 import { execFile } from 'node:child_process';
+import { delimiter } from 'node:path';
 import type {
   AdapterHealth,
   FocusResult,
@@ -32,13 +33,13 @@ export * from './resolve-bin.ts';
 export type Exec = (args: string[]) => Promise<string>;
 
 /** GUI apps (Stream Deck) start plugins with a minimal PATH that lacks the usual `orca` install dirs. */
-const EXTRA_PATH = ['/usr/local/bin', '/opt/homebrew/bin'];
+const EXTRA_PATH = process.platform === 'win32' ? [] : ['/usr/local/bin', '/opt/homebrew/bin'];
 
 export function makeExec(bin?: string, timeoutMs = 5000): Exec {
   return async (args) => {
     const resolved = bin ?? (await resolveOrcaBinCached()).bin;
     return new Promise((resolve, reject) => {
-      const path = [process.env['PATH'], ...EXTRA_PATH].filter(Boolean).join(':');
+      const path = [process.env['PATH'], ...EXTRA_PATH].filter(Boolean).join(delimiter);
       execFile(
         resolved,
         args,

@@ -66,7 +66,8 @@ export async function readMeta(path: string): Promise<RuntimeMeta | null> {
       runtimeId?: unknown;
       transports?: Array<{ kind?: unknown; endpoint?: unknown }>;
     };
-    const t = j.transports?.find((x) => x.kind === 'unix');
+    // Windows exposes the same socket as a named pipe; `createConnection` takes its path as-is.
+    const t = j.transports?.find((x) => x.kind === 'unix' || x.kind === 'named-pipe');
     if (typeof j.authToken !== 'string' || typeof t?.endpoint !== 'string') return null;
     return {
       endpoint: t.endpoint,

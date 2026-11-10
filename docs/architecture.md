@@ -8,7 +8,7 @@ Two plugins, one per host app, plus Orca's own runtime:
 
 - **Plugin A** (`orca-plugin/main.mjs`) runs inside Orca as a lazy `trusted-worker`. Orca starts it on the first event and stops it after about 10 minutes without events. It only forwards agent status and workspace events to plugin B.
 - **Plugin B** (`packages/streamdeck-plugin`) is hosted by the Elgato Stream Deck app: the app spawns it as a child process on its own bundled Node 20 (`~/Library/Application Support/com.elgato.StreamDeck/NodeJS/20.x/node`), keeps it running while the app runs and restarts it on crash or `streamdeck restart`. B talks to the app over the SDK WebSocket. It owns the keys, the bridge server, the mapping store and all reads and focus calls into Orca.
-- **Orca runtime** (in the Orca app) answers B over a unix socket. **Paired Orca servers** (environments) are reachable only through the `orca --environment` CLI.
+- **Orca runtime** (in the Orca app) answers B over a unix socket, or a named pipe on Windows. **Paired Orca servers** (environments) are reachable only through the `orca --environment` CLI.
 
 ```mermaid
 flowchart LR
@@ -81,7 +81,7 @@ Everything listens on loopback or is a local file/socket. Nothing accepts traffi
 | Endpoint | Owner | Bind / path | Who connects | Auth |
 |---|---|---|---|---|
 | Bridge WebSocket | Plugin B (`packages/adapter-bridge/src/server.ts`) | `127.0.0.1`, first free port of 47800-47809 | Plugin A only | 32-byte token from `bridge.json` (0600 in a 0700 dir, rotated per start; refused when a symlink, foreign-owned or readable by others), never sent: A and B prove it to each other with HMAC-SHA256 over two 16-byte nonces and a direction label before A sends anything; upgrades with an `Origin` header (browsers), a `Host` other than `127.0.0.1:<port>` (DNS rebinding) or from a non-loopback address are refused (401); frames over 256 KiB close the socket on both sides; 2 s to finish the handshake, at most 2 pending connections (a new one evicts the oldest) |
-| Orca runtime socket | Orca | unix socket `o-<pid>-<id>.sock` (0600) | Plugin B, `orca` CLI | `authToken` from `orca-runtime.json` (0600) in every request; rotated on each Orca start. Never logged. |
+| Orca runtime socket | Orca | unix socket `o-<pid>-<id>.sock` (0600); named pipe `\\.\pipe\orca-<pid>-<id>` on Windows | Plugin B, `orca` CLI | `authToken` from `orca-runtime.json` (0600) in every request; rotated on each Orca start. Never logged. |
 | Orca paired-device WebSocket | Orca | `ws://127.0.0.1:6768` | Not used by us (needs an E2EE handshake) | Orca's |
 | Stream Deck SDK WebSocket | Elgato app | `127.0.0.1`, port passed to B at launch | Plugin B (client) | Registration UUID from the app |
 | Paired server | Remote Orca | over the network, via Orca's own transport | `orca --environment` CLI | Orca's device pairing; `orca-environments.json` holds the tokens, B only `stat`s it |

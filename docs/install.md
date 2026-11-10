@@ -31,7 +31,7 @@ Versions and platforms that have been tested: [compatibility](compatibility.md).
 
 - Orca 1.4.245 or newer, with the `orca` shell command registered (Orca: Settings, register CLI).
 - The Elgato Stream Deck app 7.1 or newer, and a Stream Deck.
-- macOS 13 or newer. Windows and Linux are untested; pane raising on press is macOS only.
+- macOS 13 or newer, or Windows 10 or newer. Linux is untested; pane raising on press is macOS only.
 - Orca notifications can stay off. Orca Agent Deck does not use them.
 
 ## Release files

@@ -3,7 +3,6 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createHash } from 'node:crypto';
 import { createServer } from 'node:net';
-import { pathToFileURL } from 'node:url';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { WebSocket, WebSocketServer } from 'ws';
 import { isPrivateFile, readDiscovery } from './discovery.ts';
@@ -19,7 +18,7 @@ import {
 
 // Plugin A is plain JS that ships inside Orca, so it is loaded by path to stay untyped.
 const pluginPath = new URL('../../../orca-plugin/main.mjs', import.meta.url);
-const plugin = (await import(pathToFileURL(pluginPath.pathname).href)) as {
+const plugin = (await import(pluginPath.href)) as {
   createBridge: (o: Record<string, unknown>) => {
     ensure: () => Promise<void>;
     status: () => { state: string; deck: unknown };
@@ -39,6 +38,19 @@ const plugin = (await import(pathToFileURL(pluginPath.pathname).href)) as {
 let dir: string;
 let discoveryPath: string;
 let server: BridgeServer;
+
+/** Points the plugin's default discovery path at the test dir on every platform. */
+function fakeUserDirs(): () => void {
+  const prev = { HOME: process.env.HOME, APPDATA: process.env.APPDATA };
+  process.env.HOME = dir;
+  process.env.APPDATA = join(dir, 'AppData', 'Roaming');
+  return () => {
+    if (prev.HOME === undefined) delete process.env.HOME;
+    else process.env.HOME = prev.HOME;
+    if (prev.APPDATA === undefined) delete process.env.APPDATA;
+    else process.env.APPDATA = prev.APPDATA;
+  };
+}
 
 beforeEach(async () => {
   dir = await mkdtemp(join(tmpdir(), 'bridge-'));
@@ -617,7 +629,6 @@ describe('plugin A client against the real server', () => {
 describe('plugin A activate() and the Show status command', () => {
   it('connects on activate and logs "Orca plugin connected" and never raises a notification', async () => {
     await server.start();
-    const prev = process.env.HOME;
     const commands = new Map<string, () => Promise<void>>();
     const logged: string[] = [];
     const orca = {
@@ -631,18 +642,16 @@ describe('plugin A activate() and the Show status command', () => {
         },
       },
     };
-    // activate() uses the default discovery path, so point HOME at a fake one
-    process.env.HOME = dir;
-    const { writeDiscovery } = await import('./discovery.ts');
+    // activate() uses the default discovery path, so point HOME and APPDATA at a fake one
+    const restore = fakeUserDirs();
+    const { writeDiscovery, defaultDiscoveryPath } = await import('./discovery.ts');
     const d = await readDiscovery(discoveryPath);
-    await writeDiscovery(join(dir, '.orca-deck', 'bridge.json'), d!);
+    await writeDiscovery(defaultDiscoveryPath(), d!);
     vi.resetModules();
-    const fresh = (await import(
-      `${pathToFileURL(pluginPath.pathname).href}?fresh=${Date.now()}`
-    )) as typeof plugin;
+    const fresh = (await import(`${pluginPath.href}?fresh=${Date.now()}`)) as typeof plugin;
     await fresh.default(orca);
     await commands.get('deck.status')!();
-    process.env.HOME = prev;
+    restore();
     expect(logged).toContain('status: Orca plugin connected');
     expect(commands.has('deck.status')).toBe(true);
   });
@@ -660,7 +669,6 @@ describe('plugin A activate() and the Show status command', () => {
     await server.start();
     const received: { type: string; pane?: unknown }[] = [];
     server.on('message', (m) => received.push(m));
-    const prev = process.env.HOME;
     const commands = new Map<string, () => Promise<string | void>>();
     const orca = {
       version: '1.4.245',
@@ -670,14 +678,12 @@ describe('plugin A activate() and the Show status command', () => {
       },
       events: { on: () => {} },
     };
-    process.env.HOME = dir;
-    const { writeDiscovery } = await import('./discovery.ts');
+    const restore = fakeUserDirs();
+    const { writeDiscovery, defaultDiscoveryPath } = await import('./discovery.ts');
     const d = await readDiscovery(discoveryPath);
-    await writeDiscovery(join(dir, '.orca-deck', 'bridge.json'), d!);
+    await writeDiscovery(defaultDiscoveryPath(), d!);
     vi.resetModules();
-    const fresh = (await import(
-      `${pathToFileURL(pluginPath.pathname).href}?fresh=${Date.now()}`
-    )) as typeof plugin;
+    const fresh = (await import(`${pluginPath.href}?fresh=${Date.now()}`)) as typeof plugin;
     await fresh.default(orca);
     try {
       expect(commands.has('deck.map') && commands.has('deck.unmap')).toBe(true);
@@ -691,7 +697,7 @@ describe('plugin A activate() and the Show status command', () => {
         expect(received.map((m) => m.type)).toEqual(['pairRequest', 'unmapRequest']);
       }
     } finally {
-      process.env.HOME = prev;
+      restore();
     }
   });
 });
@@ -816,13 +822,9 @@ describe('forwarder', () => {
 describe('plugin A end to end through activate()', () => {
   async function boot() {
     await server.start();
-    const prev = process.env.HOME;
-    process.env.HOME = dir;
-    const { writeDiscovery } = await import('./discovery.ts');
-    await writeDiscovery(
-      join(dir, '.orca-deck', 'bridge.json'),
-      (await readDiscovery(discoveryPath))!,
-    );
+    const restore = fakeUserDirs();
+    const { writeDiscovery, defaultDiscoveryPath } = await import('./discovery.ts');
+    await writeDiscovery(defaultDiscoveryPath(), (await readDiscovery(discoveryPath))!);
     const handlers = new Map<string, (e: object) => unknown>();
     const orca = {
       version: '1.4.245',
@@ -830,14 +832,12 @@ describe('plugin A end to end through activate()', () => {
       commands: { register: () => {} },
       events: { on: (n: string, fn: (e: object) => unknown) => handlers.set(n, fn) },
     };
-    const fresh = (await import(
-      `${pathToFileURL(pluginPath.pathname).href}?e2e=${Math.random()}`
-    )) as typeof plugin;
+    const fresh = (await import(`${pluginPath.href}?e2e=${Math.random()}`)) as typeof plugin;
     return {
       handlers,
       run: async () => {
         await fresh.default(orca);
-        process.env.HOME = prev;
+        restore();
       },
     };
   }

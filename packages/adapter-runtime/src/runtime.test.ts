@@ -27,6 +27,11 @@ let handler: (method: string, params: Record<string, unknown>) => unknown;
 let preamble: string[];
 let connections: number;
 
+const socketPathAt = (name: string) =>
+  process.platform === 'win32'
+    ? `\\\\.\\pipe\\orca-rt-${process.pid}-${name}`
+    : join(dir, `${name}.sock`);
+
 const writeMeta = (t = token, endpoint = sockPath) =>
   writeFile(
     metaPath,
@@ -35,7 +40,7 @@ const writeMeta = (t = token, endpoint = sockPath) =>
       authToken: t,
       transports: [
         { kind: 'websocket', endpoint: 'ws://127.0.0.1:1' },
-        { kind: 'unix', endpoint },
+        { kind: process.platform === 'win32' ? 'named-pipe' : 'unix', endpoint },
       ],
     }),
     { mode: 0o600 },
@@ -88,7 +93,8 @@ function listen(path: string): Promise<Server> {
 
 beforeEach(async () => {
   dir = await mkdtemp(join(tmpdir(), 'rt-'));
-  sockPath = join(dir, 's.sock');
+  // Windows sockets are named pipes: node:net takes the pipe path wherever it takes a socket path.
+  sockPath = socketPathAt('s');
   metaPath = join(dir, 'orca-runtime.json');
   token = 'tok-1';
   requests = [];
@@ -106,11 +112,11 @@ afterEach(async () => {
 describe('defaultMetaPath', () => {
   it('follows each platform', () => {
     expect(defaultMetaPath('darwin', {}, '/h')).toBe(
-      '/h/Library/Application Support/orca/orca-runtime.json',
+      join('/h', 'Library/Application Support/orca/orca-runtime.json'),
     );
-    expect(defaultMetaPath('linux', {}, '/h')).toBe('/h/.config/orca/orca-runtime.json');
+    expect(defaultMetaPath('linux', {}, '/h')).toBe(join('/h', '.config/orca/orca-runtime.json'));
     expect(defaultMetaPath('linux', { XDG_CONFIG_HOME: '/x' }, '/h')).toBe(
-      '/x/orca/orca-runtime.json',
+      join('/x', 'orca/orca-runtime.json'),
     );
     expect(defaultMetaPath('win32', { APPDATA: 'C:\\A' }, 'C:\\h')).toContain('orca');
   });
@@ -124,14 +130,33 @@ describe('readMeta', () => {
       runtimeId: 'rt1',
     });
   });
-  it('refuses a runtime file others can read, or a symlink to one', async () => {
-    await chmod(metaPath, 0o644);
-    expect(await readMeta(metaPath)).toBeNull();
-    await chmod(metaPath, 0o600);
-    const link = join(dir, 'link.json');
-    await symlink(metaPath, link);
-    expect(await readMeta(link)).toBeNull();
+  it('picks the Windows named-pipe transport', async () => {
+    await writeFile(
+      metaPath,
+      JSON.stringify({
+        runtimeId: 'rt1',
+        authToken: token,
+        transports: [{ kind: 'named-pipe', endpoint: '\\\\.\\pipe\\orca-1-abc' }],
+      }),
+      { mode: 0o600 },
+    );
+    expect(await readMeta(metaPath)).toEqual({
+      endpoint: '\\\\.\\pipe\\orca-1-abc',
+      authToken: token,
+      runtimeId: 'rt1',
+    });
   });
+  it.skipIf(process.platform === 'win32')(
+    'refuses a runtime file others can read, or a symlink to one',
+    async () => {
+      await chmod(metaPath, 0o644);
+      expect(await readMeta(metaPath)).toBeNull();
+      await chmod(metaPath, 0o600);
+      const link = join(dir, 'link.json');
+      await symlink(metaPath, link);
+      expect(await readMeta(link)).toBeNull();
+    },
+  );
   it('returns null for a missing, garbled or unix-less file', async () => {
     expect(await readMeta(join(dir, 'none.json'))).toBeNull();
     await writeFile(metaPath, 'nope');
@@ -191,7 +216,7 @@ describe('RuntimeClient', () => {
     expect(await c.call('x')).toBe('old');
     // restart: new socket + token, old socket gone
     await new Promise((r) => server.close(r));
-    const newSock = join(dir, 'n.sock');
+    const newSock = socketPathAt('n');
     token = 'tok-2';
     server = await listen(newSock);
     handler = () => 'new';

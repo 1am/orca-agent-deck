@@ -2,6 +2,7 @@ import { execFileSync } from 'node:child_process';
 import { mkdtempSync, readFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { expect, it } from 'vitest';
 import { z } from 'zod';
 import {
@@ -76,7 +77,7 @@ it('CLI shim records focus in the state log', () => {
     execFileSync('node', ['--experimental-strip-types', 'src/bin.ts', ...a], {
       env: { ...process.env, FAKE_ORCA_STATE: state },
       encoding: 'utf8',
-      cwd: new URL('..', import.meta.url).pathname,
+      cwd: fileURLToPath(new URL('..', import.meta.url)),
     });
   run('scenario', 'multi-agent-day');
   const list = JSON.parse(run('terminal', 'list', '--json'));
