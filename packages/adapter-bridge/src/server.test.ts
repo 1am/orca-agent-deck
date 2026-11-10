@@ -19,6 +19,7 @@ import {
 // Plugin A is plain JS that ships inside Orca, so it is loaded by path to stay untyped.
 const pluginPath = new URL('../../../orca-plugin/main.mjs', import.meta.url);
 const plugin = (await import(pluginPath.href)) as {
+  PLUGIN_VERSION: string;
   createBridge: (o: Record<string, unknown>) => {
     ensure: () => Promise<void>;
     status: () => { state: string; deck: unknown };
@@ -545,7 +546,10 @@ describe('plugin A client against the real server', () => {
     const a = plugin.createBridge({ orcaVersion: '1.4.245', discoveryPath, onAck });
     await a.ensure();
     await until(() => a.status().state === 'connected');
-    expect(server.connection).toEqual({ orcaVersion: '1.4.245', pluginVersion: '0.1.0' });
+    expect(server.connection).toEqual({
+      orcaVersion: '1.4.245',
+      pluginVersion: plugin.PLUGIN_VERSION,
+    });
     expect(onAck).toHaveBeenCalledOnce();
     expect(a.status().deck).toEqual({ connected: true, devices: [{ model: 'Mobile', keys: 15 }] });
     a.stop();

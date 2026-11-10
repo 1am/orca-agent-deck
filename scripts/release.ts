@@ -19,6 +19,8 @@ const manifest = join(
   'packages/streamdeck-plugin/pl.1am.orca-agent-deck.sdPlugin/manifest.json',
 );
 const orcaManifest = join(root, 'orca-plugin/orca-plugin.json');
+const orcaMain = join(root, 'orca-plugin/main.mjs');
+const PLUGIN_VERSION_RE = /(export const PLUGIN_VERSION = ')[^']*(')/;
 const rootOrcaManifest = join(root, 'orca-plugin.json');
 const changelog = join(root, 'CHANGELOG.md');
 const dist = join(root, 'dist');
@@ -42,6 +44,11 @@ function setVersion(version: string): void {
   if (!m) throw new Error(`not a SemVer version: ${version}`);
   for (const file of [rootPkg, sdPkg, orcaManifest])
     writeJson(file, { ...readJson(file), version });
+  // The version the Orca plugin reports to the Stream Deck plugin.
+  writeFileSync(
+    orcaMain,
+    readFileSync(orcaMain, 'utf8').replace(PLUGIN_VERSION_RE, `$1${version}$2`),
+  );
   // Stream Deck manifests need four numeric parts, so a prerelease suffix is dropped.
   writeJson(manifest, { ...readJson(manifest), Version: `${m[1]}.${m[2]}.${m[3]}.0` });
   console.log(`version set to ${version} (manifest ${m[1]}.${m[2]}.${m[3]}.0)`);
@@ -173,6 +180,8 @@ function validate(tag?: string): void {
   };
   if (orca.manifestVersion !== 2) problems.push('orca-plugin.json manifestVersion must be 2');
   if (orca.version !== version) problems.push(`orca-plugin.json version is not ${version}`);
+  if (!readFileSync(orcaMain, 'utf8').includes(`export const PLUGIN_VERSION = '${version}'`))
+    problems.push(`orca-plugin/main.mjs PLUGIN_VERSION is not ${version} (release.ts version)`);
   // Orca reserves the orca- prefix for its own plugins.
   if (!orca.id || orca.id.startsWith('orca-'))
     problems.push(`orca-plugin.json id ${orca.id} is missing or starts with orca-`);
