@@ -82,6 +82,26 @@ export function awaitingOf(
   return classifyFinalMessage(a.lastAssistantMessage).asks ? 'text' : null;
 }
 
+/**
+ * Hosts that neither listing could cover. A host one listing covered answered it, so it is up: an
+ * SSH host with worktrees but no terminals appears only in the terminal listing's gaps.
+ * `runtime:` peers are paired runtimes: Orca discloses them even after they retire and they are not
+ * this runtime's enumeration duty, so they are not outages. `local` answered the call it came from.
+ */
+export function unreachableHostIds(
+  terminalScope: readonly string[] | undefined,
+  worktreeScope: readonly string[] | undefined,
+): string[] {
+  const scopes = [terminalScope, worktreeScope].filter(
+    (scope): scope is readonly string[] => scope !== undefined,
+  );
+  const [first, second] = scopes;
+  if (!first) return [];
+  // An older Orca may publish one scope only: keep its gaps rather than assume coverage.
+  const omitted = second ? first.filter((id) => second.includes(id)) : [...first];
+  return omitted.filter((id) => id !== 'local' && !id.startsWith('runtime:'));
+}
+
 export class CliAdapter implements OrcaAdapter {
   /**
    * One read costs 4 `orca` spawns (status, terminal list, worktree ps, host list), and NFR-2 allows
@@ -225,13 +245,11 @@ export class CliAdapter implements OrcaAdapter {
       if (!p.agentType)
         p.agentType = statuses.find((x) => x.paneKey === p.paneKey)?.agentType ?? null;
     }
-    const omitted = new Set([
-      ...(terms.result.hostScope?.omittedHostIds ?? []),
-      ...(ps.result.hostScope?.omittedHostIds ?? []),
-    ]);
-    // Orca answering means its own host is up; it was seen flapping into omittedHostIds.
-    omitted.delete('local');
-    return { panes, statuses, omittedHostIds: [...omitted] };
+    const omitted = unreachableHostIds(
+      terms.result.hostScope?.omittedHostIds,
+      ps.result.hostScope?.omittedHostIds,
+    );
+    return { panes, statuses, omittedHostIds: omitted };
   }
 
   async listHosts(): Promise<HostInfo[]> {

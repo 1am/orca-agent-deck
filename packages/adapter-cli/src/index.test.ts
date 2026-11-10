@@ -1,6 +1,6 @@
 import { readFileSync } from 'node:fs';
 import { expect, it } from 'vitest';
-import { CliAdapter, type Exec } from './index.ts';
+import { CliAdapter, unreachableHostIds, type Exec } from './index.ts';
 
 const fx = (n: string) => readFileSync(`test/fixtures/orca/${n}`, 'utf8');
 
@@ -36,6 +36,23 @@ it('focus reports errors instead of throwing', async () => {
   expect(
     (await new CliAdapter(bad).focus({ paneKey: 'a:b', hostId: 'local', handle: 'h' })).ok,
   ).toBe(false);
+});
+
+it('counts a host as unreachable only when both listings omit it', () => {
+  // An SSH host with worktrees but no terminals is covered by worktree ps: it answered.
+  expect(unreachableHostIds(['runtime:peer', 'ssh:build'], ['runtime:peer'])).toEqual([]);
+  // A host neither listing could reach is down.
+  expect(unreachableHostIds(['ssh:build', 'runtime:peer'], ['ssh:build'])).toEqual(['ssh:build']);
+  // Paired runtimes are disclosed even after they retire; they are not outages.
+  expect(unreachableHostIds(['runtime:peer'], ['runtime:peer'])).toEqual([]);
+  // `local` answered the call it came from.
+  expect(unreachableHostIds(['local'], ['local'])).toEqual([]);
+});
+
+it('keeps the gaps of the only scope an older Orca publishes', () => {
+  expect(unreachableHostIds(['ssh:build', 'runtime:peer'], undefined)).toEqual(['ssh:build']);
+  expect(unreachableHostIds(undefined, ['ssh:build'])).toEqual(['ssh:build']);
+  expect(unreachableHostIds(undefined, undefined)).toEqual([]);
 });
 
 it('health is down when orca is unreachable', async () => {
