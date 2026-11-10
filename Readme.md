@@ -96,6 +96,10 @@ Best effort, by one maintainer. Supported: the latest stable Orca and the releas
 
 To report a problem, open an issue with one of the templates and attach the file from `node collect-diagnostics.mjs` (see [Logs](docs/install.md#logs)). Read it before attaching it.
 
+## Thanks
+
+Windows support was tested and helped along by [@jondmarien](https://github.com/jondmarien).
+
 ## License
 
 [MIT](LICENSE)
