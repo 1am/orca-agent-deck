@@ -24,7 +24,7 @@ https://github.com/user-attachments/assets/1dfea071-0276-4011-b159-7916241eb2ca
 
 ## Requirements
 
-- macOS 13 or newer, Windows 10 or newer, or Linux (tested on Ubuntu 22.04). Pane raising on press is macOS only.
+- macOS 13 or newer, Windows 10 or newer, or Linux (tested on Ubuntu 22.04). Pane raising on press works on macOS, and on Linux under X11 with `xdotool` or `wmctrl` installed.
 - Orca 1.4.245 or newer, with the `orca` shell command registered (Orca: Settings, register CLI).
 - The Elgato Stream Deck app 7.1 or newer (macOS, Windows) or [OpenDeck](https://github.com/nekename/opendeck) (Linux), and a Stream Deck (hardware or Stream Deck Mobile).
 
@@ -48,7 +48,7 @@ Then install `dist/orca-agent-deck-<version>.streamDeckPlugin` (double-click) an
 
 ## Known limitations
 
-- Pressing a key raises the Orca window on macOS only.
+- Pressing a key raises the Orca window on macOS, and on Linux under X11 when `xdotool` or `wmctrl` is installed. On Windows and on Wayland it only focuses the pane.
 - Packages are not signed.
 - The two plugins are installed separately.
 - Panes on a paired Orca server update more slowly, and hold-to-assign does not work for them (use the picker).

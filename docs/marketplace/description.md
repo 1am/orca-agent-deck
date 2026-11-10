@@ -10,7 +10,7 @@ Features:
 Requirements:
 - Orca 1.4.245 or newer, with the orca shell command registered
 - Stream Deck app 7.1 or newer
-- macOS 13 or newer, or Windows 10 or newer; pane raising on press is macOS only. On Linux, install the release package in OpenDeck.
+- macOS 13 or newer, or Windows 10 or newer; pane raising on press works on macOS, and on Linux under X11 with xdotool or wmctrl installed. On Linux, install the release package in OpenDeck.
 - The companion Orca plugin, installed separately (setup steps in the plugin's Readme)
 
 Orca Agent Deck is an independent personal project and is not made by Orca or Elgato.

@@ -31,7 +31,8 @@ Versions and platforms that have been tested: [compatibility](compatibility.md).
 
 - Orca 1.4.245 or newer, with the `orca` shell command registered (Orca: Settings, register CLI).
 - The Elgato Stream Deck app 7.1 or newer (macOS, Windows) or [OpenDeck](https://github.com/nekename/opendeck) (Linux), and a Stream Deck.
-- macOS 13 or newer, Windows 10 or newer, or Linux (tested on Ubuntu 22.04). Pane raising on press is macOS only.
+- Linux only, to raise the Orca window on press: `xdotool` or `wmctrl` (`sudo apt install xdotool`), under an X11 session. Not available on Wayland.
+- macOS 13 or newer, Windows 10 or newer, or Linux (tested on Ubuntu 22.04). Pane raising on press works on macOS, and on Linux under X11 with `xdotool` or `wmctrl` installed.
 - Orca notifications can stay off. Orca Agent Deck does not use them.
 
 ## Release files
@@ -49,7 +50,7 @@ Unzip `orca-agent-deck-orca-plugin-<version>.zip` into a folder you keep, since 
 
 ## Permissions
 
-Orca Agent Deck needs no macOS permission of its own. It reads Orca through the local runtime socket, finds the `orca` command at fixed paths (no login shell), and raises the Orca window with `open -b`, which needs nothing. You should see no Files and Folders, Automation, Accessibility or Local Network dialog from it. If you do, please report it with the dialog text.
+Orca Agent Deck needs no macOS permission of its own. It reads Orca through the local runtime socket, finds the `orca` command at fixed paths (no login shell), and raises the Orca window with `open -b` (macOS), which needs nothing. You should see no Files and Folders, Automation, Accessibility or Local Network dialog from it. If you do, please report it with the dialog text.
 
 ## tmux
 

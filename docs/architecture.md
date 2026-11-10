@@ -234,7 +234,7 @@ stateDiagram-v2
 
 | Step | Measured | Notes |
 |---|---|---|
-| Window raise (`open -b`) | 35-100 ms | No permission needed |
+| Window raise (`open -b`, macOS) | 35-100 ms | No permission needed |
 | Focus, local pane (socket) | 40-100 ms incl. raise | |
 | Focus, paired-server pane | ~20 ms via `terminal.reveal` (probe); 1.3-3.4 s on the CLI fallback | The CLI fallback is a spawn plus a new connection to the remote runtime |
 | Refresh, steady state | well under 1 s (not logged) | Slow refreshes (>1 s) are logged with a per-phase split |

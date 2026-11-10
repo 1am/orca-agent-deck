@@ -85,9 +85,9 @@ Find the symptom, check the cause, apply the fix. Status key captions come from 
 
 ### Nothing happens when I press a key
 
-- **Cause.** Pressing focuses the pane in Orca and raises the Orca window; raising works on macOS only. On Windows and Linux the pane is focused but the window stays where it is.
+- **Cause.** Pressing focuses the pane in Orca and raises the Orca window. Raising works on macOS and on Linux under X11 with `xdotool` or `wmctrl` installed. On Windows and on Wayland the pane is focused but the window stays where it is.
 - **Check.** The key flashes an alert on failure. The Stream Deck plugin log has one `press` line per press with the result.
-- **Fix.** On macOS, check that Orca's bundle id is `com.stablyai.orca` and that Orca is running. A pane on a host that is down cannot be focused; the press still raises Orca.
+- **Fix.** On Linux, install `xdotool` or `wmctrl` (`sudo apt install xdotool`), restart the Stream Deck software, and check that `echo $XDG_SESSION_TYPE` prints `x11`. The plugin log has a `raise ok=false error=...` line when no tool is found. On macOS, check that Orca's bundle id is `com.stablyai.orca` and that Orca is running. A pane on a host that is down cannot be focused; the press still raises Orca.
 
 ### Paired-server panes are slow or cannot be held
 

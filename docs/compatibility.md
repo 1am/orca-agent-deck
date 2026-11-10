@@ -7,8 +7,8 @@
 | | Status |
 |---|---|
 | macOS | Tested (macOS 15). macOS 13 or newer is the declared minimum. |
-| Windows | Tested (Windows 11, Orca 1.4.255). Windows 10 or newer is the declared minimum. Pressing a key does not raise the Orca window off macOS. |
-| Linux | Tested (Ubuntu 22.04, in OpenDeck). Pressing a key focuses the pane but does not raise the Orca window. |
+| Windows | Tested (Windows 11, Orca 1.4.255). Windows 10 or newer is the declared minimum. Pressing a key focuses the pane but does not raise the Orca window. |
+| Linux | Tested (Ubuntu 22.04, in OpenDeck). Pressing a key focuses the pane; the Orca window is raised too under X11 with `xdotool` or `wmctrl` installed, not on Wayland. |
 
 ## Stream Deck
 
