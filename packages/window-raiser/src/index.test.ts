@@ -27,10 +27,15 @@ describe('window-raiser', () => {
 
   describe('Linux X11', () => {
     const env = { DISPLAY: ':0' };
-    const recorder = (missing: string[] = [], failRaise = false) => {
+    const WINDOWS = [
+      '0x03000001  0 orca-ide.orca-ide  host  Orca IDE',
+      '0x04000003  0 electron.Orca      host  my-worktree',
+    ].join('\n');
+    const recorder = (missing: string[] = [], failRaise = false, listing = '') => {
       const calls: string[][] = [];
       const exec: Run = async (cmd, args) => {
         calls.push([cmd, ...args]);
+        if (cmd === 'wmctrl' && args[0] === '-lx') return listing;
         if (missing.includes(cmd)) throw new Error(`spawn ${cmd} ENOENT`);
         if (failRaise && args.includes('windowactivate')) throw new Error('no window');
       };
@@ -42,17 +47,45 @@ describe('window-raiser', () => {
       expect((await makeRaiser('linux', exec, env).raise()).ok).toBe(true);
       expect(calls).toEqual([
         ['xdotool', 'version'],
-        ['xdotool', 'search', '--class', '^orca$', 'windowactivate'],
+        [
+          'xdotool',
+          'search',
+          '--onlyvisible',
+          '--limit',
+          '1',
+          '--class',
+          '^orca$',
+          'windowactivate',
+        ],
       ]);
     });
 
     it('falls back to wmctrl and remembers the choice', async () => {
-      const { calls, exec } = recorder(['xdotool']);
+      const { calls, exec } = recorder(['xdotool'], false, WINDOWS);
       const r = makeRaiser('linux', exec, env);
       await r.raise();
       calls.length = 0;
       await r.raise();
-      expect(calls).toEqual([['wmctrl', '-x', '-a', 'orca.orca']]);
+      expect(calls).toEqual([
+        ['wmctrl', '-lx'],
+        ['wmctrl', '-i', '-a', '0x04000003'],
+      ]);
+    });
+
+    it('wmctrl picks the window by exact class, whatever the instance name', async () => {
+      const { calls, exec } = recorder(['xdotool'], false, WINDOWS);
+      expect((await makeRaiser('linux', exec, env).raise()).ok).toBe(true);
+      expect(calls.at(-1)).toEqual(['wmctrl', '-i', '-a', '0x04000003']);
+    });
+
+    it('wmctrl fails when no window has the Orca class', async () => {
+      const { calls, exec } = recorder(
+        ['xdotool'],
+        false,
+        '0x01 0 orca-ide.orca-ide host Orca IDE',
+      );
+      expect(await makeRaiser('linux', exec, env).raise()).toMatchObject({ ok: false });
+      expect(calls.some((c) => c.includes('-i'))).toBe(false);
     });
 
     it('reports a missing tool instead of throwing', async () => {

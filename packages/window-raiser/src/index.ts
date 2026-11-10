@@ -11,14 +11,16 @@ export interface WindowRaiser {
   raise(): Promise<RaiseResult>;
 }
 
-/** Runs a command and resolves when it exits 0. Injectable for tests. */
-export type Run = (cmd: string, args: string[]) => Promise<void>;
+/** Runs a command and resolves with its stdout when it exits 0. Injectable for tests. */
+export type Run = (cmd: string, args: string[]) => Promise<string | void>;
 
 const ORCA_BUNDLE_ID = 'com.stablyai.orca';
+/** X11 window class of Orca (xdotool matches it case-insensitively, so the wmctrl path does too). */
+const WM_CLASS = 'orca';
 
 const run: Run = (cmd, args) =>
   new Promise((resolve, reject) =>
-    execFile(cmd, args, { timeout: 3000 }, (err) => (err ? reject(err) : resolve())),
+    execFile(cmd, args, { timeout: 3000 }, (err, stdout) => (err ? reject(err) : resolve(stdout))),
   );
 
 class CommandRaiser implements WindowRaiser {
@@ -50,6 +52,16 @@ export const openAppRaiser = (exec: Run = run): WindowRaiser =>
 /** Platforms without a raise strategy (Windows, Wayland): focusing the pane inside Orca still works. */
 export const noopRaiser: WindowRaiser = { raise: async () => ({ ok: true, ms: 0 }) };
 
+/** Id of the first window in `wmctrl -lx` output whose class (the part after the instance dot) is Orca's. */
+function findWindowId(listing: string): string | undefined {
+  for (const line of listing.split('\n')) {
+    // `<id> <desktop> <instance>.<class> <host> <title>`
+    const [id, , wmClass] = line.trim().split(/\s+/);
+    if (id && wmClass?.slice(wmClass.lastIndexOf('.') + 1).toLowerCase() === WM_CLASS) return id;
+  }
+  return undefined;
+}
+
 /**
  * Linux on X11: tries each tool that is installed, in order, until one raises the window.
  * Presence is probed with a harmless call, so a missing tool costs one failed spawn per raise at
@@ -57,14 +69,37 @@ export const noopRaiser: WindowRaiser = { raise: async () => ({ ok: true, ms: 0 
  */
 class X11Raiser implements WindowRaiser {
   private readonly exec: Run;
-  private readonly strategies = [
+  private readonly strategies: ReadonlyArray<{
+    probe: [string, string[]];
+    raise: () => Promise<void>;
+  }> = [
     {
       probe: ['xdotool', ['version']],
       // Anchored: the class is a regex and would also match other apps such as `orca-ide`.
-      raise: ['xdotool', ['search', '--class', '^orca$', 'windowactivate']],
+      // Visible only and one hit: Electron also keeps a hidden leader window of the same class.
+      raise: async () => {
+        await this.exec('xdotool', [
+          'search',
+          '--onlyvisible',
+          '--limit',
+          '1',
+          '--class',
+          `^${WM_CLASS}$`,
+          'windowactivate',
+        ]);
+      },
     },
-    { probe: ['wmctrl', ['-m']], raise: ['wmctrl', ['-x', '-a', 'orca.orca']] },
-  ] as const;
+    {
+      probe: ['wmctrl', ['-m']],
+      // `wmctrl -a` matches substrings of the class and needs the instance name: pick the window
+      // by its exact class from the listing and activate it by id.
+      raise: async () => {
+        const id = findWindowId((await this.exec('wmctrl', ['-lx'])) || '');
+        if (!id) throw new Error(`no ${WM_CLASS} window`);
+        await this.exec('wmctrl', ['-i', '-a', id]);
+      },
+    },
+  ];
   private usable: (typeof this.strategies)[number] | null | undefined;
 
   constructor(exec: Run) {
@@ -78,7 +113,7 @@ class X11Raiser implements WindowRaiser {
       this.usable = null;
       for (const s of this.strategies) {
         try {
-          await this.exec(s.probe[0], [...s.probe[1]]);
+          await this.exec(s.probe[0], s.probe[1]);
           this.usable = s;
           break;
         } catch {
@@ -88,7 +123,7 @@ class X11Raiser implements WindowRaiser {
     }
     if (!this.usable) return { ok: false, ms: ms(), error: 'no X11 raise tool (xdotool, wmctrl)' };
     try {
-      await this.exec(this.usable.raise[0], [...this.usable.raise[1]]);
+      await this.usable.raise();
       return { ok: true, ms: ms() };
     } catch (e) {
       return { ok: false, ms: ms(), error: (e as Error).message };

@@ -1,11 +1,12 @@
-import { chmod, mkdtemp, readFile, rm, stat, symlink, writeFile } from 'node:fs/promises';
+import { chmod, lstat, mkdtemp, readFile, rm, stat, symlink, writeFile } from 'node:fs/promises';
+import type { Stats } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createHash } from 'node:crypto';
 import { createServer } from 'node:net';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { WebSocket, WebSocketServer } from 'ws';
-import { isPrivateFile, readDiscovery } from './discovery.ts';
+import { isPrivateFile, readDiscovery, writeDiscovery } from './discovery.ts';
 import { PROTOCOL_VERSION } from './protocol.ts';
 import {
   BridgeServer,
@@ -36,15 +37,20 @@ const plugin = (await import(pluginPath.href)) as {
   default: (orca: unknown) => Promise<void>;
 };
 
+// Wraps lstat so a test can fake what Windows reports (real symlinks need extra rights there).
+vi.mock('node:fs/promises', async (orig) => {
+  const actual = await orig<typeof import('node:fs/promises')>();
+  return { ...actual, lstat: vi.fn(actual.lstat) };
+});
+
 let dir: string;
 let discoveryPath: string;
 let server: BridgeServer;
 
 /** Points the plugin's default discovery path at the test dir on every platform. afterEach undoes it. */
-function fakeUserDirs(): () => void {
+function fakeUserDirs(): void {
   vi.stubEnv('HOME', dir);
   vi.stubEnv('APPDATA', join(dir, 'AppData', 'Roaming'));
-  return () => vi.unstubAllEnvs();
 }
 
 beforeEach(async () => {
@@ -57,7 +63,6 @@ beforeEach(async () => {
   });
 });
 afterEach(async () => {
-  // A failed test may not reach its own restore()
   vi.unstubAllEnvs();
   await server.stop();
   await rm(dir, { recursive: true, force: true });
@@ -167,6 +172,37 @@ describe('discovery file', () => {
     expect(await readDiscovery(loose)).toBeNull();
     expect(await isPrivateFile(loose)).toBe(false);
     expect(await isPrivateFile(discoveryPath)).toBe(true);
+  });
+
+  it('on win32 only the regular-file check applies, so a symlink is still refused', async () => {
+    const platform = Object.getOwnPropertyDescriptor(process, 'platform')!;
+    Object.defineProperty(process, 'platform', { value: 'win32' });
+    try {
+      const faked = (isFile: boolean) =>
+        vi
+          .mocked(lstat)
+          .mockResolvedValueOnce({ isFile: () => isFile, uid: -1, mode: 0o644 } as Stats);
+      faked(false);
+      expect(await isPrivateFile(join(dir, 'link.json'))).toBe(false);
+      // no uid or mode bits on Windows: a regular file passes whatever they say
+      faked(true);
+      expect(await isPrivateFile(join(dir, 'file.json'))).toBe(true);
+    } finally {
+      Object.defineProperty(process, 'platform', platform);
+    }
+  });
+
+  it('writeDiscovery replaces a symlink at the target instead of following it', async () => {
+    if (process.platform === 'win32') return;
+    const d = await server.start();
+    const victim = join(dir, 'victim.txt');
+    await writeFile(victim, 'keep');
+    const target = join(dir, 'planted.json');
+    await symlink(victim, target);
+    await writeDiscovery(target, d);
+    expect(await readFile(victim, 'utf8')).toBe('keep');
+    expect((await lstat(target)).isFile()).toBe(true);
+    expect((await stat(target)).mode & 0o777).toBe(0o600);
   });
 
   it('plugin A will not use a discovery file that is world readable', async () => {
@@ -643,7 +679,7 @@ describe('plugin A activate() and the Show status command', () => {
       },
     };
     // activate() uses the default discovery path, so point HOME and APPDATA at a fake one
-    const restore = fakeUserDirs();
+    fakeUserDirs();
     const { writeDiscovery, defaultDiscoveryPath } = await import('./discovery.ts');
     const d = await readDiscovery(discoveryPath);
     await writeDiscovery(defaultDiscoveryPath(), d!);
@@ -651,7 +687,6 @@ describe('plugin A activate() and the Show status command', () => {
     const fresh = (await import(`${pluginPath.href}?fresh=${Date.now()}`)) as typeof plugin;
     await fresh.default(orca);
     await commands.get('deck.status')!();
-    restore();
     expect(logged).toContain('status: Orca plugin connected');
     expect(commands.has('deck.status')).toBe(true);
   });
@@ -678,26 +713,22 @@ describe('plugin A activate() and the Show status command', () => {
       },
       events: { on: () => {} },
     };
-    const restore = fakeUserDirs();
+    fakeUserDirs();
     const { writeDiscovery, defaultDiscoveryPath } = await import('./discovery.ts');
     const d = await readDiscovery(discoveryPath);
     await writeDiscovery(defaultDiscoveryPath(), d!);
     vi.resetModules();
     const fresh = (await import(`${pluginPath.href}?fresh=${Date.now()}`)) as typeof plugin;
     await fresh.default(orca);
-    try {
-      expect(commands.has('deck.map') && commands.has('deck.unmap')).toBe(true);
-      expect(await commands.get('deck.map')!()).toBe(toast);
+    expect(commands.has('deck.map') && commands.has('deck.unmap')).toBe(true);
+    expect(await commands.get('deck.map')!()).toBe(toast);
+    await new Promise((r) => setTimeout(r, 100));
+    expect(received.map((m) => m.type)).toEqual(sent);
+    if (deckUp) {
+      expect(received[0]).toMatchObject({ pane: null });
+      expect(await commands.get('deck.unmap')!()).toBe('Unmapping this pane');
       await new Promise((r) => setTimeout(r, 100));
-      expect(received.map((m) => m.type)).toEqual(sent);
-      if (deckUp) {
-        expect(received[0]).toMatchObject({ pane: null });
-        expect(await commands.get('deck.unmap')!()).toBe('Unmapping this pane');
-        await new Promise((r) => setTimeout(r, 100));
-        expect(received.map((m) => m.type)).toEqual(['pairRequest', 'unmapRequest']);
-      }
-    } finally {
-      restore();
+      expect(received.map((m) => m.type)).toEqual(['pairRequest', 'unmapRequest']);
     }
   });
 });
@@ -822,7 +853,7 @@ describe('forwarder', () => {
 describe('plugin A end to end through activate()', () => {
   async function boot() {
     await server.start();
-    const restore = fakeUserDirs();
+    fakeUserDirs();
     const { writeDiscovery, defaultDiscoveryPath } = await import('./discovery.ts');
     await writeDiscovery(defaultDiscoveryPath(), (await readDiscovery(discoveryPath))!);
     const handlers = new Map<string, (e: object) => unknown>();
@@ -837,7 +868,6 @@ describe('plugin A end to end through activate()', () => {
       handlers,
       run: async () => {
         await fresh.default(orca);
-        restore();
       },
     };
   }

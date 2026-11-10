@@ -1,5 +1,6 @@
 import { createServer, type Server, type Socket } from 'node:net';
-import { chmod, mkdtemp, rm, symlink, utimes, writeFile } from 'node:fs/promises';
+import { chmod, lstat, mkdtemp, rm, symlink, utimes, writeFile } from 'node:fs/promises';
+import type { Stats } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -13,6 +14,12 @@ import {
   makeRuntimeExec,
   readMeta,
 } from './index.ts';
+
+// Wraps lstat so a test can fake what Windows reports (real symlinks need extra rights there).
+vi.mock('node:fs/promises', async (orig) => {
+  const actual = await orig<typeof import('node:fs/promises')>();
+  return { ...actual, lstat: vi.fn(actual.lstat) };
+});
 
 const fx = (n: string) =>
   JSON.parse(readFileSync(`test/fixtures/orca/${n}`, 'utf8')) as { result: unknown };
@@ -120,6 +127,9 @@ describe('defaultMetaPath', () => {
     );
     expect(defaultMetaPath('win32', { APPDATA: 'C:\\A' }, 'C:\\h')).toContain('orca');
     // An empty APPDATA must not turn into a path relative to the working directory
+    expect(defaultMetaPath('linux', { XDG_CONFIG_HOME: '' }, '/h')).toBe(
+      join('/h', '.config', 'orca/orca-runtime.json'),
+    );
     expect(defaultMetaPath('win32', { APPDATA: '' }, 'C:\\h')).toBe(
       join('C:\\h', 'AppData/Roaming', 'orca/orca-runtime.json'),
     );
@@ -161,6 +171,19 @@ describe('readMeta', () => {
       expect(await readMeta(link)).toBeNull();
     },
   );
+  it('on win32 only the regular-file check applies, so a symlink is still refused', async () => {
+    const platform = Object.getOwnPropertyDescriptor(process, 'platform')!;
+    Object.defineProperty(process, 'platform', { value: 'win32' });
+    try {
+      // a regular file passes whatever uid and mode say
+      vi.mocked(lstat).mockResolvedValueOnce({ isFile: () => true, uid: -1, mode: 0o644 } as Stats);
+      expect(await readMeta(metaPath)).not.toBeNull();
+      vi.mocked(lstat).mockResolvedValueOnce({ isFile: () => false } as Stats);
+      expect(await readMeta(metaPath)).toBeNull();
+    } finally {
+      Object.defineProperty(process, 'platform', platform);
+    }
+  });
   it('returns null for a missing, garbled or unix-less file', async () => {
     expect(await readMeta(join(dir, 'none.json'))).toBeNull();
     await writeFile(metaPath, 'nope');

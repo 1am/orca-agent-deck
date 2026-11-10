@@ -1,19 +1,11 @@
 import { chmodSync, lstatSync, mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
-import { homedir } from 'node:os';
 import { dirname, join } from 'node:path';
+import { deckDataDir } from '@orca-agent-deck/adapter-bridge';
 import type { SlotSettings, SlotStorage } from '@orca-agent-deck/core';
 
 type Slots = Record<string, SlotSettings>;
 
-export const defaultMappingsPath = (): string => {
-  if (process.platform === 'win32')
-    return join(
-      process.env.APPDATA || join(homedir(), 'AppData', 'Roaming'),
-      'orca-deck',
-      'mappings.json',
-    );
-  return join(homedir(), '.orca-deck', 'mappings.json');
-};
+export const defaultMappingsPath = (): string => join(deckDataDir(), 'mappings.json');
 
 /**
  * Slot mappings in `~/.orca-deck/mappings.json`, shared by every Stream Deck host (Elgato app,

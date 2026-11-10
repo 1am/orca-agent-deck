@@ -1,4 +1,4 @@
-import { chmod, lstat, mkdir, readFile, rm, writeFile } from 'node:fs/promises';
+import { chmod, lstat, mkdir, readFile, rename, rm, writeFile } from 'node:fs/promises';
 import { homedir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { z } from 'zod';
@@ -15,16 +15,17 @@ export const discoveryFile = z.object({
 });
 export type Discovery = z.infer<typeof discoveryFile>;
 
-export function defaultDiscoveryPath(): string {
+/** Per-user folder shared by the bridge discovery file and the slot mappings. */
+export function deckDataDir(): string {
   if (process.platform === 'win32') {
     // A worker can start without APPDATA in its environment: fall back to the same per-user folder.
-    return join(
-      process.env.APPDATA || join(homedir(), 'AppData', 'Roaming'),
-      'orca-deck',
-      'bridge.json',
-    );
+    return join(process.env.APPDATA || join(homedir(), 'AppData', 'Roaming'), 'orca-deck');
   }
-  return join(homedir(), '.orca-deck', 'bridge.json');
+  return join(homedir(), '.orca-deck');
+}
+
+export function defaultDiscoveryPath(): string {
+  return join(deckDataDir(), 'bridge.json');
 }
 
 export async function writeDiscovery(path: string, d: Discovery): Promise<void> {
@@ -32,9 +33,13 @@ export async function writeDiscovery(path: string, d: Discovery): Promise<void> 
   await mkdir(dir, { recursive: true, mode: 0o700 });
   // mkdir applies the umask and keeps the mode of an existing dir: fix it on every start
   if (process.platform !== 'win32') await chmod(dir, 0o700);
-  await writeFile(path, JSON.stringify(d), { mode: 0o600 });
+  // Write a fresh file and rename it over the target: writing in place would follow a symlink
+  // planted at `path`, rename replaces the link itself.
+  const tmp = `${path}.${process.pid}.tmp`;
+  await writeFile(tmp, JSON.stringify(d), { mode: 0o600 });
   // writeFile keeps the mode of a pre-existing file
-  await chmod(path, 0o600);
+  await chmod(tmp, 0o600);
+  await rename(tmp, path);
 }
 
 /**

@@ -20,7 +20,7 @@ export function defaultMetaPath(
     return join(home, 'Library/Application Support/orca/orca-runtime.json');
   if (platform === 'win32')
     return join(env['APPDATA'] || join(home, 'AppData/Roaming'), 'orca/orca-runtime.json');
-  return join(env['XDG_CONFIG_HOME'] ?? join(home, '.config'), 'orca/orca-runtime.json');
+  return join(env['XDG_CONFIG_HOME'] || join(home, '.config'), 'orca/orca-runtime.json');
 }
 
 /** Orca is not running, the runtime file is gone/garbled, or the socket cannot be reached. */

@@ -1,5 +1,5 @@
 // Release helper. Single version source: root package.json (SemVer).
-//   release.ts version <x.y.z>   set version in package.json files and the Stream Deck manifest
+//   release.ts version <x.y.z>   set version in package.json files, the Stream Deck manifest and orca-plugin/main.mjs
 //   release.ts notes             write CHANGELOG.md section + dist/RELEASE_NOTES.md from conventional commits
 //   release.ts checksums         write dist/SHA256SUMS for the plugins, the Orca zip and the diagnostics script
 //   release.ts validate [tag]    check both manifests agree with package.json (and the tag, in CI)
@@ -45,10 +45,10 @@ function setVersion(version: string): void {
   for (const file of [rootPkg, sdPkg, orcaManifest])
     writeJson(file, { ...readJson(file), version });
   // The version the Orca plugin reports to the Stream Deck plugin.
-  writeFileSync(
-    orcaMain,
-    readFileSync(orcaMain, 'utf8').replace(PLUGIN_VERSION_RE, `$1${version}$2`),
-  );
+  const main = readFileSync(orcaMain, 'utf8');
+  // Compare on the pattern, not the result: re-setting the current version changes nothing.
+  if (!PLUGIN_VERSION_RE.test(main)) throw new Error(`PLUGIN_VERSION not found in ${orcaMain}`);
+  writeFileSync(orcaMain, main.replace(PLUGIN_VERSION_RE, `$1${version}$2`));
   // Stream Deck manifests need four numeric parts, so a prerelease suffix is dropped.
   writeJson(manifest, { ...readJson(manifest), Version: `${m[1]}.${m[2]}.${m[3]}.0` });
   console.log(`version set to ${version} (manifest ${m[1]}.${m[2]}.${m[3]}.0)`);
