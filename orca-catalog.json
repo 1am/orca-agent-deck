@@ -14,6 +14,66 @@
       "categories": [],
       "releases": [
         {
+          "version": "0.2.0",
+          "commit": "b334315b6653eb48a6c42ca44901e9220f6ab34a",
+          "contentHash": "901174d54f3835211b6ab651eb34941a28feae3c2c1d12e2f01b98ef53c8432c",
+          "execution": "trusted-worker",
+          "minimumOrca": "1.4.245",
+          "name": "Orca Agent Deck",
+          "contributes": [
+            {
+              "kind": "commands",
+              "name": "Orca Agent Deck: Map pane to key"
+            },
+            {
+              "kind": "commands",
+              "name": "Orca Agent Deck: Unmap pane"
+            },
+            {
+              "kind": "commands",
+              "name": "Orca Agent Deck: Show status"
+            },
+            {
+              "kind": "events",
+              "name": "agent.status.changed"
+            },
+            {
+              "kind": "events",
+              "name": "workspace.created"
+            },
+            {
+              "kind": "events",
+              "name": "workspace.removed"
+            }
+          ],
+          "capabilities": ["agent:read", "workspace:read", "storage:own"],
+          "images": {
+            "icon": {
+              "path": "orca-plugin/images/icon.png",
+              "alt": "Orca Agent Deck",
+              "sha256": "e9db045d1cf330937b3774c86cc6af156744f7580dfe05305e8f261f77c4e416",
+              "width": 512,
+              "height": 512
+            },
+            "cover": {
+              "path": "orca-plugin/images/cover.png",
+              "alt": "A Stream Deck showing Orca agent panes as colored keys: working, done, idle and empty",
+              "sha256": "b07fbe48c19bafb54ee1a71075d662e54158f015e5c17501610c96a3f630e0cd",
+              "width": 1600,
+              "height": 1000
+            },
+            "screenshots": [
+              {
+                "path": "orca-plugin/images/deck.png",
+                "alt": "A 5x3 Stream Deck grid of Orca pane keys with status icons",
+                "sha256": "1e88ece0ccdbc3afe5f9fb72db863ec73165c5b178fdcd86ebf28e801c4ed6e5",
+                "width": 1920,
+                "height": 1200
+              }
+            ]
+          }
+        },
+        {
           "version": "0.1.2",
           "commit": "10518933369020e50e4387b9c6fc8f8c744a5774",
           "contentHash": "f10d086a2d37fe0f67df29ae47b7ed3469f02c03c53c495c8f330295c5e1d15b",
