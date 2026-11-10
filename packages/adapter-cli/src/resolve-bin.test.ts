@@ -67,4 +67,19 @@ describe('resolveOrcaBin', () => {
     );
     expect(r).toMatchObject({ bin: p, source: 'app-bundle' });
   });
+
+  it('treats an empty LOCALAPPDATA as missing on Windows', async () => {
+    const p = 'C:\\Users\\x\\AppData\\Local\\Programs\\orca\\resources\\bin\\orca.exe';
+    const r = await resolveOrcaBin(
+      deps({ platform: 'win32', home: 'C:\\Users\\x', env: { LOCALAPPDATA: '' }, files: [p] }),
+    );
+    expect(r).toMatchObject({ bin: p, source: 'app-bundle' });
+  });
+
+  it('ignores the POSIX fallback dirs on Windows', async () => {
+    const r = await resolveOrcaBin(
+      deps({ platform: 'win32', home: 'C:\\Users\\x', files: ['/usr/local/bin/orca'] }),
+    );
+    expect(r).toMatchObject({ bin: 'orca', source: 'path' });
+  });
 });

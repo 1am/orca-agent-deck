@@ -41,8 +41,8 @@ function bundleCandidates(
   }
   if (platform === 'win32') {
     return [
-      `${env['LOCALAPPDATA'] ?? `${home}\\AppData\\Local`}\\Programs\\orca\\resources\\bin\\orca.exe`,
-      `${env['ProgramFiles'] ?? 'C:\\Program Files'}\\Orca\\resources\\bin\\orca.exe`,
+      `${env['LOCALAPPDATA'] || `${home}\\AppData\\Local`}\\Programs\\orca\\resources\\bin\\orca.exe`,
+      `${env['ProgramFiles'] || 'C:\\Program Files'}\\Orca\\resources\\bin\\orca.exe`,
     ];
   }
   return [];
@@ -60,7 +60,8 @@ export async function resolveOrcaBin(deps: ResolveDeps): Promise<ResolvedBin> {
       return { bin: p, source: 'app-bundle', reason: `Orca app bundle at ${p}` };
   }
 
-  for (const dir of FALLBACK_DIRS) {
+  // On Windows these resolve to `C:\usr\local\bin`, a folder any local account can create.
+  for (const dir of deps.platform === 'win32' ? [] : FALLBACK_DIRS) {
     const p = `${dir}/orca`;
     if (deps.isExecutable(p)) return { bin: p, source: 'fallback', reason: `found in ${dir}` };
   }
