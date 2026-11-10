@@ -8,17 +8,18 @@
 |---|---|
 | macOS | Tested (macOS 15). macOS 13 or newer is the declared minimum. |
 | Windows | Tested (Windows 11, Orca 1.4.255). Windows 10 or newer is the declared minimum. Pressing a key does not raise the Orca window off macOS. |
-| Linux | Untested. |
+| Linux | Tested (Ubuntu 22.04, in OpenDeck). Pressing a key focuses the pane but does not raise the Orca window. |
 
 ## Stream Deck
 
 | | Status |
 |---|---|
 | Stream Deck Mobile (6 keys) | Tested |
-| Stream Deck MK.2 hardware | Tested by the maintainer |
+| Stream Deck MK.2 hardware | Tested by the maintainer, on macOS and on Ubuntu 22.04 in OpenDeck |
 | Stream Deck Neo hardware | Tested on Windows 11 with the Elgato Stream Deck app 7.4.2 |
 | Other Stream Deck hardware | Untested |
-| OpenDeck and other hosts | Untested. Each release is meant to pass the dual-host smoke checklist in both hosts; results go in the table below. |
+| OpenDeck | Tested on Ubuntu 22.04 with Stream Deck MK.2; the plugin behaves the same as in the Elgato app. Each release is meant to pass the dual-host smoke checklist in both hosts; results go in the table below. |
+| Other hosts | Untested |
 | Elgato Stream Deck app 7.1 or newer | Required |
 
 ## Orca
@@ -58,7 +59,8 @@ Filled from the dual-host smoke runs, one row per run.
 | Host | Host version | Device | Orca Agent Deck | Result |
 |---|---|---|---|---|
 | Elgato Stream Deck app | 7.4.2 | MK.2 | | not run |
-| Elgato Stream Deck app | 7.4.2 | Neo | 0.1.2 + this change | OK on Windows 11 (Orca 1.4.255): plugin loads, bridge connects, keys render and focus panes |
+| Elgato Stream Deck app | 7.4.2 | Neo | 0.2.0 | OK on Windows 11 (Orca 1.4.255): plugin loads, bridge connects, keys render and focus panes |
+| OpenDeck (Linux) | | MK.2 | 0.2.0 | OK on Ubuntu 22.04: plugin loads, bridge connects, keys render and focus panes, same as in the Elgato app |
 | OpenDeck (macOS) | | MK.2 | | not run |
 
 ## Marketplace DRM (SDKVersion 3)

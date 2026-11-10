@@ -17,16 +17,16 @@ https://github.com/user-attachments/assets/1dfea071-0276-4011-b159-7916241eb2ca
 - Works locally and over SSH.
 - Local tmux and tmux in Orca SSH worktrees work with one agent per tmux session: see [Working with tmux](docs/working-with-tmux.md). Plain or nested `ssh` into a remote tmux is not verified yet: see [Known issues](docs/known-issues.md).
 - A shell pane (no agent) pinned to a key shows working once it has printed for about 8 seconds, and done when the output stops.
-- Only [Elgato Stream Deck](https://www.elgato.com/ww/en/p/stream-deck) is currently tested, but other decks may work as well.
+- Only [Elgato Stream Deck](https://www.elgato.com/ww/en/p/stream-deck) hardware is currently tested, but other decks may work as well. On Linux it runs in [OpenDeck](https://github.com/nekename/opendeck).
 
 > [!WARNING]
-> This is an experimental project built for personal use and it is at a very early stage (`0.1.0`). Expect breaking changes, rough edges and missing features. It has been tested on macOS with Stream Deck MK.2 and Stream Deck Mobile, and on Windows 11 with Stream Deck Neo. Use it at your own risk.
+> This is an experimental project built for personal use and it is at a very early stage (`0.2.0`). Expect breaking changes, rough edges and missing features. It has been tested on macOS with Stream Deck MK.2 and Stream Deck Mobile, on Windows 11 with Stream Deck Neo, and on Ubuntu 22.04 with Stream Deck MK.2 in OpenDeck. Use it at your own risk.
 
 ## Requirements
 
-- macOS 13 or newer, or Windows 10 or newer. Linux is untested. Pane raising on press is macOS only.
+- macOS 13 or newer, Windows 10 or newer, or Linux (tested on Ubuntu 22.04). Pane raising on press is macOS only.
 - Orca 1.4.245 or newer, with the `orca` shell command registered (Orca: Settings, register CLI).
-- The Elgato Stream Deck app 7.1 or newer and a Stream Deck (hardware or Stream Deck Mobile).
+- The Elgato Stream Deck app 7.1 or newer (macOS, Windows) or [OpenDeck](https://github.com/nekename/opendeck) (Linux), and a Stream Deck (hardware or Stream Deck Mobile).
 
 Orca Agent Deck has two parts and needs both: a **Stream Deck plugin** (draws the keys, talks to Orca) and a small **Orca plugin** (pushes agent status to the deck as it changes).
 
