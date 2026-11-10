@@ -39,17 +39,11 @@ let dir: string;
 let discoveryPath: string;
 let server: BridgeServer;
 
-/** Points the plugin's default discovery path at the test dir on every platform. */
+/** Points the plugin's default discovery path at the test dir on every platform. afterEach undoes it. */
 function fakeUserDirs(): () => void {
-  const prev = { HOME: process.env.HOME, APPDATA: process.env.APPDATA };
-  process.env.HOME = dir;
-  process.env.APPDATA = join(dir, 'AppData', 'Roaming');
-  return () => {
-    if (prev.HOME === undefined) delete process.env.HOME;
-    else process.env.HOME = prev.HOME;
-    if (prev.APPDATA === undefined) delete process.env.APPDATA;
-    else process.env.APPDATA = prev.APPDATA;
-  };
+  vi.stubEnv('HOME', dir);
+  vi.stubEnv('APPDATA', join(dir, 'AppData', 'Roaming'));
+  return () => vi.unstubAllEnvs();
 }
 
 beforeEach(async () => {
@@ -62,6 +56,8 @@ beforeEach(async () => {
   });
 });
 afterEach(async () => {
+  // A failed test may not reach its own restore()
+  vi.unstubAllEnvs();
   await server.stop();
   await rm(dir, { recursive: true, force: true });
 });

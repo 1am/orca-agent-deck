@@ -8,7 +8,7 @@ type Slots = Record<string, SlotSettings>;
 export const defaultMappingsPath = (): string => {
   if (process.platform === 'win32')
     return join(
-      process.env.APPDATA ?? join(homedir(), 'AppData', 'Roaming'),
+      process.env.APPDATA || join(homedir(), 'AppData', 'Roaming'),
       'orca-deck',
       'mappings.json',
     );

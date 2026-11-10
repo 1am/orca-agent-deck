@@ -119,6 +119,10 @@ describe('defaultMetaPath', () => {
       join('/x', 'orca/orca-runtime.json'),
     );
     expect(defaultMetaPath('win32', { APPDATA: 'C:\\A' }, 'C:\\h')).toContain('orca');
+    // An empty APPDATA must not turn into a path relative to the working directory
+    expect(defaultMetaPath('win32', { APPDATA: '' }, 'C:\\h')).toBe(
+      join('C:\\h', 'AppData/Roaming', 'orca/orca-runtime.json'),
+    );
   });
 });
 

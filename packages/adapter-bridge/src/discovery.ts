@@ -19,7 +19,7 @@ export function defaultDiscoveryPath(): string {
   if (process.platform === 'win32') {
     // A worker can start without APPDATA in its environment: fall back to the same per-user folder.
     return join(
-      process.env.APPDATA ?? join(homedir(), 'AppData', 'Roaming'),
+      process.env.APPDATA || join(homedir(), 'AppData', 'Roaming'),
       'orca-deck',
       'bridge.json',
     );
@@ -40,12 +40,13 @@ export async function writeDiscovery(path: string, d: Discovery): Promise<void> 
 /**
  * True when `path` is a regular file (not a symlink) owned by the current user and not readable
  * by group or other. Files in the discovery dir carry the bridge token or the Orca runtime token,
- * so anything else is not trusted. Not enforced on Windows, where modes mean nothing.
+ * so anything else is not trusted. On Windows, where modes and uids mean nothing, only the
+ * regular-file check applies and the profile ACL does the rest.
  */
 export async function isPrivateFile(path: string): Promise<boolean> {
-  if (process.platform === 'win32') return true;
   try {
     const st = await lstat(path);
+    if (process.platform === 'win32') return st.isFile();
     return st.isFile() && st.uid === process.getuid?.() && (st.mode & 0o077) === 0;
   } catch {
     return false;

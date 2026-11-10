@@ -16,17 +16,20 @@ export const defaultDiscoveryPath = () => {
   if (process.platform !== 'win32') return join(homedir(), '.orca-deck', 'bridge.json');
   // Orca's worker can start without APPDATA in its environment: use the same per-user folder.
   return join(
-    process.env.APPDATA ?? join(homedir(), 'AppData', 'Roaming'),
+    process.env.APPDATA || join(homedir(), 'AppData', 'Roaming'),
     'orca-deck',
     'bridge.json',
   );
 };
 
-/** Regular file (no symlink) of the current user, not readable by group or other. Mirrors B's check. */
+/**
+ * Regular file (no symlink) of the current user, not readable by group or other. Mirrors B's check.
+ * Windows has no mode bits or uid: only the regular-file check applies, the profile ACL does the rest.
+ */
 export async function isPrivateFile(path) {
-  if (process.platform === 'win32') return true;
   try {
     const st = await lstat(path);
+    if (process.platform === 'win32') return st.isFile();
     return st.isFile() && st.uid === process.getuid?.() && (st.mode & 0o077) === 0;
   } catch {
     return false;
