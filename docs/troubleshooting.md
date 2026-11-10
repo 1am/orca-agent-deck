@@ -94,6 +94,15 @@ Find the symptom, check the cause, apply the fix. Status key captions come from 
 - **Cause.** Paired Orca servers are reachable only through the `orca --environment` CLI. Status can lag by about 7 s, and Orca publishes no focus for them.
 - **Fix.** Assign them from the picker, not by holding a key. Background and numbers: [known-issues.md](known-issues.md).
 
+## Orca plugin (development)
+
+### Orca's plugin panel stays on "Loading plugin panel..." or its plugin list hangs
+
+- **Cause.** Orca's development folder was set to the repository root instead of `orca-plugin/`. Orca watches every file under a development folder and reloads the plugin when one changes. The Stream Deck plugin writes its log under `packages/streamdeck-plugin/pl.1am.orca-agent-deck.sdPlugin/logs/`, so every connect or key press reloads the Orca plugin, which connects again and writes another log line. The reload loop keeps the plugin service busy, so panel reads never finish.
+- **Check.** `~/.orca-deck/plugin-a.log` shows `worker started` every second or so. The Stream Deck plugin log shows `A connected` at the same rate.
+- **Fix.** Remove the repository root from Orca Settings, Plugins, Development folders and add the `orca-plugin` folder instead:
+  `orca plugin dev unload <path-to-repo>` then `orca plugin dev load <path-to-repo>/orca-plugin` (approve the fingerprint it prints). Restart Orca if its plugin service is already stuck. Stop the Stream Deck plugin while doing this so its log stops waking the watcher.
+
 ## What to attach to an issue
 
 Run the diagnostics script (see Logs in [install.md](install.md#logs)) and attach the file it writes. Read it before attaching. Also say which Status key caption you see and what the key shows.

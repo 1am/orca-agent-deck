@@ -78,7 +78,13 @@ Committing images needs `exiftool` (`brew install exiftool`): the pre-commit hoo
 
 Other dev scripts: `pnpm fake-orca` (a fake Orca for local runs), `pnpm render:gallery` (every key state in `out/gallery.html`), `pnpm audit:awaiting` (how the "awaiting reply" classifier judges the running agents; prints verdicts only).
 
-`pnpm sd:dev` needs Stream Deck developer mode (`npx streamdeck dev`, once). Load the Orca plugin in development mode with `orca plugin dev load orca-plugin`.
+`pnpm sd:dev` needs Stream Deck developer mode (`npx streamdeck dev`, once). Load the Orca plugin from its own folder, not the repository root:
+
+```sh
+orca plugin dev load orca-plugin
+```
+
+Orca watches every file under a development folder. The Stream Deck plugin writes its logs under `packages/streamdeck-plugin/`, so a repository-root dev folder reloads the Orca plugin on every log line (agent connect, key press), and Orca's plugin panel never finishes loading. The `orca-plugin/` folder has its own manifest and none of those logs.
 
 - Architecture, network surface and timings: [docs/architecture.md](docs/architecture.md)
 
