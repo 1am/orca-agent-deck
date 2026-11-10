@@ -4,7 +4,7 @@
 //   release.ts checksums         write dist/SHA256SUMS for the plugins, the Orca zip and the diagnostics script
 //   release.ts validate [tag]    check both manifests agree with package.json (and the tag, in CI)
 //   release.ts strip-debug       turn off the Node inspector in the Stream Deck manifest (make package, CI release)
-//   release.ts root-manifest     write orca-plugin.json at the repository root (scripts/export.sh, public repository)
+//   release.ts root-manifest     write orca-plugin.json at the repository root (keeps the repository-root copy in sync)
 import { execFileSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { existsSync, readdirSync, readFileSync, writeFileSync, mkdirSync } from 'node:fs';
@@ -82,7 +82,7 @@ function commitSections(): string {
     .join('\n\n');
 }
 
-/** Body of the version's CHANGELOG.md section (written by `make release`, scripts/release.sh), or null. */
+/** Body of the version's CHANGELOG.md section (written by the release tooling), or null. */
 function changelogSection(version: string): string | null {
   if (!existsSync(changelog)) return null;
   const text = readFileSync(changelog, 'utf8');
@@ -181,7 +181,7 @@ function validate(tag?: string): void {
     if (!orca.main || !existsSync(join(root, 'orca-plugin', orca.main)))
       problems.push(`orca-plugin.json main ${orca.main} not found`);
   }
-  // Only the public repository has the root copy (scripts/export.sh writes it).
+  // The root copy is written by `release.ts root-manifest`.
   if (existsSync(rootOrcaManifest) && readFileSync(rootOrcaManifest, 'utf8') !== rootManifestText())
     problems.push(
       'root orca-plugin.json does not match orca-plugin/orca-plugin.json (release.ts root-manifest)',

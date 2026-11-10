@@ -3,7 +3,7 @@ import { classifyFinalMessage } from './awaiting.ts';
 
 /**
  * Synthetic corpus modelled on how coding agents end a turn. These are NOT real captures; real
- * messages are checked with scripts/awaiting-audit.ts (verdicts only, no text) per the manual list.
+ * messages are checked by hand (verdicts only, no text) per the manual list.
  */
 const ASKS: Array<[string, string]> = [
   ['plain question', 'I updated the parser.\n\nShould I also update the docs?'],

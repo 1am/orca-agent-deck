@@ -76,7 +76,7 @@ pnpm sd:dev           # build, link into the Stream Deck app, rebuild on change
 
 Committing images needs `exiftool` (`brew install exiftool`): the pre-commit hook strips image metadata and blocks the commit without it.
 
-Other dev scripts: `pnpm fake-orca` (a fake Orca for local runs), `pnpm render:gallery` (every key state in `out/gallery.html`), `pnpm audit:awaiting` (how the "awaiting reply" classifier judges the running agents; prints verdicts only).
+Other dev script: `pnpm fake-orca` (a fake Orca for local runs).
 
 `pnpm sd:dev` needs Stream Deck developer mode (`npx streamdeck dev`, once). Load the Orca plugin from its own folder, not the repository root:
 

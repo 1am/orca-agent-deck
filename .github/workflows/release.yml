@@ -1,6 +1,6 @@
 name: Release
 # A push to main whose package.json version has no tag yet builds and publishes that release; the
-# tag is created with it. Runs in the public repository only (the dev repository exports this file).
+# tag is created with it. Runs in the public repository only.
 on:
   push:
     branches: [main]

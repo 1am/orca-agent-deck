@@ -3,7 +3,7 @@ import tseslint from 'typescript-eslint';
 
 export default tseslint.config(
   {
-    ignores: ['**/dist/**', '**/*.sdPlugin/bin/**', 'coverage/**', 'kanban/**', 'out/**'],
+    ignores: ['**/dist/**', '**/*.sdPlugin/bin/**', 'coverage/**', 'out/**'],
   },
   js.configs.recommended,
   {

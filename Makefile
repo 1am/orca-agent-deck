@@ -17,9 +17,6 @@ package: package-sd package-orca
 	@pnpm release:notes
 	@pnpm release:checksums
 
-# Dev repository only: release targets (release.mk is not exported).
--include release.mk
-
 # Contract tests need a running Orca, so they are not part of test (CI and the release have none).
 test:
 	pnpm test

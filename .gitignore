@@ -6,7 +6,6 @@ packages/streamdeck-plugin/pl.1am.orca-agent-deck.sdPlugin/bin
 out
 plugin-logs.txt
 packages/streamdeck-plugin/pl.1am.orca-agent-deck.sdPlugin/logs
-kanban/.lock
 tmp
 .claude/
 orca-deck-diagnostics-*.txt
