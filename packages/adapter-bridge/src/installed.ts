@@ -1,5 +1,9 @@
-/** Orca plugin key of plugin A (`<publisher>.<id>`). */
-export const PLUGIN_A_KEY = '1am.agent-deck';
+/**
+ * Orca plugin keys of plugin A (`<publisher>.<id>`). The manifest has no publisher: Orca takes it
+ * from the repository owner for a git or catalog install (`1am`) and uses `local` for a folder or
+ * zip installed from a local path. An exact list, so a foreign `x.agent-deck` never matches.
+ */
+export const PLUGIN_A_KEYS: readonly string[] = ['1am.agent-deck', 'local.agent-deck'];
 
 /**
  * Is plugin A installed and not disabled, from `orca plugin list --json`? Orca starts a worker
@@ -11,7 +15,9 @@ export function pluginAInstalled(stdout: string): boolean {
     const r = JSON.parse(stdout) as {
       result?: { plugins?: { pluginKey?: string; status?: string }[] };
     };
-    const p = r.result?.plugins?.find((x) => x.pluginKey === PLUGIN_A_KEY);
+    const p = r.result?.plugins?.find(
+      (x) => x.pluginKey !== undefined && PLUGIN_A_KEYS.includes(x.pluginKey),
+    );
     return !!p && p.status !== 'disabled';
   } catch {
     return false;

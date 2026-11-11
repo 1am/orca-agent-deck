@@ -12,7 +12,7 @@ Find the symptom, check the cause, apply the fix. Status key captions come from 
 
 ### "Orca x.y.z too old"
 
-- **Cause.** Orca is older than 1.4.245.
+- **Cause.** Orca is older than 1.4.245. The Orca plugin itself needs Orca 1.4.246 or newer.
 - **Fix.** Update Orca.
 
 ### "orca CLI not found"

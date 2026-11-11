@@ -8,6 +8,14 @@ it('detects an installed plugin A, running or idle', () => {
   expect(pluginAInstalled(list([{ pluginKey: '1am.agent-deck', status: 'idle' }]))).toBe(true);
 });
 
+it('accepts a local-path install, an exact key only', () => {
+  expect(pluginAInstalled(list([{ pluginKey: 'local.agent-deck', status: 'idle' }]))).toBe(true);
+  expect(pluginAInstalled(list([{ pluginKey: 'x.agent-deck', status: 'running' }]))).toBe(false);
+  expect(pluginAInstalled(list([{ pluginKey: 'local.agent-deck', status: 'disabled' }]))).toBe(
+    false,
+  );
+});
+
 it('is false when absent, disabled or the output is garbage', () => {
   expect(pluginAInstalled(list([{ pluginKey: 'other.x', status: 'running' }]))).toBe(false);
   expect(pluginAInstalled(list([{ pluginKey: '1am.agent-deck', status: 'disabled' }]))).toBe(false);
