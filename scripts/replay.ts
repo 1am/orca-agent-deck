@@ -15,7 +15,7 @@ const side = (sideAt >= 0 ? args[sideAt + 1] : 'sim') as Side;
 const targets = args.filter((a, i) => !a.startsWith('--') && (sideAt < 0 || i !== sideAt + 1));
 if (side !== 'sim') {
   console.error(
-    `--side ${side}: only the sim runner is here; plugin A scenarios run with make replay-a (#176), plugin B with #177`,
+    `--side ${side}: only the sim runner is here; plugin A scenarios run with make replay-a, plugin B with make replay-b`,
   );
   process.exit(2);
 }
