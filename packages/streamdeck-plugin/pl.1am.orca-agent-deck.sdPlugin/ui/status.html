@@ -87,7 +87,7 @@
   </head>
   <body>
     <h1>Setup</h1>
-    <div id="checks">Checking...</div>
+    <div id="checks" data-placeholder="1">Checking...</div>
     <div id="stamp" role="status"></div>
     <button id="recheck">Check again</button>
     <script src="pi.js"></script>
@@ -143,7 +143,13 @@
         waiting = null;
         recheck.disabled = false;
         recheck.textContent = 'Check again';
-        document.getElementById('checks').classList.remove('busy');
+        const root = document.getElementById('checks');
+        root.classList.remove('busy');
+        // One state at a time: the first-load "Checking..." must not stay next to a "no answer" message.
+        if (root.dataset.placeholder) {
+          root.textContent = '';
+          delete root.dataset.placeholder;
+        }
         stamp.textContent = text;
       }
 

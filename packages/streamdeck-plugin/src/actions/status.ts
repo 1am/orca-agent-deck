@@ -39,6 +39,19 @@ function readTmux(): Promise<void> {
   );
 }
 
+/** Longest the Setup list waits for one probe; the inspector gives up after 5 s (10 s while Orca is read through the CLI). */
+const PROBE_MS = 4000;
+
+/** `p`, or undefined after `ms` or when it fails: the caller carries on with what it already knows. */
+function within(p: Promise<unknown>, ms: number): Promise<unknown> {
+  let stop = () => {};
+  const deadline = new Promise<undefined>((done) => {
+    const t = setTimeout(done, ms);
+    stop = () => clearTimeout(t);
+  });
+  return Promise.race([p.catch(() => undefined), deadline]).finally(stop);
+}
+
 /** Setup doctor facts. */
 function doctorFacts(c: DeckController): DoctorFacts {
   if (Date.now() - tmux.at > TMUX_TTL_MS) {
@@ -90,7 +103,11 @@ export class StatusKey extends InfoKey {
     // A hidden PI's `load` must not cost a refresh and tmux spawn.
     if (!isCurrentPi(id)) return;
     const c = await this.create();
-    await Promise.all([c.refresh([]), readTmux(), refreshInstalled()]);
+    // Every probe gets a deadline below the inspector's own: a hung one (a host that does not answer, a queued
+    // refresh behind it) must not keep the whole list from being sent. The list then shows what is known.
+    await Promise.all(
+      [c.refresh([]), readTmux(), refreshInstalled()].map((p) => within(p, PROBE_MS)),
+    );
     await replyToPi(id, {
       type: 'checks',
       checks: runChecks(doctorFacts(c)),
