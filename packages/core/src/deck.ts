@@ -591,7 +591,8 @@ export class DeckController {
       mode: !this.orcaRunning ? 'down' : this.health.live ? 'live' : 'degraded',
       version: this.health.version,
       unsupported: this.health.unsupported,
-      hostsDown: this.snapshot.omittedHostIds.length,
+      // Omitted hosts keep their keys' last known state; only hosts no listing reached are down.
+      hostsDown: (this.snapshot.downHostIds ?? this.snapshot.omittedHostIds).length,
       urgent: urgent.length,
       topState: urgent[0]?.state ?? null,
       offDeck: urgent.filter((u) => !onKeys.has(u.pane.paneKey)).length,
