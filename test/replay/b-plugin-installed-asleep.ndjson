@@ -1,4 +1,4 @@
-{"v":2,"name":"b-plugin-installed-asleep","description":"Plugin A is installed but Orca has not woken it yet (no discovery file, never connected): the Status key reads OK and live, and the Setup check says it connects on the next agent event (#155). Revert check: drop the asleep branch in bridge.ts orcaPluginState (probe.installed ? asleep : missing).","sides":["b"],"keys":{"1":"a","14":{"action":"status"}}}
+{"v":2,"name":"b-plugin-installed-asleep","description":"Plugin A is installed but Orca has not woken it yet (no discovery file, never connected): the Status key reads OK and live, and the Setup check says it connects on the next agent event. Revert check: drop the asleep branch in bridge.ts orcaPluginState (probe.installed ? asleep : missing).","sides":["b"],"keys":{"1":"a","14":{"action":"status"}}}
 {"at":0,"do":"orca.pane.add","pane":"a"}
 {"at":0,"do":"orca.plugin","key":"1am.agent-deck","status":"enabled"}
 {"at":0,"do":"expect.key","key":14,"state":"completed","label":"live 1.4.245","line2":"OK"}

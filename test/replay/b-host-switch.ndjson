@@ -1,4 +1,4 @@
-{"v":2,"name":"b-host-switch","description":"Switching between the Elgato app and OpenDeck (new device id and action contexts, separate host settings) keeps the mappings (#120, #180). Revert check: drop the other-device fallback in MappingStore.locate.","sides":["b"],"keys":{"1":"b","2":"a"}}
+{"v":2,"name":"b-host-switch","description":"Switching between the Elgato app and OpenDeck (new device id and action contexts, separate host settings) keeps the mappings. Revert check: drop the other-device fallback in MappingStore.locate.","sides":["b"],"keys":{"1":"b","2":"a"}}
 {"at":0,"do":"orca.pane.add","pane":"a"}
 {"at":0,"do":"orca.pane.add","pane":"b","title":"Build"}
 {"at":0,"do":"expect.key","key":1,"state":"completed","label":"Build"}

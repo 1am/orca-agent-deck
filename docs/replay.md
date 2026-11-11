@@ -12,7 +12,7 @@ A scenario is a timeline of what Orca and the Stream Deck do, plus what the keys
 
 - `at` is ms on a virtual clock. Steps are `orca.*` (Orca to plugin A), `deck.*` (host to plugin B), `bridge.*` (A to B) and `expect.*`. `orca.agent` uses Orca's own names (`state`: working, waiting, blocked, done, idle; `outcome`, `toolName`).
 - `keys` is the initial layout (key number to pane): every runner plays it as `willAppear` at t=0 with that pane pinned. `deck` defaults to the MK.2 (5x3).
-- `sides` names the runners that play it (`sim`, `a`, and `b` with #177); the others skip it and list it as skipped.
+- `sides` names the runners that play it (`sim`, `a`, and `b`); the others skip it and list it as skipped.
 
 ## Two layers of assertions
 - `expect.*` lines are the intent: what the bug or feature is about. A scenario needs at least one, and a bug fix is only proven by an `expect` that fails when the fix is reverted. An `expect` field the runner cannot evaluate is an error, never a pass.
@@ -26,7 +26,7 @@ A scenario is a timeline of what Orca and the Stream Deck do, plus what the keys
 - Each scenario states its revert check (the line of `main.mjs` whose removal must fail it).
 
 ## Plugin B (side `b`)
-`make replay-b` plays the `b` scenarios into the built `bin/plugin.js` (it builds first) through a fake Stream Deck host (`test/replay-b/host.ts`), once per host profile that can run on this OS (`profiles.ts`: the registration info `detectHost` reads plus how the host treats property inspectors). No Orca needed; CI runs it on Linux (opendeck-linux), #172 adds Windows. B reads the real `process.platform`, so profiles of other OSes are skipped and listed as skipped.
+`make replay-b` plays the `b` scenarios into the built `bin/plugin.js` (it builds first) through a fake Stream Deck host (`test/replay-b/host.ts`), once per host profile that can run on this OS (`profiles.ts`: the registration info `detectHost` reads plus how the host treats property inspectors). No Orca needed; CI runs it on Linux (opendeck-linux), a Windows runner is not wired yet. B reads the real `process.platform`, so profiles of other OSes are skipped and listed as skipped.
 - Orca is the same `SimState` as everywhere: `orca.*` steps drive the runtime socket (or the CLI shim with header `runtime: false`), `bridge.frame from:"a"` lines are what plugin A would send (the same lines the A suite checks A produces) and `from:"b"` lines are the frames B must send back. A shared scenario names `sides: ["a","b"]`; each runner skips the other's steps. Frames use the sim clock for `stateStartedAt` (`1800000000000` + ms), or B ignores them as stale.
 - Keys: the header `keys` are pinned at t=0 (through the inspector's `configure`, like a user); `{"action":"attention"|"status"}` makes those keys. Auto-fill is off in the shipped plugin, so nothing relies on it. `deck.pi.open` selects a key's inspector; OpenDeck profiles also mount a hidden inspector per key that sends `load` at appear, played by the host, never written in scenarios. `deck.restart {profile}` restarts the plugin as another host (a host family such as `opendeck` is resolved for this OS, and a different host app starts with empty host settings).
 - `expect.key` reads the key image back through `decodeKey` (markers on the root `<svg>`: state, label, line2, agent as `badge`, key number as `number`; info keys: label = caption, line2 = value) and waits up to 4 s. `expect.pi` lists the messages (a list inside a message, such as the Setup checks, matches as an ordered subsequence) the plugin sent to that key's inspector since the last checkpoint (consecutive identical ones count once), `expect.focus` the pane Orca was asked to focus. Fields the runner cannot read are errors.
@@ -38,18 +38,18 @@ Every bug closes with a scenario that fails when its fix is reverted (the revert
 
 | Bug | Scenario | Revert check, and what then fails |
 |---|---|---|
-| #155 Status key says Orca plugin missing while the install probe is pending; installed but asleep reads slow | `b-status`, `b-plugin-installed-asleep` | pending probe mapped to missing, or the asleep branch dropped (`bridge.ts`): key 14 reads "Orca plugin missing" / "Install the Orca plugin" |
-| #131 a pushed status stays on a key after Orca dropped the agent row (tmux) | `b-stale-push` | never expire a pushed status (`bridged-adapter.ts`): key 1 stays completed instead of idle |
-| #124 a turn that ends with a question reads done | `b-awaiting-reply` | `awaitingOf` never reports a question (`adapter-cli`): key 1 reads completed/done instead of awaiting reply/asks you |
-| #78 Orca restart rotates terminal handles | `b-orca-restart` (+ `a-idle-out-reconnect`, `a-b-restart` for the reconnects) | focus with a generation-1 handle (`deck.ts`): the press never focuses the pane |
+| Status key says Orca plugin missing while the install probe is pending; installed but asleep reads slow | `b-status`, `b-plugin-installed-asleep` | pending probe mapped to missing, or the asleep branch dropped (`bridge.ts`): key 14 reads "Orca plugin missing" / "Install the Orca plugin" |
+| a pushed status stays on a key after Orca dropped the agent row (tmux) | `b-stale-push` | never expire a pushed status (`bridged-adapter.ts`): key 1 stays completed instead of idle |
+| a turn that ends with a question reads done | `b-awaiting-reply` | `awaitingOf` never reports a question (`adapter-cli`): key 1 reads completed/done instead of awaiting reply/asks you |
+| Orca restart rotates terminal handles | `b-orca-restart` (+ `a-idle-out-reconnect`, `a-b-restart` for the reconnects) | focus with a generation-1 handle (`deck.ts`): the press never focuses the pane |
 | Lazy wake: the event that woke plugin A is kept | `a-lazy-wake` | `onAck` replay removed (`main.mjs`): no agentStatus after B returns |
 | Plugin B restarts, A reconnects | `a-b-restart` | no reconnect scheduled (`main.mjs`): no hello after B restarts |
 | Hold with Orca showing a paired server says "Remote pane: use the picker" | `b-hold-remote` | hint dropped (`deck.ts`): the key says "No pane selected in Orca" |
 | Needs-input reads the same by push and by poll | `b-needs-input-label` | tool name back in `lineTwo`: poll reads "permission" |
-| #133 last-good host list, released panes off auto-fill | none: auto-fill is off in the shipped plugin, and a failing host list needs a paired Orca environment that the simulation does not model (unit tests in `adapter-cli` and `core`) | |
-| #121 agent swapped inside a tmux pane | none: superseded by the owner's decision of one agent per tmux session (#129) | |
-| #132 coalesced refreshes, instant press feedback | none: the focus highlight and timings are not part of the semantic key state (unit tests in `core`) | |
-| Sleep/wake and Wi-Fi drops of #78 | none: the simulation can restart Orca but not suspend the machine | |
+| last-good host list, released panes off auto-fill | none: auto-fill is off in the shipped plugin, and a failing host list needs a paired Orca environment that the simulation does not model (unit tests in `adapter-cli` and `core`) | |
+| agent swapped inside a tmux pane | none: superseded by the owner's decision of one agent per tmux session | |
+| coalesced refreshes, instant press feedback | none: the focus highlight and timings are not part of the semantic key state (unit tests in `core`) | |
+| Sleep/wake and Wi-Fi drops after an Orca restart | none: the simulation can restart Orca but not suspend the machine | |
 | Codex's shared daemon reports to one pane (known-issues.md) | none: it is Codex's behaviour; the deck draws what Orca reports | |
 
 ## Run
@@ -58,4 +58,4 @@ Every bug closes with a scenario that fails when its fix is reverted (the revert
 
 ## Write or record
 - Write: copy a scenario, change the steps, add the `expect` for the behaviour, run with `--update`, check the timeline reads right.
-- Record (#23): the recorder writes the same header and steps, with real timestamps turned into `at` relative to the first event, `orca.event` / `bridge.frame` for what it saw, and no terminal content. Add the `expect` lines by hand.
+- Record: the recorder writes the same header and steps, with real timestamps turned into `at` relative to the first event, `orca.event` / `bridge.frame` for what it saw, and no terminal content. Add the `expect` lines by hand.

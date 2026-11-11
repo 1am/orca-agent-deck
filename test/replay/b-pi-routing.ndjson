@@ -1,4 +1,4 @@
-{"v":2,"name":"b-pi-routing","description":"Only the inspector that is open gets replies; a message from another key (OpenDeck mounts a hidden inspector per key) changes only its own key (#169). Revert check: drop the isCurrentPi guard in replyToPi.","sides":["b"],"keys":{"1":"a","2":"b"}}
+{"v":2,"name":"b-pi-routing","description":"Only the inspector that is open gets replies; a message from another key (OpenDeck mounts a hidden inspector per key) changes only its own key. Revert check: drop the isCurrentPi guard in replyToPi.","sides":["b"],"keys":{"1":"a","2":"b"}}
 {"at":0,"do":"orca.pane.add","pane":"a"}
 {"at":0,"do":"orca.pane.add","pane":"b","title":"Build"}
 {"at":0,"do":"orca.pane.add","pane":"c","agent":"codex","title":"Codex"}

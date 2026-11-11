@@ -65,7 +65,7 @@ Filled from the dual-host smoke runs, one row per run.
 
 ## OpenDeck (source review of v2.14.2)
 
-Read from nekename/OpenDeck tag `v2.14.2` (commit `3ddecc1`, latest stable on 2026-11-10); no device run yet (#84 confirms). Refs are `file:line` under `src-tauri/src/` unless they start with `src/`. "Device only" = the code cannot answer it.
+Read from nekename/OpenDeck tag `v2.14.2` (commit `3ddecc1`, latest stable on 2026-11-10); no device run yet (the dual-host smoke checklist confirms). Refs are `file:line` under `src-tauri/src/` unless they start with `src/`. "Device only" = the code cannot answer it.
 
 | Question | Answer | Source |
 |---|---|---|
@@ -89,9 +89,9 @@ Read from nekename/OpenDeck tag `v2.14.2` (commit `3ddecc1`, latest stable on 20
 | Install routes | `.streamDeckPlugin` / `.zip` file or URL (needs one top-level `*.sdPlugin` folder in the zip); GitHub release asset ending `.streamDeckPlugin` or `.zip` (prereleases skipped when a stable one exists); catalogue at openactionapi.github.io; marketplace at marketplace.rivul.us; `streamdeck://` deep links are registered too | `events/frontend/plugins.rs:67-125`; `src/components/PluginManager.svelte:87-128,190`; `main.rs:295-320`; `README.md:24` |
 | Paths | Plugins in `<app config dir>/plugins/<dir name>`; app id `opendeck` | `events/frontend/plugins.rs:99-101`; `tauri.conf.json:41` |
 
-**Manifest decision (for #172).** Add `{"Platform": "windows", "MinimumVersion": "10"}` to `OS`. Do not add a `linux` entry: it is not in the Stream Deck manifest schema (`streamdeck validate` would fail, see ChrisRegado/streamdeck-googlemeet#62), and OpenDeck on Linux already starts a `.js` plugin when `windows` is listed. If a device run shows that is not enough, ship `manifest.linux.json` with `{"OS":[{"Platform":"linux"}]}` instead; `validate` never reads it. Keep `SDKVersion` 2, `Nodejs` 20 and `Software.MinimumVersion` 7.1: OpenDeck ignores them.
+**Manifest decision.** The manifest lists `{"Platform": "windows", "MinimumVersion": "10"}` in `OS`. Do not add a `linux` entry: it is not in the Stream Deck manifest schema (`streamdeck validate` would fail, see ChrisRegado/streamdeck-googlemeet#62), and OpenDeck on Linux already starts a `.js` plugin when `windows` is listed. If a device run shows that is not enough, ship `manifest.linux.json` with `{"OS":[{"Platform":"linux"}]}` instead; `validate` never reads it. Keep `SDKVersion` 2, `Nodejs` 20 and `Software.MinimumVersion` 7.1: OpenDeck ignores them.
 
-**Host marker (for #174).** There is nothing better than the registration values: no env var, argv flag or info field names OpenDeck. The strongest signals, all from `plugins/info_param.rs`: `application.version === "7.1.0"` (hard-coded, 3 parts), `devicePixelRatio === 0` (the Elgato app sends the real ratio), and `platform === "windows"` while `process.platform !== "win32"` (Node plugins are told `windows` on every OS, so the current "platform other than mac/windows means OpenDeck" rule never fires). `platformVersion === "10.0.19045.4474"` is a fourth. The Elgato side (4-part build version, real pixel ratio) is device only.
+**Host marker.** There is nothing better than the registration values: no env var, argv flag or info field names OpenDeck. The strongest signals, all from `plugins/info_param.rs`: `application.version === "7.1.0"` (hard-coded, 3 parts), `devicePixelRatio === 0` (the Elgato app sends the real ratio), and `platform === "windows"` while `process.platform !== "win32"` (Node plugins are told `windows` on every OS, so the current "platform other than mac/windows means OpenDeck" rule never fires). `platformVersion === "10.0.19045.4474"` is a fourth. The Elgato side (4-part build version, real pixel ratio) is device only.
 
 ## Marketplace DRM (SDKVersion 3)
 

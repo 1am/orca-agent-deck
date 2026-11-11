@@ -1,4 +1,4 @@
-{"v":2,"name":"b-awaiting-reply","description":"#124: an agent that ends its turn with a question reads awaiting reply (asks you), a plain finish reads done. Revert check: make classifyFinalMessage never report a question (adapter-cli awaitingOf).","sides":["b"],"keys":{"1":"a"}}
+{"v":2,"name":"b-awaiting-reply","description":"an agent that ends its turn with a question reads awaiting reply (asks you), a plain finish reads done. Revert check: make classifyFinalMessage never report a question (adapter-cli awaitingOf).","sides":["b"],"keys":{"1":"a"}}
 {"at":0,"do":"orca.pane.add","pane":"a"}
 {"at":0,"do":"expect.key","key":1,"state":"completed"}
 {"at":100,"do":"orca.agent","pane":"a","state":"done","outcome":"success","message":"All done, tests pass."}
