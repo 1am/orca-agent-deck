@@ -1,4 +1,6 @@
 import type { DeckState } from './status.ts';
+import { naturalMode, orcaIconArt, type IconMode } from './agent-icon-art.ts';
+import { ORCA_ICONS } from './agent-icons.generated.ts';
 
 /** Everything the key renderer needs; produced by DeckController. */
 export interface KeyModel {
@@ -112,6 +114,19 @@ const PICTOGRAM: Record<string, string> = {
     '<path d="M4.5 12a3.5 3.5 0 1 0 7 0 3.5 3.5 0 1 0-7 0M12.5 12a3.5 3.5 0 1 0 7 0 3.5 3.5 0 1 0-7 0M11.5 12h1"/>',
   cursor: '<path d="M7.5 5.5l10 7-4.5 1-2 4.5z"/>',
   amp: '<path d="M13 5l-5 8h4l-1 6 5-8h-4z"/>',
+};
+
+/**
+ * Per agent, how its badge is drawn when Orca has an icon for it (checked by eye in the render gallery at 72 and 144
+ * px): `own` keeps our pictogram, `mask` tints Orca's icon with the key's colour, `chip` shows it as it is on the badge
+ * disc. An agent not listed gets the natural mode (`naturalMode`).
+ */
+export const ICON_OVERRIDES: Readonly<Record<string, 'own' | IconMode>> = {
+  // Round or filled logos on a transparent background: tinted they would be a plain disc.
+  goose: 'chip',
+  openclaude: 'chip',
+  openclaw: 'chip',
+  'qwen-code': 'chip',
 };
 
 /** Agent types Orca reports that have no pictogram, so a first letter is ambiguous between them. */
@@ -303,13 +318,25 @@ export function renderKey(m: KeyModel, o: RenderOptions = {}): string {
   // A pane with no detected agent but a live mapping is a plain shell.
   // Orca's agent type, lower-cased once here for the pictogram and letter lookups.
   const kind = (m.agent ? m.agent : m.state === 'unmapped' ? '' : 'shell').toLowerCase();
-  const glyph = kind
-    ? (PICTOGRAM[kind] ??
-      `<text x="12" y="${harnessLabel(kind).length > 1 ? 16 : 17}" font-size="${harnessLabel(kind).length > 1 ? 11 : 14}" font-weight="500" text-anchor="middle" fill="${pal.bg}" stroke="none">${esc(harnessLabel(kind))}</text>`)
-    : '';
-  const badge = glyph
-    ? `<circle cx="${MX + 12}" cy="${MY + 12}" r="12" fill="${pal.fg}" fill-opacity=".85"/><g transform="translate(${MX} ${MY})" fill="none" stroke="${pal.bg}" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">${glyph}</g>`
-    : '';
+  // Lookup: an own pictogram where the override table says so, else Orca's icon, else our pictogram, else a letter.
+  const override = ICON_OVERRIDES[kind];
+  const orca = kind && override !== 'own' ? ORCA_ICONS[kind] : undefined;
+  const glyph = orca
+    ? ''
+    : kind
+      ? (PICTOGRAM[kind] ??
+        `<text x="12" y="${harnessLabel(kind).length > 1 ? 16 : 17}" font-size="${harnessLabel(kind).length > 1 ? 11 : 14}" font-weight="500" text-anchor="middle" fill="${pal.bg}" stroke="none">${esc(harnessLabel(kind))}</text>`)
+      : '';
+  const mode: IconMode | null = orca
+    ? override === 'mask' || override === 'chip'
+      ? override
+      : naturalMode(orca)
+    : null;
+  const badge = orca
+    ? `<circle cx="${MX + 12}" cy="${MY + 12}" r="12" fill="${pal.fg}" fill-opacity=".85"/><g transform="translate(${MX} ${MY})">${orcaIconArt(orca, mode!, pal.bg)}</g>`
+    : glyph
+      ? `<circle cx="${MX + 12}" cy="${MY + 12}" r="12" fill="${pal.fg}" fill-opacity=".85"/><g transform="translate(${MX} ${MY})" fill="none" stroke="${pal.bg}" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">${glyph}</g>`
+      : '';
   const host = m.host
     ? `<text x="${RIGHT}" y="${MY + 17}" font-size="12" text-anchor="end">${esc(ellipsis(m.host, 7))}</text>`
     : '';
@@ -320,7 +347,7 @@ export function renderKey(m: KeyModel, o: RenderOptions = {}): string {
       ? `<g transform="rotate(${(((o.spin ?? 0) % SPIN_STEPS) * 360) / SPIN_STEPS} 20 20)">${art}</g>`
       : art;
   // Top line: agent badge, then the state icon; host name on the right.
-  const iconX = glyph ? MX + 32 : MX;
+  const iconX = glyph || orca ? MX + 32 : MX;
   return (
     `<svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}" viewBox="0 0 144 144" ` +
     markers(m.state, m.label, m.line2, kind, m.keyNumber) +
