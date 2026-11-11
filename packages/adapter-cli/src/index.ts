@@ -356,7 +356,12 @@ export class CliAdapter implements OrcaAdapter {
         ? { ok: false, error: 'not navigated' }
         : { ok: true };
     } catch (e) {
-      return { ok: false, error: (e as Error).message };
+      const code = (e as { code?: unknown }).code;
+      return {
+        ok: false,
+        error: (e as Error).message,
+        ...(typeof code === 'string' ? { code } : {}),
+      };
     }
   }
 }

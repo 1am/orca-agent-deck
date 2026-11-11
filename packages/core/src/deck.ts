@@ -81,6 +81,13 @@ export type PressResult = 'focused' | 'failed' | 'unmapped';
 
 export type HoldResult = 'mapped' | 'replaced' | 'released' | 'failed';
 
+/** A focus that failed because Orca no longer knows the handle (it restarted, or the pane closed). */
+function isStaleHandle(r: { error?: string; code?: string }): boolean {
+  const known = ['terminal_handle_stale', 'terminal_not_found'];
+  // The runtime socket gives a code; the CLI path only has the text of its error.
+  return r.code !== undefined ? known.includes(r.code) : known.some((c) => r.error?.includes(c));
+}
+
 function bindingOf(p: PaneInfo): PaneBinding {
   const { tabId, leafId } = splitPaneKey(p.paneKey);
   const lastKnown: PaneBinding['lastKnown'] = {};
@@ -229,8 +236,9 @@ export class DeckController {
    * each paid the full Orca round trip and raced on the snapshot, so they are queued, and an info
    * refresh (no slots) rides on one that is running or just ran.
    */
-  async refresh(slots: string[]): Promise<Map<string, SlotView>> {
-    if (slots.length === 0) {
+  async refresh(slots: string[], opts: { force?: boolean } = {}): Promise<Map<string, SlotView>> {
+    if (opts.force) this.polledAt = 0;
+    if (slots.length === 0 && !opts.force) {
       if (this.pending > 0) {
         await this.queue;
         return new Map();
@@ -677,17 +685,12 @@ export class DeckController {
       });
     const [first] = await Promise.all([focusPane(pane), this.raise?.()]);
     let r = first;
-    if (!r.ok && /stale|not.?found/i.test(r.error ?? '')) {
-      // Orca restarted since the last read and its terminal handles rotated: read the panes again and
-      // retry once, only when the pane now has another handle (so this cannot loop).
-      try {
-        this.snapshot = await this.adapter.snapshot();
-        this.registry.update(this.snapshot.panes);
-        const fresh = this.registry.get(pane.paneKey);
-        if (fresh && fresh.handle !== pane.handle) r = await focusPane(fresh);
-      } catch {
-        // Orca is not reachable: the press fails as before.
-      }
+    if (!r.ok && isStaleHandle(r)) {
+      // Orca restarted since the last read and its terminal handles rotated: read the panes again, through the
+      // same queue as every refresh, and retry once, only when the pane now has another handle (no loop).
+      await this.refresh([], { force: true }).catch(() => {});
+      const fresh = this.registry.get(pane.paneKey);
+      if (fresh && fresh.handle !== pane.handle) r = await focusPane(fresh);
     }
     if (!r.ok && this.pressedKey === pane.paneKey) this.pressedKey = before;
     return r.ok ? 'focused' : 'failed';

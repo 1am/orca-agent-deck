@@ -58,6 +58,8 @@ export interface HostInfo {
 export interface FocusResult {
   ok: boolean;
   error?: string;
+  /** Orca's error code when it gave one (`terminal_handle_stale`, ...), else absent. */
+  code?: string;
 }
 
 export interface AdapterHealth {
