@@ -1,5 +1,5 @@
 import { expect, it } from 'vitest';
-import { layoutLabel, renderKey, textWidth, type KeyModel } from './render.ts';
+import { harnessLabel, layoutLabel, renderKey, textWidth, type KeyModel } from './render.ts';
 import type { DeckState } from './status.ts';
 
 const STATES: DeckState[] = [
@@ -83,13 +83,31 @@ it('shows agent and host badges, link-broken marker; only the working icon spins
   expect(svg).toContain('M12 5v14');
   expect(renderKey({ ...m, agent: 'pi' })).toContain('M6.5 8.5h11');
   expect(renderKey({ ...m, agent: null })).toContain('M10 6.5l-1.2 11');
-  expect(renderKey({ ...m, agent: 'gemini' })).toContain('>G</text>');
+  expect(renderKey({ ...m, agent: 'kimi' })).toContain('>K</text>');
   expect(renderKey({ ...m, agent: null, state: 'unmapped' })).not.toContain('stroke-width="2.2"');
   expect(svg).toContain('devbox');
   expect(renderKey(m, { spin: 1 })).toContain('rotate(90 20 20)');
   expect(renderKey({ ...m, state: 'completed' }, { spin: 1 })).toBe(
     renderKey({ ...m, state: 'completed' }, { spin: 0 }),
   );
+});
+
+it('draws a distinct pictogram per known agent and two letters where first letters clash', () => {
+  const m: KeyModel = { state: 'idle', label: 'a', line2: 'b' };
+  const glyphs = ['opencode', 'droid', 'devin', 'gemini', 'copilot', 'cursor', 'amp'].map(
+    (agent) => {
+      const svg = renderKey({ ...m, agent });
+      expect(svg).not.toContain('text-anchor="middle"');
+      return svg;
+    },
+  );
+  expect(new Set(glyphs).size).toBe(glyphs.length);
+  expect(harnessLabel('cline')).toBe('Cl');
+  expect(harnessLabel('crush')).toBe('Cr');
+  expect(harnessLabel('kimi')).toBe('K');
+  expect(harnessLabel('mystery')).toBe('M');
+  expect(renderKey({ ...m, agent: 'cline' })).toContain('>Cl</text>');
+  expect(renderKey({ ...m, agent: 'crush' })).toContain('>Cr</text>');
 });
 
 it('high-contrast theme changes the palette', () => {

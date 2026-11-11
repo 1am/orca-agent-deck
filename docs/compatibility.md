@@ -32,7 +32,7 @@
 
 ## Harnesses
 
-Agent Deck for Orca draws what Orca reports, so each harness depends on Orca's agent hooks. Claude Code, Codex and Pi are the ones the deck has pictograms for; others show their state without a harness badge guarantee.
+Agent Deck for Orca draws what Orca reports, so each harness depends on Orca's agent hooks. Keys carry a small badge for the harness: a pictogram for Claude Code, Codex, Pi, OpenCode, Droid, Devin, Gemini, Copilot, Cursor and Amp, and a letter for any other agent (two letters when two agents start alike, such as Cl and Cr). The state shows either way.
 
 | Harness | Reported states | Notes |
 |---|---|---|

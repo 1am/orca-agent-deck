@@ -74,7 +74,8 @@ const ICONS: Record<DeckState, string> = {
 /**
  * Harness pictograms on a 24x24 grid, drawn as strokes in the badge's background colour.
  * Simplified original glyphs (no vendor artwork): spark for Claude Code, prompt for Codex,
- * pi for Pi, "#" for a plain shell, a split window for tmux without a detected agent.
+ * pi for Pi, "#" for a plain shell, a split window for tmux without a detected agent. Agents
+ * without a glyph show their first letter (see `harnessLabel`).
  */
 const PICTOGRAM: Record<string, string> = {
   claude: '<path d="M12 5v14M5 12h14M7.1 7.1l9.8 9.8M16.9 7.1l-9.8 9.8"/>',
@@ -82,7 +83,27 @@ const PICTOGRAM: Record<string, string> = {
   pi: '<path d="M6.5 8.5h11M10 8.5l-.8 8.5M14.5 8.5v6.8q0 1.7 2 1.7"/>',
   shell: '<path d="M10 6.5l-1.2 11M15.2 6.5L14 17.5M6.5 10h11M6 14h11"/>',
   tmux: '<path d="M5 6.5h14v11H5zM12 6.5v11M12 12h7"/>',
+  opencode: '<path d="M9.5 8L5.5 12l4 4M14.5 8l4 4-4 4"/>',
+  droid: '<path d="M6.5 9.5h11v8h-11zM12 9.5v-3.5M9.5 13v1M14.5 13v1"/>',
+  devin: '<path d="M12 5.5l5.5 3.2v6.6L12 18.5l-5.5-3.2V8.7zM12 12h.01"/>',
+  gemini: '<path d="M12 5q1 5.5 7 7-6 1.5-7 7-1-5.5-7-7 6-1.5 7-7z"/>',
+  copilot:
+    '<path d="M4.5 12a3.5 3.5 0 1 0 7 0 3.5 3.5 0 1 0-7 0M12.5 12a3.5 3.5 0 1 0 7 0 3.5 3.5 0 1 0-7 0M11.5 12h1"/>',
+  cursor: '<path d="M7.5 5.5l10 7-4.5 1-2 4.5z"/>',
+  amp: '<path d="M13 5l-5 8h4l-1 6 5-8h-4z"/>',
 };
+
+/** Agent types Orca reports that have no pictogram, so a first letter is ambiguous between them. */
+const LETTER_AGENTS = ['kimi', 'cline', 'qwen', 'goose', 'crush', 'aider'];
+
+/** Letters for the badge of an agent without a pictogram: two when another such agent starts alike. */
+export function harnessLabel(kind: string): string {
+  const first = kind.slice(0, 1).toUpperCase();
+  const clash = LETTER_AGENTS.some(
+    (a) => a !== kind && a.startsWith(kind.slice(0, 1).toLowerCase()),
+  );
+  return clash && kind.length > 1 ? first + kind.slice(1, 2).toLowerCase() : first;
+}
 
 const esc = (s: string) =>
   s.replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c] ?? c);
@@ -206,7 +227,7 @@ export function renderKey(m: KeyModel, o: RenderOptions = {}): string {
   const kind = m.agent ? m.agent : m.state === 'unmapped' ? '' : 'shell';
   const glyph = kind
     ? (PICTOGRAM[kind] ??
-      `<text x="12" y="17" font-size="14" font-weight="500" text-anchor="middle" fill="${pal.bg}" stroke="none">${esc(kind.slice(0, 1).toUpperCase())}</text>`)
+      `<text x="12" y="${harnessLabel(kind).length > 1 ? 16 : 17}" font-size="${harnessLabel(kind).length > 1 ? 11 : 14}" font-weight="500" text-anchor="middle" fill="${pal.bg}" stroke="none">${esc(harnessLabel(kind))}</text>`)
     : '';
   const badge = glyph
     ? `<circle cx="${MX + 12}" cy="${MY + 12}" r="12" fill="${pal.fg}" fill-opacity=".85"/><g transform="translate(${MX} ${MY})" fill="none" stroke="${pal.bg}" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">${glyph}</g>`
