@@ -14,9 +14,12 @@ import {
   classifyFinalMessage,
   envHostId,
   isLocalHost,
-  isRuntimeHostId,
   LOCAL_HOST,
+  mergeHostCensus,
   runtimeHostId,
+  unreachableHostIds,
+  type HostCensus,
+  type ListingHostScope,
   type AgentRawState,
   type AwaitingKind,
 } from '@orca-agent-deck/core';
@@ -91,32 +94,7 @@ export function awaitingOf(
   return classifyFinalMessage(a.lastAssistantMessage).asks ? 'text' : null;
 }
 
-/**
- * Hosts no listing could reach. Orca's `hostScope` reports the hosts a listing covered (`hostIds`)
- * and the ones it left out (`omittedHostIds`). A host one listing covered answered that query, even
- * when the other had nothing to report for it: an SSH host with worktrees but no terminals appears
- * only in the terminal listing's gaps.
- *
- * This drives the "hosts down" count only. `omittedHostIds` stays the union of both listings, so a
- * key keeps its last known state for every host a listing could not see.
- */
-export function unreachableHostIds(
-  terminalScope: ListingHostScope | undefined,
-  worktreeScope: ListingHostScope | undefined,
-): string[] {
-  const scopes = [terminalScope, worktreeScope].filter(
-    (scope): scope is ListingHostScope => scope !== undefined,
-  );
-  const covered = new Set(scopes.flatMap((scope) => scope.hostIds ?? []));
-  const omitted = new Set(scopes.flatMap((scope) => scope.omittedHostIds ?? []));
-  // `local` answered the call it came from.
-  return [...omitted].filter((id) => !isLocalHost(id) && !covered.has(id));
-}
-
-export type ListingHostScope = {
-  hostIds?: readonly string[];
-  omittedHostIds?: readonly string[];
-};
+export { unreachableHostIds, type ListingHostScope };
 
 export class CliAdapter implements OrcaAdapter {
   /**
@@ -174,30 +152,30 @@ export class CliAdapter implements OrcaAdapter {
       hosts = this.lastHosts;
       hostsKnown = false;
     }
-    const omitted = new Set(local.omittedHostIds);
-    const down = new Set(local.downHostIds ?? []);
+    const paired: { id: string; census: HostCensus | null }[] = [];
     for (const env of hosts.filter((h) => h.kind === 'environment')) {
-      omitted.delete(runtimeHostId(env.id));
-      down.delete(runtimeHostId(env.id));
       if (!hostsKnown) {
-        omitted.add(envHostId(env.id));
-        down.add(envHostId(env.id));
+        paired.push({ id: env.id, census: null });
         continue;
       }
       try {
         const r = await this.snapshotOne(env.id);
         local.panes.push(...r.panes);
         local.statuses.push(...r.statuses);
-        for (const h of r.omittedHostIds) omitted.add(h);
-        // A paired server's own `runtime:` peers belong to its control plane, not to our census.
-        for (const h of r.downHostIds ?? []) if (!isRuntimeHostId(h)) down.add(h);
+        paired.push({
+          id: env.id,
+          census: { omitted: r.omittedHostIds, down: r.downHostIds ?? [] },
+        });
       } catch {
-        omitted.add(envHostId(env.id));
-        down.add(envHostId(env.id));
+        paired.push({ id: env.id, census: null });
       }
     }
-    local.omittedHostIds = [...omitted];
-    local.downHostIds = [...down];
+    const merged = mergeHostCensus(
+      { omitted: local.omittedHostIds, down: local.downHostIds ?? [] },
+      paired,
+    );
+    local.omittedHostIds = [...merged.omitted];
+    local.downHostIds = [...merged.down];
     // Remote panes carry the host's display name; the raw host id means nothing to the user.
     const names = new Map(
       hosts.flatMap(
