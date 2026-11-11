@@ -56,7 +56,7 @@ test('draws only key numbers, shaped like the deck, and names the model', async 
   }
 });
 
-test('a click on a key opens its picker; picking a pane assigns that pane and returns to the grid', async () => {
+test('the grid stays; a click on a key shows its details under it, and the details stay after a pick', async () => {
   const calls = [];
   const host = mockHost({
     requests: {
@@ -68,73 +68,98 @@ test('a click on a key opens its picker; picking a pane assigns that pane and re
     },
   });
   const view = await mount(panel, { host });
+  assert.ok(!view.find({ text: 'Key 2' }));
   await view.press({ text: '2' });
   assert.ok(view.find({ text: 'Key 2' }));
   assert.ok(view.find({ text: 'Empty' }));
   assert.ok(!view.find({ text: 'Unmap' }));
+  assert.ok(view.find({ text: '6' }));
   assert.ok(view.find({ label: 'agent-deck / main' }));
   await view.press({ label: 'orca / dev' });
   assert.deepEqual(calls, [{ key: 2, replace: false, paneKey: 'p-build' }]);
   assert.ok(view.find({ text: 'Key 2 assigned.' }));
-  assert.ok(!view.find({ role: 'heading', text: 'Key 2' }));
+  assert.ok(view.find({ text: 'Key 2' }), 'the details stay');
   assert.ok(view.find({ text: '6' }));
+  await view.press({ text: 'Use the focused pane' });
+  assert.deepEqual(calls[1], { key: 2, replace: false });
+  assert.ok(view.find({ text: 'Key 2' }));
   assert.deepEqual(view.errors, []);
   await view.unmount();
 });
 
-test('a mapped key offers Unmap and Back, and picking replaces what it shows', async () => {
-  const calls = [];
+test('the details follow the pushed deck, switch with another key and close with Back or the same key', async () => {
   const host = mockHost({
     requests: {
       'deck.get': () => ({ status: 'ok', deck }),
-      'deck.assign': (input) => (
-        calls.push(['assign', input]),
-        { ok: true, slot: { index: 1 }, action: 'moved' }
-      ),
-      'deck.unmap': (input) => (
-        calls.push(['unmap', input]),
-        { ok: true, slot: { index: 1 }, action: 'unmapped' }
-      ),
+      'deck.unmap': () => ({ ok: true, slot: { index: 1 }, action: 'unmapped' }),
     },
   });
   const view = await mount(panel, { host });
   await view.press({ text: '1' });
   assert.ok(view.find({ text: 'Shows agent-deck/main' }));
-  await view.press({ text: 'Back' });
-  assert.ok(view.find({ text: '6' }));
-  await view.press({ text: '1' });
-  await view.press({ label: 'orca / dev' });
-  assert.deepEqual(calls, [['assign', { key: 1, replace: true, paneKey: 'p-build' }]]);
-  assert.ok(view.find({ text: 'Key 1 moved here (the pane was on another key).' }));
-  await view.press({ text: '1' });
   await view.press({ text: 'Unmap' });
-  assert.deepEqual(calls[1], ['unmap', { key: 1 }]);
   assert.ok(view.find({ text: 'Key 1 emptied.' }));
+  assert.ok(view.find({ text: 'Shows agent-deck/main' }), 'until the deck pushes the change');
+  await view.post('deck.changed', {
+    status: 'ok',
+    deck: { ...deck, keys: deck.keys.map((k) => (k.key === 1 ? empty(1) : k)) },
+  });
+  assert.ok(view.find({ text: 'Empty' }));
+  assert.ok(!view.find({ text: 'Unmap' }));
+  await view.press({ text: '3' });
+  assert.ok(view.find({ text: 'Key 3' }));
+  assert.ok(!view.find({ text: 'Key 1 emptied.' }));
+  await view.press({ text: '3' });
+  assert.ok(!view.find({ text: 'Key 3' }));
+  await view.press({ text: '4' });
+  await view.press({ text: 'Back' });
+  assert.ok(!view.find({ text: 'Key 4' }));
+  assert.ok(view.find({ text: '6' }));
   await view.unmount();
 });
 
-test('a pane that was on another key moves: the pushed deck empties the old key', async () => {
+test('picking replaces what a mapped key shows and a pane on another key moves', async () => {
+  const calls = [];
   const host = mockHost({
     requests: {
       'deck.get': () => ({ status: 'ok', deck }),
-      'deck.assign': () => ({ ok: true, slot: { page: 1, index: 2 }, action: 'moved' }),
+      'deck.assign': (input) => (
+        calls.push(input),
+        { ok: true, slot: { index: 2 }, action: 'moved' }
+      ),
     },
   });
   const view = await mount(panel, { host });
-  await view.press({ text: '2' });
-  await view.press({ label: 'agent-deck / main' });
-  assert.ok(view.find({ text: 'Key 2 moved here (the pane was on another key).' }));
-  const moved = deck.keys.map((k) =>
-    k.key === 1
-      ? empty(1)
-      : k.key === 2
-        ? { key: 2, label: 'agent-deck/main', state: 'working', mapped: true }
-        : k,
-  );
-  await view.post('deck.changed', { status: 'ok', deck: { ...deck, keys: moved } });
   await view.press({ text: '1' });
-  assert.ok(view.find({ text: 'Empty' }));
+  await view.press({ label: 'orca / dev' });
+  assert.deepEqual(calls, [{ key: 1, replace: true, paneKey: 'p-build' }]);
+  assert.ok(view.find({ text: 'Key 1 moved here (the pane was on another key).' }));
   await view.unmount();
+});
+
+test('says to update the Stream Deck plugin when it sends no pane list, and still offers the focused pane', async () => {
+  const old = { ...deck };
+  delete old.panes;
+  const view = await mount(panel, {
+    host: mockHost({ requests: { 'deck.get': () => ({ status: 'ok', deck: old }) } }),
+  });
+  await view.press({ text: '2' });
+  assert.ok(
+    view.find({
+      text: 'The pane list needs a newer Stream Deck plugin: update it to choose any pane.',
+    }),
+  );
+  assert.ok(!view.find({ text: 'Orca lists no terminal panes.' }));
+  assert.ok(view.find({ text: 'Use the focused pane' }));
+  await view.unmount();
+  const none = await mount(panel, {
+    host: mockHost({
+      requests: { 'deck.get': () => ({ status: 'ok', deck: { ...deck, panes: [] } }) },
+    }),
+  });
+  await none.press({ text: '2' });
+  assert.ok(none.find({ text: 'Orca lists no terminal panes.' }));
+  await none.unmount();
 });
 
 test('says what is wrong instead of drawing a grid', async () => {

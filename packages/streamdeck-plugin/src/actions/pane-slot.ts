@@ -273,8 +273,8 @@ export class PaneSlot extends SingletonAction {
   }
 
   /** A push from plugin A arrived: refresh now instead of waiting for the next poll. */
-  nudge(): void {
-    void this.refresh();
+  nudge(): Promise<void> {
+    return this.refresh();
   }
 
   private async refresh(): Promise<void> {

@@ -90,7 +90,8 @@ async function createController(): Promise<DeckController> {
         ? { ok: true as const, slot: slotAddress(r.slot), action: r.action }
         : { ok: false as const, reason: r.reason }),
     });
-    paneSlot.nudge();
+    // The Orca panel shows the result: tell it the keys as they are now, not a second later.
+    void paneSlot.nudge().then(() => pushDeck(true));
   };
   // Short host names for the badge: global setting `hostAliases` = { "ssh:build-1": "build" }.
   deck.hostAliases = globals.hostAliases ?? {};
