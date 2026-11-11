@@ -60,6 +60,16 @@
         "when": "global"
       }
     ],
+    "keybindings": [
+      {
+        "command": "deck.map",
+        "key": "Mod+Alt+K"
+      },
+      {
+        "command": "deck.unmap",
+        "key": "Mod+Alt+Shift+K"
+      }
+    ],
     "events": [
       {
         "on": "agent.status.changed"

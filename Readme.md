@@ -11,7 +11,7 @@ https://github.com/user-attachments/assets/1dfea071-0276-4011-b159-7916241eb2ca
 ## Features
 
 - Pane key shows each pane's state (working, needs input, awaiting reply, done, error, offline).
-- Press a pane key to focus that pane in Orca; hold to assign the current pane.
+- Press a pane key to focus that pane in Orca; hold to assign the current pane, or press Cmd+Alt+K (Ctrl+Alt+K on Windows and Linux) in Orca and then the key. Cmd+Alt+Shift+K (Ctrl+Alt+Shift+K) unmaps a pane. Both are in Orca's keyboard shortcuts settings, where you can change them.
 - Status key displays setup checks.
 - Attention key counts panes that need you.
 - Works locally and over SSH.

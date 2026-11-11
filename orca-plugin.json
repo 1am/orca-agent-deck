@@ -48,6 +48,26 @@
         "id": "deck.status",
         "title": "Agent Deck: Show status",
         "when": "global"
+      },
+      {
+        "id": "deck.record",
+        "title": "Agent Deck: Record events",
+        "when": "global"
+      },
+      {
+        "id": "deck.uninstall",
+        "title": "Agent Deck: Uninstall",
+        "when": "global"
+      }
+    ],
+    "keybindings": [
+      {
+        "command": "deck.map",
+        "key": "Mod+Alt+K"
+      },
+      {
+        "command": "deck.unmap",
+        "key": "Mod+Alt+Shift+K"
       }
     ],
     "events": [
