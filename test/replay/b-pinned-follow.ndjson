@@ -1,0 +1,15 @@
+{"v":2,"name":"b-pinned-follow","description":"Pinned keys follow their pane: working, then a permission wait, then done. Revert check: break the waiting -> needs_input mapping in deriveDeckState.","sides":["b"],"keys":{"1":"a","2":"b"}}
+{"at":0,"do":"orca.pane.add","pane":"a"}
+{"at":0,"do":"orca.pane.add","pane":"b","title":"Build"}
+{"at":0,"do":"expect.key","key":1,"state":"completed","label":"Claude Code","number":"1"}
+{"at":0,"do":"expect.key","key":2,"state":"completed","label":"Build"}
+{"at":100,"do":"orca.agent","pane":"a","state":"working","toolName":"Bash"}
+{"at":100,"do":"bridge.frame","from":"a","frame":{"type":"agentStatus","paneKey":"tab-1:leaf-a","workspaceId":"w1","state":"working","outcome":null,"stateStartedAt":1800000000100,"receivedAt":1800000000100}}
+{"at":100,"do":"expect.key","key":1,"state":"working"}
+{"at":200,"do":"orca.agent","pane":"a","state":"waiting","toolName":"Bash"}
+{"at":200,"do":"bridge.frame","from":"a","frame":{"type":"agentStatus","paneKey":"tab-1:leaf-a","workspaceId":"w1","state":"waiting","outcome":null,"stateStartedAt":1800000000200,"receivedAt":1800000000200}}
+{"at":200,"do":"expect.key","key":1,"state":"needs_input","line2":"needs you"}
+{"at":200,"do":"expect.key","key":2,"state":"completed"}
+{"at":300,"do":"orca.agent","pane":"a","state":"done","outcome":"success","toolName":"Bash"}
+{"at":300,"do":"bridge.frame","from":"a","frame":{"type":"agentStatus","paneKey":"tab-1:leaf-a","workspaceId":"w1","state":"done","outcome":"success","stateStartedAt":1800000000300,"receivedAt":1800000000300}}
+{"at":300,"do":"expect.key","key":1,"state":"completed"}

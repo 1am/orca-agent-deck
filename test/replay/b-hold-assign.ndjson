@@ -1,0 +1,11 @@
+{"v":2,"name":"b-hold-assign","description":"Holding a free key while a pane is focused in Orca pins that pane; holding it again releases it. Revert check: make PaneSlot.onHold treat every hold as failed (skip c.hold).","sides":["b"],"keys":{}}
+{"at":0,"do":"orca.pane.add","pane":"a"}
+{"at":0,"do":"orca.pane.add","pane":"b","title":"Build"}
+{"at":0,"do":"orca.focus","pane":"b"}
+{"at":0,"do":"deck.appear","key":1}
+{"at":100,"do":"deck.down","key":1}
+{"at":1300,"do":"deck.up","key":1}
+{"at":1300,"do":"expect.key","key":1,"state":"completed","label":"Build"}
+{"at":1400,"do":"deck.down","key":1}
+{"at":2600,"do":"deck.up","key":1}
+{"at":2600,"do":"expect.key","key":1,"state":"unmapped"}

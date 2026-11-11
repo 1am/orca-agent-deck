@@ -1,0 +1,17 @@
+{"v":2,"name":"b-pi-routing","description":"Only the inspector that is open gets replies; a message from another key (OpenDeck mounts a hidden inspector per key) changes only its own key (#169). Revert check: drop the isCurrentPi guard in replyToPi.","sides":["b"],"keys":{"1":"a","2":"b"}}
+{"at":0,"do":"orca.pane.add","pane":"a"}
+{"at":0,"do":"orca.pane.add","pane":"b","title":"Build"}
+{"at":0,"do":"orca.pane.add","pane":"c","agent":"codex","title":"Codex"}
+{"at":0,"do":"expect.key","key":1,"state":"completed","label":"Claude Code"}
+{"at":0,"do":"expect.key","key":2,"state":"completed","label":"Build"}
+{"at":100,"do":"deck.pi.open","key":1}
+{"at":100,"do":"expect.pi","key":1,"messages":[{"type":"state","config":{"mode":"pinned","paneKey":"tab-1:leaf-a"}}]}
+{"at":100,"do":"expect.pi","key":2,"messages":[]}
+{"at":200,"do":"deck.pi.send","key":2,"message":{"type":"configure","paneKey":"tab-1:leaf-c"}}
+{"at":200,"do":"expect.key","key":2,"state":"completed","label":"Codex"}
+{"at":200,"do":"expect.key","key":1,"state":"completed","label":"Claude Code"}
+{"at":200,"do":"expect.pi","key":1,"messages":[]}
+{"at":200,"do":"expect.pi","key":2,"messages":[]}
+{"at":300,"do":"deck.pi.open","key":2}
+{"at":300,"do":"expect.pi","key":2,"messages":[{"type":"state","config":{"paneKey":"tab-1:leaf-c"}}]}
+{"at":300,"do":"expect.pi","key":1,"messages":[]}

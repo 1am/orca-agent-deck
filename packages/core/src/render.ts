@@ -228,6 +228,56 @@ const MX = 14;
 const MY = 22;
 const RIGHT = 144 - MX;
 
+/**
+ * What a key says, as attributes of the root element: the replay suite reads the semantic state back from the image
+ * through `decodeKey` instead of a second renderer. For an info key: state = tone, label = caption, line2 = value.
+ */
+const markers = (
+  state: string,
+  label: string,
+  line2: string,
+  agent?: string,
+  number?: string | null,
+) =>
+  `data-state="${state}" data-label="${esc(label)}" data-line2="${esc(line2)}"` +
+  (agent !== undefined ? ` data-agent="${esc(agent)}"` : '') +
+  (number ? ` data-number="${esc(number)}"` : '') +
+  ' ';
+
+export interface DecodedKey {
+  state: string;
+  label: string;
+  line2: string;
+  agent?: string;
+  number?: string;
+}
+
+/** Reads the markers back from a key image (an SVG string or a `data:image/svg+xml` URL); null when there are none. */
+export function decodeKey(image: string): DecodedKey | null {
+  const svg = image.startsWith('data:')
+    ? decodeURIComponent(image.slice(image.indexOf(',') + 1))
+    : image;
+  const tag = /<svg\b[^>]*>/.exec(svg)?.[0] ?? '';
+  const attr = (name: string): string | undefined => {
+    const v = new RegExp(`\\sdata-${name}="([^"]*)"`).exec(tag)?.[1];
+    return v === undefined
+      ? undefined
+      : v
+          .replace(/&lt;/g, '<')
+          .replace(/&gt;/g, '>')
+          .replace(/&quot;/g, '"')
+          .replace(/&amp;/g, '&');
+  };
+  const state = attr('state');
+  if (state === undefined) return null;
+  const out: DecodedKey = { state, label: attr('label') ?? '', line2: attr('line2') ?? '' };
+  const agent = attr('agent');
+  const number = attr('number');
+  if (agent !== undefined) out.agent = agent;
+  if (number !== undefined) out.number = number;
+  return out;
+}
+
 export function renderKey(m: KeyModel, o: RenderOptions = {}): string {
   const size = o.size ?? 144;
   const base = (o.highContrast && HIGH_CONTRAST[m.state]) || PALETTE[m.state];
@@ -271,6 +321,7 @@ export function renderKey(m: KeyModel, o: RenderOptions = {}): string {
   const iconX = glyph ? MX + 32 : MX;
   return (
     `<svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}" viewBox="0 0 144 144" ` +
+    markers(m.state, m.label, m.line2, kind, m.keyNumber) +
     `style="--bg:${pal.bg}" font-family="${FONT_STACK}" font-weight="400" color="${pal.fg}" fill="${pal.fg}">` +
     `<rect width="144" height="144" fill="${pal.bg}"/>` +
     badge +
@@ -305,6 +356,7 @@ export function renderInfoKey(m: InfoModel, o: RenderOptions = {}): string {
     .join('');
   return (
     `<svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}" viewBox="0 0 144 144" ` +
+    markers(m.tone, m.caption, m.value) +
     `font-family="${FONT_STACK}" font-weight="500" fill="${pal.fg}">` +
     `<rect width="144" height="144" fill="${pal.bg}"/>` +
     `<text x="72" y="84" font-size="${m.value.length > 3 ? 40 : 56}" text-anchor="middle">${esc(m.value)}</text>` +

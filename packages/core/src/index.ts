@@ -10,6 +10,7 @@ export * from './render.ts';
 export * from './gesture.ts';
 export * from './keynumber.ts';
 export * from './doctor.ts';
+export * from './host.ts';
 export * from './awaiting.ts';
 export * from './shell-activity.ts';
 export * from './autofill.ts';

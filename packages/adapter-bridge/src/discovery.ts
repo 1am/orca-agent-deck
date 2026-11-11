@@ -7,6 +7,16 @@ import { PROTOCOL_VERSION } from './protocol.ts';
 /** Port range tried by B, first free wins. */
 export const PORT_RANGE = { first: 47800, last: 47809 } as const;
 
+/**
+ * `ORCA_DECK_BRIDGE_PORTS` (comma list, `0` = any free port) replaces the default range, for tests that must not share
+ * the real one. Anything malformed (empty entry, not a port number) is ignored as a whole: `ports` is then undefined.
+ */
+export function portsFromEnv(value: string | undefined): { ports?: number[]; bad?: string } {
+  if (value === undefined || value === '') return {};
+  const ports = value.split(',').map((p) => (/^\d{1,5}$/.test(p.trim()) ? Number(p) : NaN));
+  return ports.every((p) => p >= 0 && p <= 65535) ? { ports } : { bad: value };
+}
+
 export const discoveryFile = z.object({
   v: z.literal(PROTOCOL_VERSION),
   port: z.number().int(),

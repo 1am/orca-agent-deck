@@ -1,0 +1,7 @@
+{"v":2,"name":"b-hold-remote","description":"Orca marks no local worktree active while it shows a paired server: holding a free key cannot read the focused pane and says Remote pane: use the picker. Revert check: drop the no-active-worktree hint in DeckController.focusedPane.","sides":["b"],"keys":{}}
+{"at":0,"do":"orca.host.add","id":"ssh-1","kind":"ssh","name":"remote"}
+{"at":0,"do":"orca.pane.add","pane":"r","host":"ssh-1"}
+{"at":0,"do":"deck.appear","key":1}
+{"at":100,"do":"deck.down","key":1}
+{"at":1300,"do":"deck.up","key":1}
+{"at":1300,"do":"expect.key","key":1,"label":"Remote pane: use the picker"}

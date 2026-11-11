@@ -83,6 +83,15 @@ export function worktreePs(s: SimState) {
             ...(p.agent.interactivePrompt === undefined
               ? {}
               : { interactivePrompt: p.agent.interactivePrompt }),
+            ...(p.agent.outcome === undefined
+              ? {}
+              : {
+                  mainAgent: {
+                    state: p.agent.state,
+                    outcome: p.agent.outcome,
+                    stateStartedAt: p.agent.stateStartedAt,
+                  },
+                }),
             stateStartedAt: p.agent.stateStartedAt,
             updatedAt: p.agent.stateStartedAt,
             hasLivePty: p.connected,

@@ -1,4 +1,4 @@
-export type AgentState = 'working' | 'waiting' | 'done';
+export type AgentState = 'working' | 'waiting' | 'blocked' | 'done' | 'idle';
 
 export interface Pane {
   handle: string;
@@ -13,6 +13,7 @@ export interface Pane {
   agent: {
     state: AgentState;
     toolName: string | null;
+    outcome?: string | null;
     stateStartedAt: number;
     /** What `worktree ps` reports as lastAssistantMessage (content stays inside the adapter). */
     lastMessage?: string;
@@ -34,6 +35,8 @@ export interface SimState {
   hosts: Host[];
   panes: Pane[];
   focusedHandle: string | null;
+  /** What `orca plugin list` reports; undefined = the call fails (an unanswered probe). */
+  plugins?: { pluginKey: string; status: string }[];
   log: string[];
 }
 
@@ -90,7 +93,7 @@ export function setAgent(
   key: string,
   state: AgentState,
   toolName: string | null = null,
-  extra: { lastMessage?: string; interactivePrompt?: string } = {},
+  extra: { lastMessage?: string; interactivePrompt?: string; outcome?: string | null } = {},
 ): void {
   const p = find(s, key);
   if (!p.agent) throw new Error(`pane ${key} has no agent`);

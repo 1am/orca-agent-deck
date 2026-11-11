@@ -1,0 +1,8 @@
+{"v":2,"name":"b-mapping-persists","description":"The plugin restarts with its host: pinned keys come back with their panes. Revert check: make FileSlotStorage.read ignore the file and plugin.ts load nothing from the host settings cache.","sides":["b"],"keys":{"1":"b","2":"a"}}
+{"at":0,"do":"orca.pane.add","pane":"a"}
+{"at":0,"do":"orca.pane.add","pane":"b","title":"Build"}
+{"at":0,"do":"expect.key","key":1,"state":"completed","label":"Build"}
+{"at":0,"do":"expect.key","key":2,"state":"completed","label":"Claude Code"}
+{"at":100,"do":"deck.restart"}
+{"at":100,"do":"expect.key","key":1,"state":"completed","label":"Build"}
+{"at":100,"do":"expect.key","key":2,"state":"completed","label":"Claude Code"}

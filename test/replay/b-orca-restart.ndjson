@@ -1,0 +1,10 @@
+{"v":2,"name":"b-orca-restart","description":"#78: Orca restarts (terminal handles rotate): once the deck has read the new handles a press still focuses the pinned pane. A press in the same instant as the restart, before any refresh, uses the old handle and fails once (known, not asserted). Revert check: focus with the generation-1 handle (a stale one) in DeckController.focus.","sides":["b"],"keys":{"1":"a"}}
+{"at":0,"do":"orca.pane.add","pane":"a"}
+{"at":0,"do":"expect.key","key":1,"state":"completed","label":"Claude Code"}
+{"at":100,"do":"orca.restart"}
+{"at":200,"do":"orca.agent","pane":"a","state":"working"}
+{"at":200,"do":"bridge.frame","from":"a","frame":{"type":"agentStatus","paneKey":"tab-1:leaf-a","workspaceId":"w1","state":"working","outcome":null,"stateStartedAt":1800000000200,"receivedAt":1800000000200}}
+{"at":200,"do":"expect.key","key":1,"state":"working","label":"Claude Code"}
+{"at":300,"do":"deck.down","key":1}
+{"at":300,"do":"deck.up","key":1}
+{"at":300,"do":"expect.focus","pane":"a"}

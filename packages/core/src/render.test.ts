@@ -1,5 +1,6 @@
-import { expect, it } from 'vitest';
+import { describe, expect, it } from 'vitest';
 import {
+  decodeKey,
   harnessLabel,
   layoutLabel,
   renderInfoKey,
@@ -73,9 +74,9 @@ it('cuts labels at 128 characters and ellipsises what does not fit', () => {
   expect(l.size).toBe(12);
   expect(l.lines.join(' ').length).toBeLessThanOrEqual(128);
   expect(l.lines.at(-1)?.endsWith('…')).toBe(true);
-  expect(renderKey({ state: 'idle', label: 'y'.repeat(300), line2: '' })).not.toContain(
-    'y'.repeat(129),
-  );
+  // The drawing is cut; the data-label marker keeps the whole label for the replay suite.
+  const svg = renderKey({ state: 'idle', label: 'y'.repeat(300), line2: '' });
+  expect(svg.slice(svg.indexOf('<rect'))).not.toContain('y'.repeat(129));
 });
 
 it('shows agent and host badges, link-broken marker; only the working icon spins', () => {
@@ -198,4 +199,30 @@ it('pairing mode draws the key number large and the label as one short line', ()
   expect(svg).toContain('font-size="72"');
   expect(svg).toContain('>5</text>');
   expect(svg).not.toContain('5: Assign');
+});
+
+describe('decodeKey', () => {
+  it('reads back what the key says, including escaped text and the info key mapping', () => {
+    const svg = renderKey({
+      state: 'needs_input',
+      label: 'a "b" <c> & d',
+      line2: 'permission',
+      agent: 'claude',
+      keyNumber: '3',
+    });
+    expect(decodeKey(svg)).toEqual({
+      state: 'needs_input',
+      label: 'a "b" <c> & d',
+      line2: 'permission',
+      agent: 'claude',
+      number: '3',
+    });
+    expect(decodeKey(`data:image/svg+xml;charset=utf8,${encodeURIComponent(svg)}`)?.state).toBe(
+      'needs_input',
+    );
+    expect(
+      decodeKey(renderInfoKey({ tone: 'completed', value: 'OK', caption: 'live 1.4' })),
+    ).toEqual({ state: 'completed', label: 'live 1.4', line2: 'OK' });
+    expect(decodeKey('<svg xmlns="x"></svg>')).toBeNull();
+  });
 });

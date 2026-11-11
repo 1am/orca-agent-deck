@@ -54,7 +54,7 @@ export class FakeRuntime {
         runtimeId: 'fake-runtime',
         authToken: this.token,
         transports: [
-          { kind: 'unix', endpoint: this.sockPath },
+          { kind: process.platform === 'win32' ? 'named-pipe' : 'unix', endpoint: this.sockPath },
           { kind: 'websocket', endpoint: 'ws://127.0.0.1:1' },
         ],
       }),

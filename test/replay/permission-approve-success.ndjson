@@ -1,0 +1,10 @@
+{"v":2,"name":"permission-approve-success","description":"Claude asks for a Bash permission, the user approves, the turn succeeds","sides":["sim"],"keys":{"1":"a","2":"b"}}
+{"at":0,"do":"orca.pane.add","pane":"a"}
+{"at":0,"do":"orca.pane.add","pane":"b"}
+{"at":1000,"do":"orca.agent","pane":"a","state":"working"}
+{"at":3000,"do":"orca.agent","pane":"a","state":"working","toolName":"Bash"}
+{"at":6000,"do":"orca.agent","pane":"a","state":"waiting","toolName":"Bash"}
+{"at":6000,"do":"expect.key","key":1,"state":"needs_input","line2":"needs you"}
+{"at":11000,"do":"orca.agent","pane":"a","state":"working","toolName":"Bash"}
+{"at":15000,"do":"orca.agent","pane":"a","state":"done","outcome":"success","toolName":"Bash"}
+{"at":15000,"do":"expect.key","key":1,"state":"completed"}

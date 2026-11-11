@@ -1,0 +1,7 @@
+t(ms)  key  orca event                  state          label | line 2
+     0  1    addPane a; addPane b       completed      Claude Code | done
+     0  2    addPane a; addPane b       completed      Claude Code | done
+  1000  1    agent a working            working        Claude Code | working 0s
+  6000  1    agent a waiting/Bash       needs_input    Claude Code | needs you
+ 11000  1    agent a working/Bash       working        Claude Code | working 0s
+ 15000  1    agent a done/Bash          completed      Claude Code | done

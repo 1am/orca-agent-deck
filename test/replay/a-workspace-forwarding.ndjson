@@ -1,0 +1,7 @@
+{"v":2,"name":"a-workspace-forwarding","description":"Workspace created and removed events are forwarded. Revert check: remove the orca.events.on for workspace.created.","sides":["a"],"keys":{}}
+{"at":0,"do":"orca.activate"}
+{"at":0,"do":"bridge.frame","from":"a","frame":{"type":"hello"}}
+{"at":100,"do":"orca.event","name":"workspace.created","payload":{"workspaceId":"wt1","kind":"worktree","path":"/w/wt1","branch":"main"}}
+{"at":100,"do":"bridge.frame","from":"a","frame":{"type":"workspace","event":"created","workspaceId":"wt1","path":"/w/wt1"}}
+{"at":200,"do":"orca.event","name":"workspace.removed","payload":{"workspaceId":"wt1","kind":"worktree","path":"/w/wt1"}}
+{"at":200,"do":"bridge.frame","from":"a","frame":{"type":"workspace","event":"removed","workspaceId":"wt1"}}

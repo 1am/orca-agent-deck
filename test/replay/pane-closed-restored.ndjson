@@ -1,0 +1,7 @@
+{"v":2,"name":"pane-closed-restored","description":"A pane closes and comes back: its key goes offline, then recovers","sides":["sim"],"keys":{"1":"a","2":"b"}}
+{"at":0,"do":"orca.pane.add","pane":"a"}
+{"at":0,"do":"orca.pane.add","pane":"b"}
+{"at":1000,"do":"orca.pane.remove","pane":"b"}
+{"at":1000,"do":"expect.key","key":2,"state":"offline"}
+{"at":6000,"do":"orca.pane.add","pane":"b"}
+{"at":6000,"do":"expect.key","key":2,"state":"completed"}

@@ -1,0 +1,16 @@
+{"v":2,"name":"b-attention","description":"The Attention key counts the panes that need you and walks them on each press. Revert check: remove the cursor advance in DeckController.pressAttention.","sides":["b"],"keys":{"1":"a","2":"b","3":"c","15":{"action":"attention"}}}
+{"at":0,"do":"orca.pane.add","pane":"a"}
+{"at":0,"do":"orca.pane.add","pane":"b"}
+{"at":0,"do":"orca.pane.add","pane":"c"}
+{"at":0,"do":"expect.key","key":15,"state":"unmapped","line2":"0","label":"all calm"}
+{"at":100,"do":"orca.agent","pane":"a","state":"waiting","toolName":"Bash"}
+{"at":100,"do":"bridge.frame","from":"a","frame":{"type":"agentStatus","paneKey":"tab-1:leaf-a","workspaceId":"w1","state":"waiting","outcome":null,"stateStartedAt":1800000000100,"receivedAt":1800000000100}}
+{"at":150,"do":"orca.agent","pane":"c","state":"waiting","toolName":"Bash"}
+{"at":150,"do":"bridge.frame","from":"a","frame":{"type":"agentStatus","paneKey":"tab-1:leaf-c","workspaceId":"w1","state":"waiting","outcome":null,"stateStartedAt":1800000000150,"receivedAt":1800000000150}}
+{"at":150,"do":"expect.key","key":15,"state":"needs_input","line2":"2","label":"need you"}
+{"at":200,"do":"deck.down","key":15}
+{"at":200,"do":"deck.up","key":15}
+{"at":200,"do":"expect.focus","pane":"a"}
+{"at":300,"do":"deck.down","key":15}
+{"at":300,"do":"deck.up","key":15}
+{"at":300,"do":"expect.focus","pane":"c"}

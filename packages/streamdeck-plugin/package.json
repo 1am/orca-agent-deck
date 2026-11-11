@@ -6,5 +6,12 @@
   "scripts": {
     "build": "tsc -p . && rollup -c",
     "watch": "rollup -c -w --watch.onEnd=\"streamdeck restart pl.1am.orca-agent-deck\""
+  },
+  "dependencies": {
+    "@orca-agent-deck/adapter-bridge": "workspace:*",
+    "@orca-agent-deck/adapter-cli": "workspace:*",
+    "@orca-agent-deck/adapter-runtime": "workspace:*",
+    "@orca-agent-deck/core": "workspace:*",
+    "@orca-agent-deck/window-raiser": "workspace:*"
   }
 }

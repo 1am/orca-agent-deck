@@ -1,0 +1,18 @@
+{"v":2,"name":"b-pairing","description":"Map pane to key from Orca: free keys show Assign here, the pressed key gets the focused pane and B answers over the bridge; a cancelled request puts the keys back. Revert check: report a wrong slot (slotAddress) in the pairResult B sends.","sides":["b"],"keys":{}}
+{"at":0,"do":"orca.pane.add","pane":"a"}
+{"at":0,"do":"orca.focus","pane":"a"}
+{"at":0,"do":"deck.appear","key":3}
+{"at":0,"do":"deck.appear","key":4}
+{"at":0,"do":"expect.key","key":3,"state":"unmapped"}
+{"at":100,"do":"bridge.frame","from":"a","frame":{"type":"pairRequest","requestId":"r1","pane":null}}
+{"at":100,"do":"bridge.frame","from":"b","frame":{"type":"pairState","requestId":"r1","state":"waitingForKey"}}
+{"at":100,"do":"expect.key","key":3,"state":"unmapped","label":"Assign here: Claude Code"}
+{"at":200,"do":"deck.down","key":3}
+{"at":200,"do":"deck.up","key":3}
+{"at":200,"do":"bridge.frame","from":"b","frame":{"type":"pairResult","requestId":"r1","ok":true,"slot":{"index":3}}}
+{"at":200,"do":"expect.key","key":3,"state":"completed","label":"Claude Code"}
+{"at":200,"do":"expect.key","key":4,"state":"unmapped","label":""}
+{"at":300,"do":"bridge.frame","from":"a","frame":{"type":"pairRequest","requestId":"r2","pane":null}}
+{"at":300,"do":"bridge.frame","from":"b","frame":{"type":"pairState","requestId":"r2","state":"waitingForKey"}}
+{"at":400,"do":"bridge.frame","from":"a","frame":{"type":"pairCancel","requestId":"r2"}}
+{"at":400,"do":"expect.key","key":4,"state":"unmapped","label":""}

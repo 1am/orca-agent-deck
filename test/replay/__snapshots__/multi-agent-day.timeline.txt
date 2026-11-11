@@ -1,0 +1,15 @@
+t(ms)  key  orca event                  state          label | line 2
+     0  1    addPane a; addPane b; addP completed      Claude Code | done
+     0  2    addPane a; addPane b; addP completed      Claude Code | done
+     0  3    addPane a; addPane b; addP completed      Codex | done
+   500  1    agent a working            working        Claude Code | working 0s
+  1000  2    agent b working            working        Claude Code | working 0s
+  3000  1    agent b waiting            working        Claude Code | working 2s
+  3000  2    agent b waiting            needs_input    Claude Code | needs you
+  4000  1    agent c working            working        Claude Code | working 3s
+  4000  3    agent c working            working        Codex | working 0s
+  7000  1    agent a done               completed      Claude Code | done
+  7000  3    agent a done               working        Codex | working 3s
+  9000  2    agent b done               completed      Claude Code | done
+  9000  3    agent b done               working        Codex | working 5s
+ 10000  3    agent c done               completed      Codex | done

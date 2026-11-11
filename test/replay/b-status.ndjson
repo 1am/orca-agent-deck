@@ -1,0 +1,7 @@
+{"v":2,"name":"b-status","description":"The Status key never says the Orca plugin is missing while the install probe has no answer (#155): slow updates until A connects, then live. Revert check: map a pending install probe to missing in bridge.ts orcaPluginState.","sides":["b"],"keys":{"1":"a","14":{"action":"status"}}}
+{"at":0,"do":"orca.pane.add","pane":"a"}
+{"at":0,"do":"expect.key","key":14,"state":"idle","label":"slow updates 1.4.245","line2":"OK"}
+{"at":100,"do":"orca.agent","pane":"a","state":"working"}
+{"at":100,"do":"bridge.frame","from":"a","frame":{"type":"agentStatus","paneKey":"tab-1:leaf-a","workspaceId":"w1","state":"working","outcome":null,"stateStartedAt":1800000000100,"receivedAt":1800000000100}}
+{"at":100,"do":"expect.key","key":1,"state":"working"}
+{"at":100,"do":"expect.key","key":14,"state":"completed","label":"live 1.4.245","line2":"OK"}

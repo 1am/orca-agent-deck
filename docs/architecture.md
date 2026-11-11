@@ -80,7 +80,7 @@ Everything listens on loopback or is a local file/socket. Nothing accepts traffi
 
 | Endpoint | Owner | Bind / path | Who connects | Auth |
 |---|---|---|---|---|
-| Bridge WebSocket | Plugin B (`packages/adapter-bridge/src/server.ts`) | `127.0.0.1`, first free port of 47800-47809 | Plugin A only | 32-byte token from `bridge.json` (0600 in a 0700 dir, rotated per start; refused when a symlink, foreign-owned or readable by others. On Windows, which has no mode bits, only the symlink check applies and the user profile's ACL keeps it private), never sent: A and B prove it to each other with HMAC-SHA256 over two 16-byte nonces and a direction label before A sends anything; upgrades with an `Origin` header (browsers), a `Host` other than `127.0.0.1:<port>` (DNS rebinding) or from a non-loopback address are refused (401); frames over 256 KiB close the socket on both sides; 2 s to finish the handshake, at most 2 pending connections (a new one evicts the oldest) |
+| Bridge WebSocket | Plugin B (`packages/adapter-bridge/src/server.ts`) | `127.0.0.1`, first free port of 47800-47809 (`ORCA_DECK_BRIDGE_PORTS`, a comma list where `0` means any free port, replaces the range for tests; a malformed value is ignored with one log line) | Plugin A only | 32-byte token from `bridge.json` (0600 in a 0700 dir, rotated per start; refused when a symlink, foreign-owned or readable by others. On Windows, which has no mode bits, only the symlink check applies and the user profile's ACL keeps it private), never sent: A and B prove it to each other with HMAC-SHA256 over two 16-byte nonces and a direction label before A sends anything; upgrades with an `Origin` header (browsers), a `Host` other than `127.0.0.1:<port>` (DNS rebinding) or from a non-loopback address are refused (401); frames over 256 KiB close the socket on both sides; 2 s to finish the handshake, at most 2 pending connections (a new one evicts the oldest) |
 | Orca runtime socket | Orca | unix socket `o-<pid>-<id>.sock` (0600); named pipe `\\.\pipe\orca-<pid>-<id>` on Windows | Plugin B, `orca` CLI | `authToken` from `orca-runtime.json` (0600) in every request; rotated on each Orca start. Never logged. Windows pipe names are visible to every local account, so with Orca stopped and a stale `orca-runtime.json` another account could open the old name and receive a token that no longer works. |
 | Orca paired-device WebSocket | Orca | `ws://127.0.0.1:6768` | Not used by us (needs an E2EE handshake) | Orca's |
 | Stream Deck SDK WebSocket | Elgato app | `127.0.0.1`, port passed to B at launch | Plugin B (client) | Registration UUID from the app |
@@ -242,8 +242,22 @@ stateDiagram-v2
 | First read after wake | ~1.8 s | Socket health call while Orca wakes |
 | Paired-server status age | up to ~7 s | 5 s cache plus the 2 s poll, unless plugin A pushes it |
 
+## Platform decisions (macOS, Windows, Linux)
+
+One helper per concern, all pure and tested with `path.win32`/`path.posix` (`packages/core/src/paths.ts`); `main.mjs` mirrors the two it needs and a test keeps the mirror equal.
+
+| Concern | Decision |
+|---|---|
+| Own files (`bridge.json`, `mappings.json`, plugin A's log) | `deckDataDir`: `%APPDATA%\orca-deck` on Windows, `~/.orca-deck` elsewhere; the same for plugin B, plugin A and the diagnostics script |
+| File trust | `isPrivateStat`: owner and mode 0600 checked on POSIX, not on Windows (modes mean nothing; the profile folder is the user's). One implementation for the bridge file, the mappings file and Orca's runtime file |
+| Orca runtime socket | Taken from the transports Orca writes into `orca-runtime.json`: `unix` on macOS and Linux, `named-pipe` (`\\.\pipe\orca-<id>-<kind>`) on Windows (Orca's `runtime-rpc-socket-metadata`). The folder of that file on Windows (`%APPDATA%\orca`) is device only |
+| Orca CLI | Launcher name per platform: `orca.cmd`, `orca-ide` (Linux desktops), `orca` (`orcaCliName`). Node refuses to run a `.cmd` without a shell, so `spawnPlan` runs it through `cmd.exe` with an allowlist for the program path and every argument (no quotes or `& | < > ^ % !`), and throws otherwise; everything else is spawned directly. The CLI is only the degraded fallback and the plugin probe. Device only: where Windows installs `orca.cmd` (`ORCA_BIN` or the PATH entry from Orca's "register CLI") |
+| PATH | Joined with `path.delimiter`; the Unix fallback dirs are not added on Windows |
+| Window raise | macOS `open -b`, Linux X11 tools; Windows (#175) and Wayland are a no-op that reports why, and the plugin logs it once |
+| Test shims | `orca` and `open` are node scripts everywhere; Windows runs them through a `.cmd` launcher |
+
 ## Logs
 
 - Plugin B: `~/Library/Application Support/com.elgato.StreamDeck/Plugins/pl.1am.orca-agent-deck.sdPlugin/logs/pl.1am.orca-agent-deck.0.log` (newest). Press lines read `press slot=<id> -> <result> <ms> (local|ssh|env)`.
-- Plugin A: `~/.orca-deck/plugin-a.log`; "Agent Deck: Show status" in Orca's command palette writes a status summary there. See `docs/install.md` for the full list.
+- Plugin A: `~/.orca-deck/plugin-a.log` (Windows `%APPDATA%\orca-deck\plugin-a.log`); "Agent Deck for Orca: Show status" in Orca's command palette writes a status summary there. See `docs/install.md` for the full list.
 - Neither log ever contains terminal content, pane previews or tokens.
