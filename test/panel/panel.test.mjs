@@ -40,7 +40,7 @@ const deck = deckOf(3, 2);
 test('draws only key numbers, shaped like the deck, and names the model', async () => {
   for (const [model, cols, rows, name] of [
     ['1', 3, 2, 'Stream Deck Mini'],
-    ['0', 5, 3, 'Stream Deck MK.2'],
+    ['0', 5, 3, 'Stream Deck (MK.2)'],
     ['2', 8, 4, 'Stream Deck XL'],
   ]) {
     const host = mockHost({

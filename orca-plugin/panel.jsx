@@ -45,7 +45,7 @@ const DONE = {
 
 /** The Stream Deck SDK's device type numbers, as the deck frame carries them. */
 const MODELS = {
-  0: 'Stream Deck MK.2',
+  0: 'Stream Deck (MK.2)',
   1: 'Stream Deck Mini',
   2: 'Stream Deck XL',
   3: 'Stream Deck Mobile',
