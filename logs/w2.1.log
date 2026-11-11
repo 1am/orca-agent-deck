@@ -1,0 +1,6 @@
+2026-11-11T10:21:02.770Z ERROR Process encountered uncaught exception 
+TypeError: Cannot read properties of undefined (reading 'state')
+    at PaneSlot.animating (/Users/pb/dev/1am/github/agent-deck-wt/w2/packages/streamdeck-plugin/src/actions/pane-slot.ts:79:42)
+    at Timeout._onTimeout (/Users/pb/dev/1am/github/agent-deck-wt/w2/packages/streamdeck-plugin/src/actions/pane-slot.ts:73:16)
+    at listOnTimeout (node:internal/timers:585:17)
+    at processTimers (node:internal/timers:521:7)

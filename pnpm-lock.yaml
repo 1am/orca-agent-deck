@@ -8,9 +8,6 @@ importers:
 
   .:
     dependencies:
-      '@elgato/streamdeck':
-        specifier: ^3.0.4
-        version: 3.0.4
       ws:
         specifier: 8.22.0
         version: 8.22.0
@@ -21,6 +18,9 @@ importers:
       '@elgato/cli':
         specifier: ^1.10.4
         version: 1.10.4(@types/node@22.20.5)
+      '@elgato/streamdeck':
+        specifier: 3.0.4
+        version: 3.0.4
       '@eslint/js':
         specifier: ^9.0.0
         version: 9.39.5

@@ -32,12 +32,12 @@
     "catalog": "node scripts/catalog.mjs"
   },
   "dependencies": {
-    "@elgato/streamdeck": "^3.0.4",
     "ws": "8.22.0",
     "zod": "^3.23.8"
   },
   "devDependencies": {
     "@elgato/cli": "^1.10.4",
+    "@elgato/streamdeck": "3.0.4",
     "@eslint/js": "^9.0.0",
     "@orca-agent-deck/adapter-bridge": "workspace:*",
     "@orca-agent-deck/adapter-cli": "workspace:*",
