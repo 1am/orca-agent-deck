@@ -168,8 +168,9 @@ export class CliAdapter implements OrcaAdapter {
     const omitted = new Set(local.omittedHostIds);
     const down = new Set(local.downHostIds ?? []);
     for (const env of hosts.filter((h) => h.kind === 'environment')) {
-      omitted.delete(`runtime:${env.id}`);
-      down.delete(`runtime:${env.id}`);
+      // Orca's runtime ids are `runtime:` + encodeURIComponent(environment id).
+      omitted.delete(`runtime:${encodeURIComponent(env.id)}`);
+      down.delete(`runtime:${encodeURIComponent(env.id)}`);
       if (!hostsKnown) {
         omitted.add(`env:${env.id}`);
         down.add(`env:${env.id}`);
@@ -180,7 +181,8 @@ export class CliAdapter implements OrcaAdapter {
         local.panes.push(...r.panes);
         local.statuses.push(...r.statuses);
         for (const h of r.omittedHostIds) omitted.add(h);
-        for (const h of r.downHostIds ?? []) down.add(h);
+        // A paired server's own `runtime:` peers belong to its control plane, not to our census.
+        for (const h of r.downHostIds ?? []) if (!h.startsWith('runtime:')) down.add(h);
       } catch {
         omitted.add(`env:${env.id}`);
         down.add(`env:${env.id}`);

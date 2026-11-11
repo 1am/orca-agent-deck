@@ -250,3 +250,58 @@ it('a failing host list keeps the last paired servers and marks them down instea
   expect(s.downHostIds).toContain('env:E1');
   expect(s.panes.some((p) => p.hostId === 'env:E1')).toBe(false);
 });
+
+/** Snapshot with one paired environment; each listing says which hosts it left out. */
+async function pairedSnapshot(o: {
+  envId: string;
+  local: string[];
+  paired: string[];
+  hostListFails?: boolean;
+}) {
+  const exec: Exec = async (args) => {
+    const env = args.includes('--environment');
+    const k = args.slice(0, 2).join(' ');
+    if (k === 'host list') {
+      if (o.hostListFails) throw new Error('host list failed');
+      return JSON.stringify({
+        ok: true,
+        result: { hosts: [{ id: o.envId, kind: 'environment', name: 'remote' }] },
+      });
+    }
+    if (k === 'terminal list' || k === 'worktree ps') {
+      const out = JSON.parse(await fixtureExec(args));
+      out.result.hostScope = { hostIds: ['local'], omittedHostIds: env ? o.paired : o.local };
+      return JSON.stringify(out);
+    }
+    return fixtureExec(args);
+  };
+  return new CliAdapter(exec).snapshot();
+}
+
+it('ignores the runtime peers a paired server lists, its own census', async () => {
+  const s = await pairedSnapshot({
+    envId: 'E1',
+    local: ['runtime:E1'],
+    paired: ['runtime:retired'],
+  });
+  expect(s.omittedHostIds).toContain('runtime:retired');
+  expect(s.downHostIds).toEqual([]);
+});
+
+it('still counts a local-runtime peer with no matching environment as down', async () => {
+  const known = await pairedSnapshot({ envId: 'E1', local: ['runtime:gone'], paired: [] });
+  expect(known.downHostIds).toEqual(['runtime:gone']);
+  const unknown = await pairedSnapshot({
+    envId: 'E1',
+    local: ['runtime:gone'],
+    paired: [],
+    hostListFails: true,
+  });
+  expect(unknown.downHostIds).toContain('runtime:gone');
+});
+
+it('matches runtime ids by the URL-encoded environment id', async () => {
+  const s = await pairedSnapshot({ envId: 'env 1', local: ['runtime:env%201'], paired: [] });
+  expect(s.omittedHostIds).toEqual([]);
+  expect(s.downHostIds).toEqual([]);
+});
