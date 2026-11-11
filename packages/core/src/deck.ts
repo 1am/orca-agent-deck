@@ -1,5 +1,6 @@
 import type { OrcaAdapter, PaneInfo, PaneStatusEvent, Snapshot } from './adapter.ts';
 import { isLocalHost, LOCAL_HOST } from './host-id.ts';
+import { splitPaneKey } from './pane-key.ts';
 import { MappingStore, type PaneBinding, type SlotPosition } from './mapping.ts';
 import { PaneRegistry } from './registry.ts';
 import { ShellActivity } from './shell-activity.ts';
@@ -79,7 +80,7 @@ export type PressResult = 'focused' | 'failed' | 'unmapped';
 export type HoldResult = 'mapped' | 'replaced' | 'released' | 'failed';
 
 function bindingOf(p: PaneInfo): PaneBinding {
-  const [tabId = '', leafId = ''] = p.paneKey.split(':');
+  const { tabId, leafId } = splitPaneKey(p.paneKey);
   const lastKnown: PaneBinding['lastKnown'] = {};
   if (p.repo) lastKnown.repo = p.repo;
   if (p.branch) lastKnown.branch = p.branch;

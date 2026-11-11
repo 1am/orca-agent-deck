@@ -4,6 +4,7 @@ export * from './ack.ts';
 export * from './adapter.ts';
 export * from './host-id.ts';
 export * from './host-scope.ts';
+export * from './pane-key.ts';
 export * from './registry.ts';
 export * from './mapping.ts';
 export * from './shortid.ts';
