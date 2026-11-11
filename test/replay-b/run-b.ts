@@ -18,7 +18,7 @@ import {
 } from '@orca-agent-deck/fake-orca';
 import { ACTION, FakeHost } from './host.ts';
 import { PROFILES, type Profile } from './profiles.ts';
-import { replayTimeoutMs } from '../replay-budget.ts';
+import { replayBudget } from '../replay-budget.ts';
 
 /**
  * Plays a side-`b` scenario into the built `bin/plugin.js` through a fake Stream Deck host (host.ts), with Orca
@@ -105,7 +105,8 @@ export async function runB(
   profileId: string,
   a?: PluginA,
 ): Promise<{ orcaCalls: number }> {
-  const TIMEOUT_MS = replayTimeoutMs();
+  const budget = replayBudget();
+  const TIMEOUT_MS = budget.ms;
   const profile = PROFILES[profileId]!;
   const root = await mkdtemp(join(tmpdir(), 'rb-'));
   const home = join(root, 'h');
@@ -179,7 +180,9 @@ process.exit(r.status ?? 1);`,
     while (!cond()) {
       failIfBroken();
       if (Date.now() > end)
-        throw new Error(`timed out after ${TIMEOUT_MS} ms waiting for ${what}\n${detail()}`);
+        throw new Error(
+          `timed out after ${TIMEOUT_MS} ms (${budget.note}) waiting for ${what}\n${detail()}`,
+        );
       await wait(10);
     }
   };
@@ -209,6 +212,36 @@ process.exit(r.status ?? 1);`,
         );
       }
     }
+  };
+  /**
+   * A failure is easier to explain with the whole run than with its last lines: the plugin log, what
+   * the host recorded and every key change go to a folder under the OS temp dir (never the repository).
+   * The fakes produce no terminal content, so nothing here carries any.
+   */
+  const keepEvidence = async (name: string, profileId: string, message: string) => {
+    const evidence = await mkdtemp(join(tmpdir(), `replay-fail-${name}-${profileId}-`));
+    const save = (file: string, text: string) =>
+      writeFile(join(evidence, file), text).catch(() => {});
+    await save('error.txt', `${message}\n\nbudget: ${budget.note}\n`);
+    await save('plugin.log', await readLogs(stage));
+    await save('timeline.txt', `${observed.join('\n')}\n`);
+    await save(
+      'host.json',
+      JSON.stringify(
+        {
+          piMessages: host.piMessages,
+          alerts: host.alerts,
+          unknown: host.unknown,
+          settingsLog: host.settingsLog,
+          globalSettings: host.globalSettings,
+          stderr: host.stderr.slice(-4000),
+          runtimeMethods: runtime ? runtime.requests.map((r) => r.method) : null,
+        },
+        null,
+        2,
+      ),
+    );
+    return evidence;
   };
   const timeline = () =>
     `  observed:\n${
@@ -337,7 +370,10 @@ process.exit(r.status ?? 1);`,
     const reqs = runtime
       ? ` runtime requests: ${[...new Set(runtime.requests.map((r) => r.method))].join(', ') || 'none'}\n`
       : '';
-    throw new Error(`${(e as Error).message}\n${reqs}  plugin log:\n${log.replace(/^/gm, '    ')}`);
+    const evidence = await keepEvidence(sc.header.name, profileId, (e as Error).message);
+    throw new Error(
+      `${(e as Error).message}\n${reqs}  plugin log:\n${log.replace(/^/gm, '    ')}\n  evidence: ${evidence}`,
+    );
   } finally {
     sim?.close();
     await a?.stop().catch(() => {});

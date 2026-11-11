@@ -35,7 +35,10 @@ A scenario is a timeline of what Orca and the Stream Deck do, plus what the keys
 - Isolation: everything runs in a temp dir (HOME, APPDATA, XDG_CONFIG_HOME, a copy of the `.sdPlugin` folder as the working directory); `ORCA_BIN` is the fake-orca shim, `open` is a stub on `PATH`, and `ORCA_DECK_BRIDGE_PORTS=0` keeps B off the real bridge port range. `pnpm replay-b` fails if `git status` changed during the run. Pairing's 15 s timeout stays a unit test (`core/pairing.test.ts`).
 
 ## Wait budget
-Every wait in the A and B suites ends when its state arrives; the deadline (`test/replay-budget.ts`) only has to outlast a starved machine. It is 12 s times the load average per core (at least 1), the same for every scenario, and `REPLAY_TIMEOUT_SCALE=<n>` sets the factor by hand.
+Every wait in the A and B suites (and the end-to-end suite, which plays through the B runner) ends when its state arrives; the deadline (`test/replay-budget.ts`) only has to outlast a starved machine. It is 12 s times the load average per core, between 1 and 5 times (a hung run fails in about a minute); `REPLAY_TIMEOUT_SCALE=<n>` sets the factor by hand, uncapped. A timeout message says how the deadline came about.
+
+## Evidence of a failed B run
+A failing B scenario keeps its run in a folder under the OS temp directory (never the repository) and prints the path: `error.txt` (the message with the expected-vs-actual diff and the budget), `timeline.txt` (every key change), `plugin.log`, and `host.json` (what the host recorded: inspector messages, alerts, settings, plugin stderr, runtime request names). The fakes produce no terminal content, so there is none in it. Delete the folder when done.
 
 ## Regression catalog
 Every bug closes with a scenario that fails when its fix is reverted (the revert check is in the scenario's `description`, and was run by hand once), or a line on why it cannot be simulated. Add a row when you close a bug.

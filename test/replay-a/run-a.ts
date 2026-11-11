@@ -1,7 +1,7 @@
 import { existsSync, readdirSync, statSync } from 'node:fs';
 import { mkdir, mkdtemp, readFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
-import { replayTimeoutMs } from '../replay-budget.ts';
+import { replayBudget } from '../replay-budget.ts';
 import { join } from 'node:path';
 import {
   BridgeServer,
@@ -41,10 +41,11 @@ const SETTLE_MS = 30;
 const wait = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 async function until(cond: () => boolean, what: string): Promise<void> {
-  const timeoutMs = replayTimeoutMs();
-  const end = Date.now() + timeoutMs;
+  const budget = replayBudget();
+  const end = Date.now() + budget.ms;
   while (!cond()) {
-    if (Date.now() > end) throw new Error(`timed out after ${timeoutMs} ms waiting for ${what}`);
+    if (Date.now() > end)
+      throw new Error(`timed out after ${budget.ms} ms (${budget.note}) waiting for ${what}`);
     await wait(5);
   }
 }
