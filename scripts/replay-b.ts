@@ -5,7 +5,7 @@ import { join, resolve } from 'node:path';
 import { loadScenario } from '../packages/fake-orca/src/index.ts';
 import { changedRealState, snapshotRealState } from './replay-guard.ts';
 import { PROFILES } from '../test/replay-b/profiles.ts';
-import { canRun, runB } from '../test/replay-b/run-b.ts';
+import { canRun, missingHost, runB } from '../test/replay-b/run-b.ts';
 
 const root = resolve(import.meta.dirname, '..');
 const dir = join(root, 'test/replay');
@@ -44,7 +44,12 @@ for (const file of files) {
   if (!sc.header.sides.includes('b')) continue;
   names.push(sc.header.name);
   for (const p of Object.values(PROFILES).filter((x) => !only || x.id === only))
-    jobs.push({ name: sc.header.name, profile: p.id, skip: canRun(p), run: () => runB(sc, p.id) });
+    jobs.push({
+      name: sc.header.name,
+      profile: p.id,
+      skip: canRun(p) ?? missingHost(sc, p),
+      run: () => runB(sc, p.id),
+    });
 }
 
 const results = new Map<string, string>();
@@ -75,10 +80,15 @@ for (const n of names)
   console.log(
     `${n.padEnd(w)}  ${profiles
       .map((p) =>
-        (jobs.find((j) => j.name === n && j.profile === p)?.skip
-          ? '-'
-          : (results.get(`${n}/${p}`) ?? '?')
-        ).padEnd(22),
+        (() => {
+          const skip = jobs.find((j) => j.name === n && j.profile === p)?.skip;
+          // A profile of another OS is a dash; a scenario that needs a host this OS lacks says which.
+          return skip
+            ? skip.startsWith('needs ')
+              ? '-'
+              : `skip: ${skip}`
+            : (results.get(`${n}/${p}`) ?? '?');
+        })().padEnd(22),
       )
       .join('')}`,
   );
@@ -89,9 +99,13 @@ if (problems.length) {
   console.log(`FAIL ${problems.join('\n')}`);
   process.exit(1);
 }
-const skipped = [...new Set(jobs.filter((j) => j.skip).map((j) => j.profile))];
+const skipped = [
+  ...new Set(jobs.filter((j) => j.skip?.startsWith('needs ')).map((j) => j.profile)),
+];
+const scenarioSkips = jobs.filter((j) => j.skip && !j.skip.startsWith('needs '));
 console.log(
   `${jobs.filter((j) => !j.skip).length - failures.length} passed, ${failures.length} failed in ${((Date.now() - t0) / 1000).toFixed(1)} s; profiles skipped here: ${skipped.join(', ') || 'none'}`,
 );
+for (const j of scenarioSkips) console.log(`skipped ${j.name} on ${j.profile}: ${j.skip}`);
 if (afterState.note) console.log(`note: ${afterState.note}`);
 process.exit(failures.length ? 1 : 0);

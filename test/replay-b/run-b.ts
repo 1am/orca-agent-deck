@@ -85,6 +85,22 @@ async function writeShim(dir: string, name: string, js: string): Promise<string>
   return file;
 }
 
+/**
+ * Why a scenario cannot run starting on this profile, or null. A `deck.restart` that names a host with no profile for
+ * the OS (there is no Elgato app on Linux) is a scenario for other machines: skipped there, not failed.
+ */
+export function missingHost(sc: Scenario, p: Profile): string | null {
+  for (const st of sc.steps) {
+    if (st.do !== 'deck.restart' || !st.profile) continue;
+    const named = PROFILES[st.profile];
+    const found = named
+      ? named.os === p.os
+      : Object.values(PROFILES).some((x) => x.os === p.os && x.expect.host === st.profile);
+    if (!found) return `no ${st.profile} on ${p.os}`;
+  }
+  return null;
+}
+
 export const canRun = (p: Profile): string | null =>
   p.os === process.platform ? null : `needs ${p.os} (this is ${process.platform})`;
 
