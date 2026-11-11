@@ -23,14 +23,15 @@ export interface KeyModel {
 export const SPIN_STEPS = 8;
 
 /** Spinning keys up to which the spinner advances on every 250 ms repaint tick (4 fps). */
-const FULL_RATE_KEYS = 8;
+const FULL_RATE_KEYS = 2;
 
 /**
  * Does the spinner advance on this repaint tick (250 ms apart)? Elgato asks plugins to keep to
  * about 10 image updates per second (https://docs.elgato.com/guidelines/streamdeck/plugins/images-and-layouts),
- * which reads as a total, not per key. Up to 8 spinning keys turn at 4 fps (32 updates per
- * second at most); beyond that every other tick advances (2 fps), so a full 32-key deck sends no
- * more than the 64 per second it did when the spinner moved a quarter turn every 500 ms.
+ * which reads as a total, not per key. Up to 2 spinning keys turn at 4 fps (8 updates per second,
+ * inside the guideline). With more, every other tick advances (2 fps): that is above the guideline
+ * from 6 keys on (a full 32-key deck sends 64 per second) but no more than the quarter turn every
+ * 500 ms the spinner made before, which hardware and Stream Deck Mobile have carried.
  */
 export function spinnerAdvances(tick: number, workingCount: number): boolean {
   return workingCount <= FULL_RATE_KEYS || tick % 2 === 0;

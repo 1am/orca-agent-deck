@@ -20,7 +20,7 @@ All notable changes to this project are documented here. Format: [Keep a Changel
 
 - **orca-plugin:** needs Orca 1.4.246 or newer. The manifest no longer declares `publisher`, which Orca deprecated and now takes from the repository owner. On Orca 1.4.245, the catalog keeps offering v0.2.1.
 - **streamdeck:** a key waiting for permission always reads "needs you". It used to read the tool name when the status came from polling and "needs you" when Orca pushed it.
-- **streamdeck:** the working spinner turns in eighths at 4 frames per second and slows to 2 when more than 8 keys are working, to stay within Elgato's guidance on image updates.
+- **streamdeck:** the working spinner turns in eighths at 4 frames per second while at most 2 keys are working and at 2 with more (as before), because Elgato asks for about 10 image updates per second in total. Ticks with nothing to animate no longer repaint.
 - **streamdeck:** key text prefers Liberation Sans and DejaVu Sans, so labels lay out the same on Linux and Windows hosts that lack Helvetica.
 
 ### Fixed
