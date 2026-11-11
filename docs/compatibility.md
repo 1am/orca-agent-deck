@@ -26,7 +26,7 @@
 
 | | Status |
 |---|---|
-| 1.4.245 | Minimum. Older versions are refused ("Orca x.y.z too old"). |
+| 1.4.246 | Minimum, set by the Orca plugin: older Orca refuses to install it. Before 1.4.245 the deck also shows "Orca x.y.z too old". |
 | 1.4.245 to 1.4.251 | Tested |
 | Newer than 1.4.251 | Untested. Newer Orca versions are expected to work, and the Status key shows the version it sees. |
 

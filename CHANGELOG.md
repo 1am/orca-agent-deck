@@ -2,6 +2,12 @@
 
 All notable changes to this project are documented here. Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), versioning: [SemVer](https://semver.org/).
 
+## [Unreleased]
+
+### Changed
+
+- **orca-plugin:** needs Orca 1.4.246 or newer. The manifest no longer declares `publisher`, which Orca deprecated and now takes from the repository owner. On Orca 1.4.245, the catalog keeps offering v0.2.1.
+
 ## [0.2.1] - 2026-11-11
 
 Renamed to Agent Deck for Orca.

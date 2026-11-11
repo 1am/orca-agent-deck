@@ -25,7 +25,7 @@ Find the symptom, check the cause, apply the fix. Status key captions come from 
 
 - **Cause.** The runtime socket is not answering, so every read spawns the `orca` CLI (150-230 ms each).
 - **Check.** The plugin log says why (see Logs in [install.md](install.md)).
-- **Fix.** Restart Orca. Check that Orca 1.4.245 or newer runs as the same user as the Elgato app.
+- **Fix.** Restart Orca. Check that Orca 1.4.246 or newer runs as the same user as the Elgato app.
 
 ### "slow updates" (grey OK)
 
