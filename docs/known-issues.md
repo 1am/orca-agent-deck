@@ -4,6 +4,14 @@ Setting up tmux so each pane gets its own key: see `docs/working-with-tmux.md`.
 
 Issues that affect Agent Deck for Orca but are not ours to fix, plus how the deck lives with them. Re-check the upstream status on each Orca update and update the "Checked" date.
 
+## Stream Deck app
+
+### The plugin can only answer the inspector the app announced (Stream Deck SDK 3.0.4)
+
+- **What.** The SDK sends to a property inspector only after the app's `propertyInspectorDidAppear` event named it. After the plugin restarts, an inspector that was already open sends `load` (Check again) but the plugin has no inspector to answer.
+- **Deck impact.** The Setup tab's Check again shows "No answer from the plugin. If it was restarted, select the key again." after 5 s (10 s while Orca is read through the CLI).
+- **Workaround.** Select another key and then this one again; the app announces the inspector and the tab answers. Not yet verified whether the Elgato app or OpenDeck re-announce it after a restart.
+
 ## Paired Orca servers
 
 Checked: 2026-11-06.
