@@ -53,7 +53,7 @@ it('restart rotates handles', () => {
   expect(s.panes[0]?.handle).not.toBe(before);
 });
 
-const SCENARIOS = new URL('../../../test/replay/', import.meta.url).pathname;
+const SCENARIOS = fileURLToPath(new URL('../../../test/replay/', import.meta.url));
 const runScenario = (name: string) => play(loadScenario(`${SCENARIOS}${name}.ndjson`));
 
 it.each(readdirSync(SCENARIOS).filter((f) => f.endsWith('.ndjson')))(

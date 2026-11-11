@@ -1,10 +1,12 @@
+import { fileURLToPath } from 'node:url';
 import { readdirSync, readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import { loadScenario, parseScenario } from './load.ts';
 import { replaySim } from './run.ts';
 import { diffTimeline } from './timeline.ts';
 
-const DIR = new URL('../../../../test/replay/', import.meta.url).pathname;
+// A directory with its trailing separator: `fileURLToPath`, not `.pathname`, which is `/D:/...` on Windows.
+const DIR = fileURLToPath(new URL('../../../../test/replay/', import.meta.url));
 // The sim runner plays the scenarios that name it; `make replay-a` plays the `a` ones.
 const files = readdirSync(DIR).filter(
   (f) => f.endsWith('.ndjson') && loadScenario(`${DIR}${f}`).header.sides.includes('sim'),

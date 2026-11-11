@@ -1,3 +1,4 @@
+import { fileURLToPath } from 'node:url';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { DeckController, MappingStore } from '../../packages/core/src/index.ts';
 import { CliAdapter } from '../../packages/adapter-cli/src/index.ts';
@@ -14,7 +15,7 @@ const poll = (d: DeckController, slots: string[]) => {
 it('ssh-drop-reconnect: the remote key goes unreachable, keeps its mapping, and recovers', async () => {
   const steps: SimState[] = [];
   play(
-    loadScenario(new URL('../replay/ssh-drop-reconnect.ndjson', import.meta.url).pathname),
+    loadScenario(fileURLToPath(new URL('../replay/ssh-drop-reconnect.ndjson', import.meta.url))),
     (s) => steps.push(structuredClone(s)),
   );
   // host.add, pane.add, host down, host up

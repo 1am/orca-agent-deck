@@ -1,6 +1,6 @@
 import { mkdtemp, readFile, readdir, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { basename, join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { parseScenario } from './load.ts';
 import { DROP_KEYS, SECRET_LIKE, recordScenario } from './record.ts';
@@ -254,7 +254,7 @@ describe('plugin A recording', () => {
       const text = await readFile(t.file, 'utf8');
       expect(text).toContain('t:one');
       expect(text).toContain('t:two');
-      expect(await readdir(t.dir)).toEqual([t.file.split('/').pop()]);
+      expect(await readdir(t.dir)).toEqual([basename(t.file)]);
     });
 
     it('does not resume past the time limit, or a file at the size limit', async () => {
@@ -263,6 +263,20 @@ describe('plugin A recording', () => {
       expect(await readdir(late.dir)).not.toContain('.active.json');
       const big = await started();
       expect(await big.second({ maxBytes: 10 }).resume()).toBeNull();
+    });
+
+    it('reads a note whose path was written with the other separator (a Windows path)', async () => {
+      const t = await started();
+      const name = basename(t.file);
+      await writeFile(
+        join(t.dir, '.active.json'),
+        JSON.stringify({
+          path: `C:\\Users\\ann\\AppData\\Roaming\\orca-deck\\recordings\\${name}`,
+          startedAt: Date.now(),
+        }),
+      );
+      // The file is found by its name inside this recorder's own folder, whatever folder the note names.
+      expect(await t.second().resume()).toBe(t.file);
     });
 
     it('ignores a note that points outside the recordings folder', async () => {
