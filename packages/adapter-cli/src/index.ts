@@ -27,6 +27,7 @@ import {
 } from '@orca-agent-deck/core';
 import type { z } from 'zod';
 import { resolveOrcaBinCached } from './resolve-bin.ts';
+import { spawnPlan } from './spawn-plan.ts';
 import {
   hostListResponse,
   tabTitles,
@@ -42,6 +43,7 @@ import {
 
 export * from './schemas.ts';
 export * from './resolve-bin.ts';
+export * from './spawn-plan.ts';
 
 /** Runs `orca <args>` and returns stdout. Injectable for tests. */
 export type Exec = (args: string[]) => Promise<string>;
@@ -54,10 +56,21 @@ export function makeExec(bin?: string, timeoutMs = 5000): Exec {
     const resolved = bin ?? (await resolveOrcaBinCached()).bin;
     return new Promise((resolve, reject) => {
       const path = [process.env['PATH'], ...EXTRA_PATH].filter(Boolean).join(delimiter);
+      let plan;
+      try {
+        plan = spawnPlan(resolved, args, process.platform);
+      } catch (e) {
+        return reject(e);
+      }
       execFile(
-        resolved,
-        args,
-        { timeout: timeoutMs, maxBuffer: 16 * 1024 * 1024, env: { ...process.env, PATH: path } },
+        plan.file,
+        plan.args,
+        {
+          timeout: timeoutMs,
+          maxBuffer: 16 * 1024 * 1024,
+          env: { ...process.env, PATH: path },
+          windowsVerbatimArguments: plan.verbatim,
+        },
         (err, stdout) => (err ? reject(err) : resolve(stdout)),
       );
     });

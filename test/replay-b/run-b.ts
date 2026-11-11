@@ -1,4 +1,5 @@
 import { execFileSync } from 'node:child_process';
+import { randomUUID } from 'node:crypto';
 import { chmod, cp, mkdir, mkdtemp, readFile, readdir, rm, writeFile } from 'node:fs/promises';
 import { existsSync, readFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -68,7 +69,7 @@ function resolveProfile(name: string): Profile {
 /** Orca's runtime endpoint: a unix socket, or a named pipe on Windows (what Orca publishes there). */
 const runtimeEndpoint = (root: string) =>
   process.platform === 'win32'
-    ? `\\\\.\\pipe\\orca-replay-${process.pid}-${Date.now()}-rt`
+    ? `\\\\.\\pipe\\orca-replay-${process.pid}-${randomUUID()}-rt`
     : join(root, 'rt.sock');
 
 /** Writes a node-script shim `name`; returns what to run (`name`, or `name.cmd` on Windows). */
@@ -190,7 +191,12 @@ process.exit(r.status ?? 1);`,
   // Steps at t=0 are applied before the deck appears.
   const applied = new Set<Step>();
   let sim = null as BridgeSimulator | null;
-  const discovery = join(home, '.orca-deck', 'bridge.json');
+  // Where the plugin keeps its data dir: %APPDATA%\orca-deck on Windows (the env above), ~/.orca-deck elsewhere.
+  const discovery = join(
+    process.platform === 'win32' ? env['APPDATA']! : home,
+    process.platform === 'win32' ? 'orca-deck' : '.orca-deck',
+    'bridge.json',
+  );
   let t = 0;
 
   const until = async (cond: () => boolean, what: string, detail: () => string) => {

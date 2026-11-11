@@ -25,7 +25,18 @@ export class FakeRuntime {
 
   async start(): Promise<void> {
     this.server = createServer((sock) => this.serve(sock));
-    await new Promise<void>((r) => this.server?.listen(this.sockPath, r));
+    // A listen failure (a pipe name already taken) fails this start with its reason, not the whole process.
+    await new Promise<void>((resolve, reject) => {
+      const server = this.server!;
+      server.once('error', (e) =>
+        reject(new Error(`fake runtime cannot listen on ${this.sockPath}: ${e.message}`)),
+      );
+      server.listen(this.sockPath, () => {
+        server.removeAllListeners('error');
+        server.on('error', () => {});
+        resolve();
+      });
+    });
     await this.writeMeta();
   }
 
