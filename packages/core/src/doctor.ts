@@ -119,7 +119,7 @@ export function runChecks(f: DoctorFacts): Check[] {
             id: 'orca-version',
             label: 'Orca version',
             result: 'fail',
-            reason: `Orca ${f.orcaVersion ?? '?'} is older than Orca Agent Deck supports`,
+            reason: `Orca ${f.orcaVersion ?? '?'} is older than Agent Deck for Orca supports`,
             caption: `Orca ${f.orcaVersion ?? ''} too old`.trim(),
             hint: 'Update Orca',
           }
@@ -207,9 +207,9 @@ export function runChecks(f: DoctorFacts): Check[] {
       label: 'Orca plugin',
       result: 'warn',
       reason:
-        'The Orca Agent Deck plugin has not connected; the deck works with slower, polled status',
+        'The Agent Deck for Orca plugin has not connected; the deck works with slower, polled status',
       caption: 'Orca plugin missing',
-      hint: 'Install or enable the Orca Agent Deck plugin in Orca',
+      hint: 'Install or enable the Agent Deck for Orca plugin in Orca',
     });
   } else if (f.orcaPlugin === 'connected' || f.orcaPlugin === 'asleep') {
     checks.push({
@@ -287,7 +287,7 @@ export function runChecks(f: DoctorFacts): Check[] {
               result: 'warn',
               reason: 'No connected device has a Pane slot key on its page',
               caption: 'no pane slots',
-              hint: 'Install the Orca Agent Deck profile, or drag Pane slot keys onto a page',
+              hint: 'Install the Agent Deck for Orca profile, or drag Pane slot keys onto a page',
               fix: { action: 'install-profile', label: 'Install profile' },
             }
           : {

@@ -3,7 +3,7 @@ name: Bug report
 about: Something does not work (install, keys, focus, setup checks)
 ---
 
-- Orca Agent Deck version:
+- Agent Deck for Orca version:
 - Orca version:
 - macOS version:
 - Device (Stream Deck model or Stream Deck Mobile):

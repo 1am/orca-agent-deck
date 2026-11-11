@@ -1,6 +1,6 @@
 {
   "catalogVersion": 2,
-  "name": "Orca Agent Deck",
+  "name": "Agent Deck for Orca",
   "owner": "1am",
   "plugins": [
     {

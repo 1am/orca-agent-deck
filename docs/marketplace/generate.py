@@ -44,7 +44,7 @@ def thumbnail(icon):
     d = ImageDraw.Draw(img)
     big = Image.open(SRC / "icon.png").convert("RGBA").resize((420, 420), Image.LANCZOS)
     img.paste(big, (260, 270), big)
-    d.text((780, 330), "Orca Agent Deck", font=font(BOLD, 110), fill=FG)
+    d.text((780, 330), "Agent Deck for Orca", font=font(BOLD, 96), fill=FG)
     d.text((784, 480), "See which agent needs you.", font=font(REGULAR, 56), fill=MUTED)
     d.text((784, 560), "Press a key to jump to its pane.", font=font(REGULAR, 56), fill=MUTED)
     img.save(OUT / "thumbnail-1920x960.png")

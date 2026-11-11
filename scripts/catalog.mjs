@@ -13,7 +13,12 @@ const RELEASE_LIMIT = 32;
 
 /** The catalog with `entry` first in the plugin's releases (a re-run for the same version replaces it). */
 export function withRelease(catalog, { pluginKey, entry, sourcePath }) {
-  const doc = catalog ?? { catalogVersion: 2, name: 'Orca Agent Deck', owner: '1am', plugins: [] };
+  const doc = catalog ?? {
+    catalogVersion: 2,
+    name: 'Agent Deck for Orca',
+    owner: '1am',
+    plugins: [],
+  };
   const source = {
     kind: 'git',
     url: REPO,

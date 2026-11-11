@@ -21,4 +21,4 @@ Images for the Maker Console listing. `python3 docs/marketplace/generate.py` reb
 
 ## Listing text
 
-`description.md` is the Maker Console description: 959 characters (limit 250 to 1500), and its first paragraph is 269 characters of plain text. The product name "Orca Agent Deck" is 15 characters (limit 30) and has no "Plugin" suffix. Whether the name is free on the Marketplace has not been checked: search the Marketplace before submitting.
+`description.md` is the Maker Console description: 967 characters (limit 250 to 1500), and its first paragraph is 273 characters of plain text. The product name "Agent Deck for Orca" is 19 characters (limit 30) and has no "Plugin" suffix. Whether the name is free on the Marketplace has not been checked: search the Marketplace before submitting.

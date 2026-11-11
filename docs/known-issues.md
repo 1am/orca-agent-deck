@@ -2,7 +2,7 @@
 
 Setting up tmux so each pane gets its own key: see `docs/working-with-tmux.md`.
 
-Issues that affect Orca Agent Deck but are not ours to fix, plus how the deck lives with them. Re-check the upstream status on each Orca update and update the "Checked" date.
+Issues that affect Agent Deck for Orca but are not ours to fix, plus how the deck lives with them. Re-check the upstream status on each Orca update and update the "Checked" date.
 
 ## Paired Orca servers
 

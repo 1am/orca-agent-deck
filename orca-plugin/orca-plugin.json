@@ -3,7 +3,7 @@
   "execution": "trusted-worker",
   "id": "agent-deck",
   "publisher": "1am",
-  "name": "Orca Agent Deck",
+  "name": "Agent Deck for Orca",
   "version": "0.2.0",
   "description": "Shows Orca agent status on a Stream Deck and focuses panes from it.",
   "icon": "images/icon.png",
@@ -37,17 +37,17 @@
     "commands": [
       {
         "id": "deck.map",
-        "title": "Orca Agent Deck: Map pane to key",
+        "title": "Agent Deck: Map pane to key",
         "when": "global"
       },
       {
         "id": "deck.unmap",
-        "title": "Orca Agent Deck: Unmap pane",
+        "title": "Agent Deck: Unmap pane",
         "when": "global"
       },
       {
         "id": "deck.status",
-        "title": "Orca Agent Deck: Show status",
+        "title": "Agent Deck: Show status",
         "when": "global"
       }
     ],

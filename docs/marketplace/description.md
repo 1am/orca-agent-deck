@@ -1,4 +1,4 @@
-Orca Agent Deck shows the state of the agents and terminals running in Orca on your Stream Deck, and focuses a pane when you press its key. You see at a glance which agent is working, which one has finished and which one needs your attention, without switching windows.
+Agent Deck for Orca shows the state of the agents and terminals running in Orca on your Stream Deck, and focuses a pane when you press its key. You see at a glance which agent is working, which one has finished and which one needs your attention, without switching windows.
 
 Features:
 - Pane keys show each pane's state: working, needs input, awaiting reply, done, error or offline
@@ -13,4 +13,4 @@ Requirements:
 - macOS 13 or newer, Windows 10 or newer, or Linux (tested on Ubuntu 22.04); pane raising on press works on macOS, and on Linux under X11 with xdotool or wmctrl installed. On Linux, install the release package in OpenDeck.
 - The companion Orca plugin, installed separately (setup steps in the plugin's Readme)
 
-Orca Agent Deck is an independent personal project and is not made by Orca or Elgato.
+Agent Deck for Orca is an independent personal project and is not made by Orca or Elgato.

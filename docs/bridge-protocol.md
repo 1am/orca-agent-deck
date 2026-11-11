@@ -74,7 +74,7 @@ Fields marked `?` are optional, `null` marks nullable. All carry `v` and `type`.
 
 ## Versioning
 
-- `PROTOCOL_VERSION` (`v`) is the major version, currently 1. A message with another `v` throws `UnsupportedVersionError`; B closes the connection with **4002** and logs the received version. The Stream Deck plugin and the Orca plugin are released together; a breaking change bumps `v` and both sides ship in the same release (the Property Inspector shows "Update Orca Agent Deck" when they disagree).
+- `PROTOCOL_VERSION` (`v`) is the major version, currently 1. A message with another `v` throws `UnsupportedVersionError`; B closes the connection with **4002** and logs the received version. The Stream Deck plugin and the Orca plugin are released together; a breaking change bumps `v` and both sides ship in the same release (the Property Inspector shows "Update Agent Deck for Orca" when they disagree).
 - **Adding an optional field needs no bump.** zod objects strip unknown keys, so an old receiver ignores a field it does not know; a new receiver treats the field as optional. Precedent: `agentType` on `agentStatus`. Removing or renaming a field, changing a meaning, or adding a required field is breaking.
 - Changing the handshake is breaking; changing only the transport binding is not.
 

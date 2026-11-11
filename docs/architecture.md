@@ -245,5 +245,5 @@ stateDiagram-v2
 ## Logs
 
 - Plugin B: `~/Library/Application Support/com.elgato.StreamDeck/Plugins/pl.1am.orca-agent-deck.sdPlugin/logs/pl.1am.orca-agent-deck.0.log` (newest). Press lines read `press slot=<id> -> <result> <ms> (local|ssh|env)`.
-- Plugin A: `~/.orca-deck/plugin-a.log`; "Orca Agent Deck: Show status" in Orca's command palette writes a status summary there. See `docs/install.md` for the full list.
+- Plugin A: `~/.orca-deck/plugin-a.log`; "Agent Deck: Show status" in Orca's command palette writes a status summary there. See `docs/install.md` for the full list.
 - Neither log ever contains terminal content, pane previews or tokens.

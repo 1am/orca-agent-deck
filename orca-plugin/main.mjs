@@ -1,4 +1,4 @@
-// Orca Agent Deck plugin A (trusted-worker). Single ESM file, no dependencies.
+// Agent Deck for Orca plugin A (trusted-worker). Single ESM file, no dependencies.
 // Finds plugin B (the Stream Deck plugin) through its discovery file, proves the shared token,
 // forwards agent status and workspace events, and reconnects on every activate.
 // Never log tokens or terminal content.
@@ -255,7 +255,7 @@ export function createBridge({
           setState('connected');
           delay = retryMs;
           deck = msg.deck ?? null;
-          log('connected to Orca Agent Deck');
+          log('connected to Agent Deck for Orca');
           onAck(msg);
         } else if (msg?.type) {
           onBridgeMessage(msg);
@@ -277,7 +277,7 @@ export function createBridge({
       log(
         challenge
           ? 'bridge: the peer on the bridge port sent no proof, closing'
-          : 'bridge: no challenge on the bridge port (Stream Deck plugin older than this one, or not Orca Agent Deck), closing',
+          : 'bridge: no challenge on the bridge port (Stream Deck plugin older than this one, or not Agent Deck for Orca), closing',
       );
       socket.close();
     }, handshakeMs);

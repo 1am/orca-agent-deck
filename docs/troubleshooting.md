@@ -36,7 +36,7 @@ Find the symptom, check the cause, apply the fix. Status key captions come from 
 ### "Orca plugin missing"
 
 - **Cause.** The Orca plugin has not connected since the Stream Deck plugin started: not installed, disabled, or Orca has not sent it an event yet.
-- **Check.** In Orca run "Orca Agent Deck: Show status", then read `~/.orca-deck/plugin-a.log`. Check Orca Settings, Plugins.
+- **Check.** In Orca run "Agent Deck: Show status", then read `~/.orca-deck/plugin-a.log`. Check Orca Settings, Plugins.
 - **Fix.** Install it (Quick start step 2 in [install.md](install.md)) and enable it. Start or finish a turn in an agent so Orca wakes it. If the Elgato app was restarted after Orca, the plugin reconnects with a backoff of up to 30 s.
 
 ### "Orca plugin outdated"
@@ -65,7 +65,7 @@ Find the symptom, check the cause, apply the fix. Status key captions come from 
 ### Key never turns green
 
 - **Cause.** Green means an agent turn finished. Orca reports no status when its hook variables are missing, typically for agents in a tmux server started outside Orca (stablyai/orca#32293). Green also clears once you press the key or focus the pane in Orca.
-- **Check.** Run "Orca Agent Deck: Show status" and look at the Status key for "tmux env missing". Check in Orca that agent hooks are on for the harness. Run `orca worktree ps --json` and look for the agent.
+- **Check.** Run "Agent Deck: Show status" and look at the Status key for "tmux env missing". Check in Orca that agent hooks are on for the harness. Run `orca worktree ps --json` and look for the agent.
 - **Fix.** [working-with-tmux.md](working-with-tmux.md). A shell pane (no agent) shows "done" only after it has printed continuously for about 8 seconds and then stopped.
 
 ### Shell pane never shows working

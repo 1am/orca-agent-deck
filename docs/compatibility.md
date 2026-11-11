@@ -32,7 +32,7 @@
 
 ## Harnesses
 
-Orca Agent Deck draws what Orca reports, so each harness depends on Orca's agent hooks. Claude Code, Codex and Pi are the ones the deck has pictograms for; others show their state without a harness badge guarantee.
+Agent Deck for Orca draws what Orca reports, so each harness depends on Orca's agent hooks. Claude Code, Codex and Pi are the ones the deck has pictograms for; others show their state without a harness badge guarantee.
 
 | Harness | Reported states | Notes |
 |---|---|---|
@@ -56,7 +56,7 @@ State names follow the colours on the key: working (blue), needs input (amber), 
 
 Filled from the dual-host smoke runs, one row per run.
 
-| Host | Host version | Device | Orca Agent Deck | Result |
+| Host | Host version | Device | Agent Deck for Orca | Result |
 |---|---|---|---|---|
 | Elgato Stream Deck app | 7.4.2 | MK.2 | | not run |
 | Elgato Stream Deck app | 7.4.2 | Neo | 0.2.0 | OK on Windows 11 (Orca 1.4.255): plugin loads, bridge connects, keys render and focus panes |

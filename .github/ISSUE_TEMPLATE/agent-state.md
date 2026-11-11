@@ -3,7 +3,7 @@ name: Wrong agent state on a key
 about: A key shows the wrong state (stays grey, never turns green, wrong harness)
 ---
 
-- Orca Agent Deck version:
+- Agent Deck for Orca version:
 - Orca version:
 - Harness and version (Claude Code / Codex / Pi):
 - Pane type (local / SSH / paired server / tmux):

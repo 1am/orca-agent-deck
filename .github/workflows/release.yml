@@ -69,6 +69,6 @@ jobs:
           flags=""
           case "$TAG" in *-*) flags="--prerelease" ;; esac
           gh release create "$TAG" $flags --target "$GITHUB_SHA" \
-            --title "Orca Agent Deck ${TAG#v}" \
+            --title "Agent Deck for Orca ${TAG#v}" \
             --notes-file dist/RELEASE_NOTES.md \
             dist/*.streamDeckPlugin dist/*.zip dist/collect-diagnostics.mjs dist/SHA256SUMS

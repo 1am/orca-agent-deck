@@ -68,7 +68,7 @@ function collect() {
   }
 
   return [
-    `Orca Agent Deck diagnostics, ${new Date().toISOString()}`,
+    `Agent Deck for Orca diagnostics, ${new Date().toISOString()}`,
     '',
     `macOS: ${run('sw_vers', ['-productVersion'])} (${process.arch})`,
     `Orca app: ${plist('/Applications/Orca.app', 'CFBundleShortVersionString')}`,

@@ -3,7 +3,7 @@ import { z } from 'zod';
 /** Bridge protocol v1. Plugin A (in Orca) <-> plugin B (Stream Deck plugin, WebSocket server). */
 export const PROTOCOL_VERSION = 1;
 
-/** Thrown for a message whose major `v` we do not speak; B shows "update Orca Agent Deck plugin". */
+/** Thrown for a message whose major `v` we do not speak; B shows "update Agent Deck for Orca plugin". */
 export class UnsupportedVersionError extends Error {
   readonly received: unknown;
   constructor(received: unknown) {

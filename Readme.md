@@ -1,10 +1,10 @@
-# Orca Agent Deck
+# Agent Deck for Orca
 
 **Working with LLMs is like...**
 
 [![Working with LLMs is like...](https://media1.giphy.com/media/vx9YFNa9ePYWLNnh0X/giphy.gif)](https://giphy.com/gifs/texasarchive-1960s-industrial-film-southwestern-bell-telephone-company-vx9YFNa9ePYWLNnh0X)
 
-Here comes Orca Agent Deck which shows the state of your agents and terminals running in [Orca](https://www.onorca.dev) on a Stream Deck, and focuses a pane when you press its key. Easy to look up where and when your attention is needed.
+Here comes Agent Deck for Orca which shows the state of your agents and terminals running in [Orca](https://www.onorca.dev) on a Stream Deck, and focuses a pane when you press its key. Easy to look up where and when your attention is needed.
 
 https://github.com/user-attachments/assets/1dfea071-0276-4011-b159-7916241eb2ca
 
@@ -28,7 +28,7 @@ https://github.com/user-attachments/assets/1dfea071-0276-4011-b159-7916241eb2ca
 - Orca 1.4.245 or newer, with the `orca` shell command registered (Orca: Settings, register CLI).
 - The Elgato Stream Deck app 7.1 or newer (macOS, Windows) or [OpenDeck](https://github.com/nekename/opendeck) (Linux), and a Stream Deck (hardware or Stream Deck Mobile).
 
-Orca Agent Deck has two parts and needs both: a **Stream Deck plugin** (draws the keys, talks to Orca) and a small **Orca plugin** (pushes agent status to the deck as it changes).
+Agent Deck for Orca has two parts and needs both: a **Stream Deck plugin** (draws the keys, talks to Orca) and a small **Orca plugin** (pushes agent status to the deck as it changes).
 
 ## Install from a release
 
@@ -90,7 +90,7 @@ Orca watches every file under a development folder. The Stream Deck plugin write
 
 ## Support
 
-Orca Agent Deck is an independent project. It is not affiliated with or endorsed by Stably (Orca) or Elgato (Stream Deck).
+Agent Deck for Orca is an independent project. It is not affiliated with or endorsed by Stably (Orca) or Elgato (Stream Deck).
 
 Best effort, by one maintainer. Supported: the latest stable Orca and the release before it, on macOS. Upstream Orca limits are listed in [docs/known-issues.md](docs/known-issues.md).
 
