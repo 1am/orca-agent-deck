@@ -1,6 +1,6 @@
 import { execFileSync } from 'node:child_process';
 import { chmod, cp, mkdir, mkdtemp, readFile, readdir, rm, writeFile } from 'node:fs/promises';
-import { existsSync, readFileSync, writeFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { basename, delimiter, dirname, join, resolve } from 'node:path';
 import { decodeKey } from '@orca-agent-deck/core';
@@ -12,26 +12,24 @@ import {
   newState,
   row,
   advance,
+  writeStateFile,
   type Scenario,
   type Step,
 } from '@orca-agent-deck/fake-orca';
 import { ACTION, FakeHost } from './host.ts';
 import { PROFILES, type Profile } from './profiles.ts';
+import { replayTimeoutMs } from '../replay-budget.ts';
 
 /**
  * Plays a side-`b` scenario into the built `bin/plugin.js` through a fake Stream Deck host (host.ts), with Orca
  * simulated by the same SimState the other runners use: the runtime socket (or, with `runtime: false`, the CLI
  * shim) and plugin A played by the BridgeSimulator from the `bridge.frame from:"a"` lines.
  * Plugin B runs on real time, so `at` only orders steps, except the gap between a keyDown and its keyUp (a hold).
- * Checks wait for the state to arrive (4 s deadline, see BASE_TIMEOUT_MS); nothing here sleeps for a fixed time except a short settle
+ * Checks wait for the state to arrive (one scaled deadline for every scenario, see replay-budget.ts); nothing here sleeps for a fixed time except a short settle
  * to catch messages that should not be there. There is no timeline snapshot: spinner frames and poll timing
  * make one unstable, the `expect.*` lines carry the intent.
  */
 
-// A wait is over when the state arrived; the deadline only has to outlast a slow machine. With the runtime socket off every
-// refresh spawns the CLI shim, which takes seconds on a loaded machine, so those scenarios get three times as long.
-// REPLAY_TIMEOUT_SCALE stretches both further (a busy CI runner).
-const BASE_TIMEOUT_MS = 4000 * (Number(process.env['REPLAY_TIMEOUT_SCALE']) || 1);
 const SETTLE_MS = 30;
 const wait = (ms: number) => new Promise((r) => setTimeout(r, ms));
 // A bundled runner (replay-e2e) has no source tree next to it: the script says where the repository is.
@@ -107,7 +105,7 @@ export async function runB(
   profileId: string,
   a?: PluginA,
 ): Promise<{ orcaCalls: number }> {
-  const TIMEOUT_MS = BASE_TIMEOUT_MS * (sc.header.runtime ? 1 : 3);
+  const TIMEOUT_MS = replayTimeoutMs();
   const profile = PROFILES[profileId]!;
   const root = await mkdtemp(join(tmpdir(), 'rb-'));
   const home = join(root, 'h');
@@ -149,7 +147,7 @@ process.exit(r.status ?? 1);`,
 
   const s = newState();
   const t0 = s.now;
-  const persist = () => writeFileSync(stateFile, JSON.stringify(s));
+  const persist = () => writeStateFile(stateFile, s);
   persist();
   let runtime: FakeRuntime | null = null;
   if (sc.header.runtime) {

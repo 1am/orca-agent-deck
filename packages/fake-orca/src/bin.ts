@@ -1,11 +1,12 @@
 #!/usr/bin/env node
 // Shim mimicking the real `orca` CLI JSON output. State lives in $FAKE_ORCA_STATE (JSON file).
-import { existsSync, readFileSync, writeFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import * as r from './render.ts';
 import { focus, newState, type SimState } from './sim.ts';
+import { writeStateFile } from './state-file.ts';
 import { loadScenario } from './replay/load.ts';
 import { play } from './replay/play.ts';
 
@@ -23,14 +24,14 @@ try {
     // `scenario <name>` plays test/replay/<name>.ndjson; the path is relative to this file.
     const dir = new URL('../../../test/replay/', import.meta.url);
     const s = play(loadScenario(fileURLToPath(new URL(`${b ?? ''}.ndjson`, dir))));
-    writeFileSync(file, JSON.stringify(s));
+    writeStateFile(file, s);
     console.log(s.log.join('\n'));
   } else if (a === 'terminal' && b === 'list') out(r.terminalList(load()));
   else if (a === 'terminal' && b === 'switch') {
     const s = load();
     const i = args.indexOf('--terminal');
     focus(s, args[i + 1] ?? '');
-    writeFileSync(file, JSON.stringify(s));
+    writeStateFile(file, s);
     out({ id: 'fake', ok: true, result: { focus: { navigated: true } } });
   } else if (a === 'worktree' && b === 'ps') out(r.worktreePs(load()));
   else if (a === 'host' && b === 'list') out(r.hostList(load()));
