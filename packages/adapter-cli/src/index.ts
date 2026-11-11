@@ -16,7 +16,9 @@ import {
   isLocalHost,
   LOCAL_HOST,
   mergeHostCensus,
+  paneKey,
   runtimeHostId,
+  splitPaneKey,
   unreachableHostIds,
   type HostCensus,
   type ListingHostScope,
@@ -216,7 +218,7 @@ export class CliAdapter implements OrcaAdapter {
     const titles = tabTitles(terms.result.visualLayouts);
     const wts = new Map(ps.result.worktrees.map((w) => [w.worktreeId, w]));
     const panes: PaneInfo[] = terms.result.terminals.map((t) => ({
-      paneKey: `${t.tabId}:${t.leafId}`,
+      paneKey: paneKey(t.tabId, t.leafId),
       hostId: environment ? envHostId(environment) : t.executionHostId,
       handle: t.handle,
       worktreeId: t.worktreeId,
@@ -317,7 +319,7 @@ export class CliAdapter implements OrcaAdapter {
       if (fromLayout) return fromLayout;
       this.focusNote += ' active-worktree-has-no-layout';
       const r = await this.call(terminalShowResponse, ['terminal', 'show']);
-      return `${r.result.terminal.tabId}:${r.result.terminal.leafId}`;
+      return paneKey(r.result.terminal.tabId, r.result.terminal.leafId);
     } catch (e) {
       this.focusNote = `focus read failed: ${(e as Error).message.slice(0, 80)}`;
       return null;
@@ -332,7 +334,7 @@ export class CliAdapter implements OrcaAdapter {
   async focus(
     pane: PaneRef & { handle: string; environment?: string | null; worktreeId?: string },
   ): Promise<FocusResult> {
-    const [tabId, leafId] = pane.paneKey.split(':');
+    const { tabId, leafId } = splitPaneKey(pane.paneKey);
     if (pane.environment && pane.worktreeId && tabId && leafId) {
       // A paired server has no window: the CLI asks it about the pane (a new remote connection
       // per call, 1.3-3.4 s) and then has this Orca reveal it. We know the pane already, so we
