@@ -26,12 +26,12 @@ Checked: 2026-11-11.
 
 Checked: 2026-11-11 (Orca 1.4.251, not reported upstream).
 
-### Plugin shortcuts do not fire while a terminal has the keyboard
+### Plugin shortcuts do not fire while a terminal, editor or text field has the keyboard
 
-- **What.** Orca runs a plugin's `contributes.keybindings` only when the key press does not come from a terminal: its key handler tells the terminal (xterm's input) from the rest of the window and skips plugin shortcuts for the terminal. Any chord is affected, not only Cmd+Alt+K. Orca's own shortcuts are not.
-- **Deck impact.** "Map pane to key" (Cmd+Alt+K, Ctrl+Alt+K) and "Unmap pane" (with Shift) do nothing while you type in a terminal pane, which is where you are when you want to map it. They work with the sidebar or an editor focused.
+- **What.** Orca's window key handler drops a plugin's `contributes.keybindings` when the key press comes from an editable target (an input, the Monaco editor, a contenteditable) and does not offer them to a terminal (xterm's input) either. Any chord is affected, not only Cmd+Alt+K. Orca's own shortcuts are not. Remapping the chord in Orca's Settings > Keyboard changes the keys but not this check, so it does not help.
+- **Deck impact.** "Map pane to key" (Cmd+Alt+K, Ctrl+Alt+K) and "Unmap pane" (with Shift) do nothing while you type in a terminal pane, which is where you are when you want to map it, and in an editor or text field. They fire only where nothing like that has the keyboard, for example the plugin settings view.
 - **Workaround.** Click "Map pane" in Orca's status bar, click a key in the Agent Deck panel in the right sidebar, or run "Agent Deck: Map pane to key" from the command palette. All three take the terminal pane you focused last.
-- **Upstream.** Needs Orca to offer plugin shortcuts in terminals too (as it does for its own, under the terminal shortcut policy).
+- **Upstream.** Needs Orca to offer plugin shortcuts in terminals too (as it does for its own, under the terminal shortcut policy), for example a keybinding context for terminals or a `when` clause that allows terminal focus. The shortcut stays in the plugin for when Orca does.
 
 ## Paired Orca servers
 
