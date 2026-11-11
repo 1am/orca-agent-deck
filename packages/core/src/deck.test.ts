@@ -829,3 +829,61 @@ it('a pane whose process crashed counts on the Attention key even though its age
   await d.refresh([]);
   expect(d.overview()).toMatchObject({ urgent: 1, topState: 'error' });
 });
+
+describe('press after Orca rotated the terminal handles', () => {
+  const setup = (failure: { error: string; code?: string }) => {
+    let gen = 1;
+    const calls: string[] = [];
+    let snapshots = 0;
+    const a: OrcaAdapter = {
+      health: async () => ({ orcaRunning: true, version: '1.4.0' }),
+      snapshot: async () => (
+        snapshots++,
+        { panes: [pane('a:1', { handle: `g${gen}` })], statuses: [], omittedHostIds: [] }
+      ),
+      listHosts: async () => [],
+      focus: async (p) => {
+        calls.push(p.handle);
+        return p.handle === 'g2' ? { ok: true } : { ok: false, ...failure };
+      },
+    };
+    const d = new DeckController(a, new MappingStore());
+    return {
+      d,
+      calls,
+      snapshots: () => snapshots,
+      restart: () => void (gen = 2),
+    };
+  };
+
+  it('retries once with the fresh handle when Orca says the handle is stale', async () => {
+    const t = setup({ error: 'terminal_handle_stale: gone', code: 'terminal_handle_stale' });
+    await t.d.refresh(['s1']);
+    t.d.configure('s1', { paneKey: 'a:1' });
+    await t.d.refresh(['s1']);
+    t.restart();
+    expect(await t.d.press('s1')).toBe('focused');
+    expect(t.calls).toEqual(['g1', 'g2']);
+  });
+
+  it('does not re-read the panes for an unrelated failure', async () => {
+    const t = setup({ error: 'method_not_found: nope', code: 'method_not_found' });
+    await t.d.refresh(['s1']);
+    t.d.configure('s1', { paneKey: 'a:1' });
+    await t.d.refresh(['s1']);
+    const before = t.snapshots();
+    t.restart();
+    expect(await t.d.press('s1')).toBe('failed');
+    expect(t.calls).toEqual(['g1']);
+    expect(t.snapshots()).toBe(before);
+  });
+
+  it('reads the code from the text on the CLI path, which has no code field', async () => {
+    const t = setup({ error: 'Command failed: terminal_not_found' });
+    await t.d.refresh(['s1']);
+    t.d.configure('s1', { paneKey: 'a:1' });
+    await t.d.refresh(['s1']);
+    t.restart();
+    expect(await t.d.press('s1')).toBe('focused');
+  });
+});
