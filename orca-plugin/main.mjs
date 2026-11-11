@@ -419,7 +419,7 @@ export const UNINSTALL_CONFIRM_MS = 10_000;
 
 /** What the "Uninstall" toast says (max 200 characters): the data is gone, the two plugins are removed by hand. */
 export const uninstallText = (dir) =>
-  `Removed ${dir}. Now remove the Stream Deck plugin (Elgato app: Preferences, Plugins; OpenDeck: Plugins), then this plugin in Orca Settings, Plugins.`.slice(
+  `Removed ${dir}. Remove the Stream Deck plugin too, or it recreates your mappings (Elgato app: Preferences, Plugins; OpenDeck: Plugins), then this plugin in Orca Settings.`.slice(
     0,
     200,
   );
@@ -620,7 +620,7 @@ export default async function activate(orca) {
     const dir = deckDataDir(here());
     if (Date.now() - armedAt > UNINSTALL_CONFIRM_MS) {
       armedAt = Date.now();
-      return `Run Agent Deck: Uninstall again within ${UNINSTALL_CONFIRM_MS / 1000} s to remove ${dir} (bridge file, key mappings, this plugin's log).`.slice(
+      return `Run Agent Deck: Uninstall again within ${UNINSTALL_CONFIRM_MS / 1000} s to remove ${dir} (bridge file, key mappings, recordings, this plugin's log).`.slice(
         0,
         200,
       );

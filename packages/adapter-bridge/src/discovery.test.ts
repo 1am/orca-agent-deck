@@ -91,6 +91,12 @@ describe('plugin A uninstall', () => {
       /refusing/,
     );
     expect(a.uninstallText('/Users/ann/.orca-deck').length).toBeLessThanOrEqual(200);
-    expect(a.uninstallText('/Users/ann/.orca-deck')).toMatch(/Elgato app.*OpenDeck.*Orca Settings/);
+    expect(a.uninstallText('/Users/ann/.orca-deck')).toMatch(
+      /recreates your mappings.*Elgato app.*OpenDeck.*Orca Settings/,
+    );
+    // A long Windows path still leaves the warning in the toast.
+    const long = a.uninstallText(`C:\\Users\\${'a'.repeat(40)}\\AppData\\Roaming\\orca-deck`);
+    expect(long.length).toBeLessThanOrEqual(200);
+    expect(long).toContain('recreates your mappings');
   });
 });

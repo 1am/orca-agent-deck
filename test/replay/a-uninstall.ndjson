@@ -1,8 +1,8 @@
-{"v":2,"name":"a-uninstall","description":"Agent Deck: Uninstall asks twice (the first run only arms and removes nothing); the second run within 10 s removes the data dir under the worker HOME and says how to remove the two plugins. Revert checks: make removeDeckData a no-op; make the first run remove at once (skip the armed check).","sides":["a"],"keys":{}}
+{"v":2,"name":"a-uninstall","description":"Agent Deck: Uninstall asks twice (the first run only arms and removes nothing); the second run within 10 s removes the data dir (recordings included) under the worker HOME and says how to remove the two plugins. Revert checks: make removeDeckData a no-op; make the first run remove at once (skip the armed check).","sides":["a"],"keys":{}}
 {"at":0,"do":"orca.activate"}
 {"at":0,"do":"bridge.frame","from":"a","frame":{"type":"hello"}}
 {"at":100,"do":"expect.file","path":".orca-deck","exists":true}
-{"at":100,"do":"orca.command","id":"deck.uninstall","resultContains":"again within 10 s"}
+{"at":100,"do":"orca.command","id":"deck.uninstall","resultContains":"recordings"}
 {"at":100,"do":"expect.file","path":".orca-deck","exists":true}
-{"at":200,"do":"orca.command","id":"deck.uninstall","resultContains":"Elgato app"}
+{"at":200,"do":"orca.command","id":"deck.uninstall","resultContains":"recreates your mappings"}
 {"at":200,"do":"expect.file","path":".orca-deck","exists":false}
