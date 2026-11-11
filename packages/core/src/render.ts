@@ -131,7 +131,7 @@ export const ICON_OVERRIDES: Readonly<Record<string, 'own' | IconMode>> = {
 /** Agent types Orca reports that have no pictogram, so a first letter is ambiguous between them. */
 const LETTER_AGENTS = ['kimi', 'cline', 'qwen', 'goose', 'crush', 'aider'];
 
-/** Letters for the badge of an agent without a pictogram: two when another such agent starts alike. */
+/** Letters for the badge of an agent without a pictogram (`kind` lower-case): two when another such agent starts alike. */
 export function harnessLabel(kind: string): string {
   const first = kind.slice(0, 1).toUpperCase();
   const clash = LETTER_AGENTS.some(
