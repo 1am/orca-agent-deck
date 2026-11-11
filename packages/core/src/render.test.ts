@@ -1,5 +1,12 @@
 import { expect, it } from 'vitest';
-import { harnessLabel, layoutLabel, renderKey, textWidth, type KeyModel } from './render.ts';
+import {
+  harnessLabel,
+  layoutLabel,
+  renderInfoKey,
+  renderKey,
+  textWidth,
+  type KeyModel,
+} from './render.ts';
 import type { DeckState } from './status.ts';
 
 const STATES: DeckState[] = [
@@ -108,6 +115,12 @@ it('draws a distinct pictogram per known agent and two letters where first lette
   expect(harnessLabel('mystery')).toBe('M');
   expect(renderKey({ ...m, agent: 'cline' })).toContain('>Cl</text>');
   expect(renderKey({ ...m, agent: 'crush' })).toContain('>Cr</text>');
+});
+
+it('asks for a metric-compatible font before DejaVu Sans', () => {
+  const stack = 'font-family="Helvetica, Arial, Liberation Sans, DejaVu Sans, sans-serif"';
+  expect(renderKey({ state: 'idle', label: 'a', line2: 'b' })).toContain(stack);
+  expect(renderInfoKey({ tone: 'idle', value: '1', caption: 'a' })).toContain(stack);
 });
 
 it('high-contrast theme changes the palette', () => {

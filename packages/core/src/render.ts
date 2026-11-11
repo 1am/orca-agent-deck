@@ -105,6 +105,12 @@ export function harnessLabel(kind: string): string {
   return clash && kind.length > 1 ? first + kind.slice(1, 2).toLowerCase() : first;
 }
 
+/**
+ * Liberation Sans has Arial's metrics, so a Linux host that has it (or Windows with Arial) lays
+ * text out as `textWidth` expects; DejaVu Sans (often fontconfig's pick) is about 10% wider.
+ */
+const FONT_STACK = 'Helvetica, Arial, Liberation Sans, DejaVu Sans, sans-serif';
+
 const esc = (s: string) =>
   s.replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c] ?? c);
 
@@ -245,7 +251,7 @@ export function renderKey(m: KeyModel, o: RenderOptions = {}): string {
   const iconX = glyph ? MX + 32 : MX;
   return (
     `<svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}" viewBox="0 0 144 144" ` +
-    `style="--bg:${pal.bg}" font-family="Helvetica, Arial, sans-serif" font-weight="400" color="${pal.fg}" fill="${pal.fg}">` +
+    `style="--bg:${pal.bg}" font-family="${FONT_STACK}" font-weight="400" color="${pal.fg}" fill="${pal.fg}">` +
     `<rect width="144" height="144" fill="${pal.bg}"/>` +
     badge +
     `<g transform="translate(${iconX} ${MY}) scale(.6)" opacity="${m.state === 'unmapped' ? 0.6 : 1}">${icon}</g>` +
@@ -279,7 +285,7 @@ export function renderInfoKey(m: InfoModel, o: RenderOptions = {}): string {
     .join('');
   return (
     `<svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}" viewBox="0 0 144 144" ` +
-    `font-family="Helvetica, Arial, sans-serif" font-weight="500" fill="${pal.fg}">` +
+    `font-family="${FONT_STACK}" font-weight="500" fill="${pal.fg}">` +
     `<rect width="144" height="144" fill="${pal.bg}"/>` +
     `<text x="72" y="84" font-size="${m.value.length > 3 ? 40 : 56}" text-anchor="middle">${esc(m.value)}</text>` +
     caption +
