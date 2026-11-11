@@ -667,16 +667,28 @@ export class DeckController {
     const before = this.pressedKey;
     this.pressedKey = pane.paneKey;
     // Switch the pane and raise the window concurrently: both are slow subprocess calls.
-    const [r] = await Promise.all([
+    const focusPane = (p: PaneInfo) =>
       this.adapter.focus({
-        paneKey: pane.paneKey,
-        hostId: pane.hostId,
-        handle: pane.handle,
-        environment: pane.environment ?? null,
-        worktreeId: pane.worktreeId,
-      }),
-      this.raise?.(),
-    ]);
+        paneKey: p.paneKey,
+        hostId: p.hostId,
+        handle: p.handle,
+        environment: p.environment ?? null,
+        worktreeId: p.worktreeId,
+      });
+    const [first] = await Promise.all([focusPane(pane), this.raise?.()]);
+    let r = first;
+    if (!r.ok && /stale|not.?found/i.test(r.error ?? '')) {
+      // Orca restarted since the last read and its terminal handles rotated: read the panes again and
+      // retry once, only when the pane now has another handle (so this cannot loop).
+      try {
+        this.snapshot = await this.adapter.snapshot();
+        this.registry.update(this.snapshot.panes);
+        const fresh = this.registry.get(pane.paneKey);
+        if (fresh && fresh.handle !== pane.handle) r = await focusPane(fresh);
+      } catch {
+        // Orca is not reachable: the press fails as before.
+      }
+    }
     if (!r.ok && this.pressedKey === pane.paneKey) this.pressedKey = before;
     return r.ok ? 'focused' : 'failed';
   }

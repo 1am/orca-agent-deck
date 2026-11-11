@@ -41,7 +41,7 @@ Every bug closes with a scenario that fails when its fix is reverted (the revert
 | Status key says Orca plugin missing while the install probe is pending; installed but asleep reads slow | `b-status`, `b-plugin-installed-asleep` | pending probe mapped to missing, or the asleep branch dropped (`bridge.ts`): key 14 reads "Orca plugin missing" / "Install the Orca plugin" |
 | a pushed status stays on a key after Orca dropped the agent row (tmux) | `b-stale-push` | never expire a pushed status (`bridged-adapter.ts`): key 1 stays completed instead of idle |
 | a turn that ends with a question reads done | `b-awaiting-reply` | `awaitingOf` never reports a question (`adapter-cli`): key 1 reads completed/done instead of awaiting reply/asks you |
-| Orca restart rotates terminal handles | `b-orca-restart` (+ `a-idle-out-reconnect`, `a-b-restart` for the reconnects) | focus with a generation-1 handle (`deck.ts`): the press never focuses the pane |
+| Orca restart rotates terminal handles | `b-orca-restart`, `b-orca-restart-press` (a press in the same instant retries with the fresh handle; + `a-idle-out-reconnect`, `a-b-restart` for the reconnects) | focus with a generation-1 handle (`deck.ts`): the press never focuses the pane |
 | Lazy wake: the event that woke plugin A is kept | `a-lazy-wake` | `onAck` replay removed (`main.mjs`): no agentStatus after B returns |
 | Plugin B restarts, A reconnects | `a-b-restart` | no reconnect scheduled (`main.mjs`): no hello after B restarts |
 | Hold with Orca showing a paired server says "Remote pane: use the picker" | `b-hold-remote` | hint dropped (`deck.ts`): the key says "No pane selected in Orca" |
