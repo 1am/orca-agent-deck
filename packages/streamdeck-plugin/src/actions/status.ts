@@ -48,6 +48,8 @@ function doctorFacts(c: DeckController): DoctorFacts {
     binSource: bin?.source ?? null,
     binReason: bin?.reason,
     liveLink: o.mode === 'down' ? null : o.fast ? 'socket' : 'cli',
+    // The key counts the same hosts (`overview().hostsDown`), so key and list cannot disagree.
+    hostsDown: o.mode === 'down' ? null : o.hostsDownNames,
     mappedSlots: c.mappedSlotCount(),
     orcaPlugin: orcaPluginState(),
     orcaPluginVersion: orcaPluginVersion(),
