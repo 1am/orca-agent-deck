@@ -27,12 +27,12 @@
     "catalog": "node scripts/catalog.mjs"
   },
   "dependencies": {
-    "@elgato/streamdeck": "^3.0.4",
     "ws": "8.22.0",
     "zod": "^3.23.8"
   },
   "devDependencies": {
     "@elgato/cli": "^1.10.4",
+    "@elgato/streamdeck": "3.0.4",
     "@eslint/js": "^9.0.0",
     "@rollup/plugin-commonjs": "^29.0.3",
     "@rollup/plugin-node-resolve": "^16.0.3",

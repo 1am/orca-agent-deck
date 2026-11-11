@@ -5,6 +5,11 @@ const ui = vi.hoisted(() => ({
   sendToPropertyInspector: vi.fn<(payload: unknown) => Promise<void>>(async () => {}),
 }));
 
+const direct = vi.hoisted(() =>
+  vi.fn<(context: string, payload: object) => Promise<void>>(async () => {}),
+);
+vi.mock('./pi-send.ts', () => ({ sendToInspectorOf: direct }));
+
 vi.mock('@elgato/streamdeck', () => ({
   default: { ui, logger: { info: vi.fn() } },
   action: () => (target: unknown) => target,
@@ -19,6 +24,7 @@ const ev = (id: string, payload: unknown) => ({ action: { id }, payload }) as ne
 describe('Property Inspector routing (OpenDeck mounts a hidden PI per action)', () => {
   beforeEach(() => {
     ui.sendToPropertyInspector.mockClear();
+    direct.mockClear();
     ui.action = { id: 'A' };
   });
 
@@ -63,11 +69,22 @@ describe('Property Inspector routing (OpenDeck mounts a hidden PI per action)', 
       expect(ui.sendToPropertyInspector).not.toHaveBeenCalled();
     });
 
-    it('no PI open: nothing is sent', async () => {
+    it('no PI announced (plugin restarted): `load` is answered to the asking inspector only', async () => {
       ui.action = undefined;
       const { slot } = make();
       await slot.onSendToPlugin(ev('A', { type: 'load' }));
       expect(ui.sendToPropertyInspector).not.toHaveBeenCalled();
+      expect(direct).toHaveBeenCalledOnce();
+      expect(direct).toHaveBeenCalledWith(
+        'A',
+        expect.objectContaining({ type: 'state', context: 'A' }),
+      );
+    });
+
+    it('another inspector being current never gets the direct path', async () => {
+      const { slot } = make();
+      await slot.onSendToPlugin(ev('B', { type: 'load' }));
+      expect(direct).not.toHaveBeenCalled();
     });
   });
 
@@ -82,6 +99,7 @@ describe('Property Inspector routing (OpenDeck mounts a hidden PI per action)', 
       await key.onSendToPlugin(ev('B', { type: 'load' }));
       expect(ui.sendToPropertyInspector).not.toHaveBeenCalled();
       expect(c.refresh).not.toHaveBeenCalled();
+      expect(direct).not.toHaveBeenCalled();
     });
   });
 });
