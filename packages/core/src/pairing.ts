@@ -19,8 +19,8 @@ export type PairingResult =
       requestId: string;
       ok: true;
       slot: string;
-      /** `copied`: the pane also stays on its other slots. `moved`: it left them. */
-      action: 'mapped' | 'copied' | 'moved';
+      /** `moved`: the pane was on other slots and left them (a pane is on one key only). */
+      action: 'mapped' | 'moved';
     }
   | { requestId: string; ok: false; reason: PairingReason };
 
@@ -34,7 +34,7 @@ export interface PairingOptions {
 
 /**
  * Pairing mode (spec 7.2 steps 4-7, 7.8) for pane keys: a request names a pane, then the next
- * slot press binds it. A pane already pinned elsewhere is added as a copy on tap and moved on hold.
+ * slot press binds it. A pane already on another slot moves here: it is on one key only.
  * A mapped slot is replaced and an auto slot becomes pinned. Pure: the deck feeds `press` and
  * renders `state`, the bridge turns results into `pairResult`.
  */
@@ -100,20 +100,16 @@ export class Pairing {
    * A slot was pressed (`tap`) or held. Returns true when pairing consumed the press, so the
    * caller must not also run the normal key action.
    */
-  press(slot: string, gesture: 'tap' | 'hold'): boolean {
+  // The gesture no longer changes the outcome (a pane moves on both); callers still say which it was.
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  press(slot: string, _gesture: 'tap' | 'hold'): boolean {
     const cur = this.current;
     if (cur.phase !== 'waitingForKey') return false;
     const others = cur.existing.filter((s) => s !== slot);
     const prev = this.mapping.get(slot);
-    const pinnedElsewhere = others.filter((s) => this.mapping.get(s)?.mode === 'pinned');
-    const move = gesture === 'hold' && pinnedElsewhere.length > 0;
-    if (move) {
-      for (const s of pinnedElsewhere) {
-        this.mapping.set(s, { mode: 'auto', pos: this.mapping.get(s)?.pos });
-      }
-    }
+    for (const s of others) this.mapping.set(s, { mode: 'auto', pos: this.mapping.get(s)?.pos });
     this.mapping.set(slot, { ...prev, mode: 'pinned', pane: cur.pane });
-    const action = move ? 'moved' : pinnedElsewhere.length > 0 ? 'copied' : 'mapped';
+    const action = others.length > 0 ? 'moved' : 'mapped';
     this.finish({ requestId: cur.requestId, ok: true, slot, action });
     return true;
   }

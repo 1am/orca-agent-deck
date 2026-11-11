@@ -69,6 +69,8 @@ class FakeB {
   frames: Frame[] = [];
   deck = false;
   lastRequestId = '';
+  /** Answers every pairRequest with this frame, as a B that has no pane to map would. */
+  autoReply: Frame | null = null;
   private server: BridgeServer | null = null;
   private disc: Discovery | null = null;
   path: string;
@@ -93,6 +95,7 @@ class FakeB {
     server.on('message', (m) => {
       if (m.type === 'pairRequest') this.lastRequestId = m.requestId;
       this.frames.push({ ...m });
+      if (m.type === 'pairRequest' && this.autoReply) this.send(this.autoReply);
     });
     this.disc = await server.start();
     this.server = server;
@@ -209,6 +212,9 @@ export async function runA(sc: Scenario, env: Env): Promise<void> {
       case 'deck.restart':
         await b.down(step.up === false);
         if (step.up !== false) await b.up();
+        return;
+      case 'bridge.reply':
+        b.autoReply = step.frame;
         return;
       case 'bridge.frame':
         if (step.from === 'b') {

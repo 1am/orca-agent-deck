@@ -105,6 +105,8 @@ export const stepSchema = z.discriminatedUnion('do', [
    * A frame on the A-B seam. `from: "a"` is expected: frames A sends at that instant, in order, each matching the listed
    * fields (a subset). `from: "b"` is sent by the fake B; the string `"$requestId"` stands for A's last pairing request id.
    */
+  /** Plugin A suite: from now on the fake B answers every `pairRequest` at once with this frame (`"$requestId"` as above). */
+  step('bridge.reply', { frame: json }),
   step('bridge.frame', { from: z.enum(['a', 'b']), frame: json }),
   step('expect.key', {
     key,

@@ -26,6 +26,7 @@ All notable changes to this project are documented here. Format: [Keep a Changel
 
 ### Fixed
 
+- **streamdeck:** a pane is on one key only. Mapping a pane that already sits on a key (from the "Map pane to key" command, by holding a key, or from the picker) moves it instead of showing it on two keys, and a mappings file that has a pane on several keys is cleaned on load. Run from the plugin settings, "Map pane to key" uses the last pane Orca reported focused, and says "Focus a terminal pane first" when there is none.
 - **streamdeck:** a key press at the moment Orca restarts no longer fails: the plugin reads the panes again and retries with the new terminal handle.
 - **streamdeck:** the Status key no longer counts a paired server's runtime peers as hosts down, and paired servers whose id needs encoding are matched.
 - **streamdeck:** the Orca plugin installed from a local folder is detected, so the Status key does not call it missing.

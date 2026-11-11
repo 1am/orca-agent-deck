@@ -31,6 +31,15 @@ export interface SlotSettings {
   autoFilter?: Record<string, unknown>;
   /** ms epoch when the bound pane was last seen; used for offline retention. */
   lastSeenAt?: number;
+  /** ms epoch when this pane was put on this slot (not refreshed while it stays): which of two copies is newer. */
+  assignedAt?: number;
+}
+
+/** A pane that a mappings file had on several keys: it stays on the newest, the others were cleared. */
+export interface DedupedPane {
+  paneKey: string;
+  kept: string;
+  removed: string[];
 }
 
 export const DEFAULT_RETENTION_MS = 24 * 60 * 60 * 1000;
@@ -77,6 +86,30 @@ export class MappingStore {
     this.now = now;
     this.retentionMs = retentionMs;
     this.slots = storage.load();
+    this.dedupedOnLoad = this.dedupe();
+  }
+
+  /** What loading cleaned up (a pane on two keys, from before a pane lived on one key only), for the log. */
+  readonly dedupedOnLoad: DedupedPane[];
+
+  /** A pane is on at most one key: where a file has it on several, the most recently assigned keeps it. */
+  private dedupe(): DedupedPane[] {
+    const by = new Map<string, string[]>();
+    for (const [k, s] of Object.entries(this.slots))
+      if (s.pane) by.set(s.pane.paneKey, [...(by.get(s.pane.paneKey) ?? []), k]);
+    const out: DedupedPane[] = [];
+    for (const [paneKey, keys] of by) {
+      if (keys.length < 2) continue;
+      // Files from before `assignedAt` order by position in the file, which is assignment order.
+      const kept = keys.reduce((a, b) =>
+        (this.slots[b]!.assignedAt ?? 0) >= (this.slots[a]!.assignedAt ?? 0) ? b : a,
+      );
+      const removed = keys.filter((k) => k !== kept);
+      for (const k of removed) delete this.slots[k];
+      out.push({ paneKey, kept, removed });
+    }
+    if (out.length) this.persist();
+    return out;
   }
 
   get(slot: string): SlotSettings | undefined {
@@ -84,10 +117,18 @@ export class MappingStore {
   }
 
   set(slot: string, s: SlotSettings): void {
+    const prev = this.slots[slot];
     this.slots[slot] = {
       ...s,
-      pos: s.pos ?? this.slots[slot]?.pos,
+      pos: s.pos ?? prev?.pos,
       lastSeenAt: s.pane ? this.now() : s.lastSeenAt,
+      ...(s.pane
+        ? {
+            assignedAt:
+              s.assignedAt ??
+              (prev?.pane?.paneKey === s.pane.paneKey ? prev.assignedAt : this.now()),
+          }
+        : {}),
     };
     this.persist();
   }

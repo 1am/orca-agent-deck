@@ -44,6 +44,10 @@ async function createController(): Promise<DeckController> {
       (m) => streamDeck.logger.info(m),
     ),
   );
+  for (const d of store.dedupedOnLoad)
+    streamDeck.logger.info(
+      `mappings: pane ${d.paneKey} was on ${d.removed.length + 1} keys, kept the newest (${d.removed.length} cleared)`,
+    );
   const raiser = makeRaiser();
   const raise = async () => {
     const r = await raiser.raise();

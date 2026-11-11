@@ -135,6 +135,8 @@ export class DeckController {
   private readonly shell = new ShellActivity();
   /** Pane focused in Orca at the last refresh (null when unknown, undefined before the first read). */
   private focusedKey: string | null | undefined = undefined;
+  /** The last pane the focus read named: what "Map pane" uses when Orca reports none (the settings view is open). */
+  private lastFocusedKey: string | null = null;
   /**
    * Pane the deck focused last. Orca reports no focus while it shows a paired server, so this
    * keeps that key highlighted until Orca reports the user in another pane.
@@ -204,7 +206,11 @@ export class DeckController {
       if (named && !named.orphaned) return bindingOf(named);
     }
     const focused = paneKey ? null : await this.focusedPane();
-    return focused ? bindingOf(focused) : null;
+    if (focused) return bindingOf(focused);
+    // Run from the plugin settings, Orca reports no focused pane: the last one it did is the one meant.
+    const last =
+      !paneKey && this.lastFocusedKey ? this.registry.get(this.lastFocusedKey) : undefined;
+    return last && !last.orphaned ? bindingOf(last) : null;
   }
 
   /** Unmaps every slot showing a pane (named, or the focused one); returns how many were cleared. */
@@ -395,6 +401,7 @@ export class DeckController {
     const prev = this.focusedKey;
     // The snapshot just read the same worktree and terminal lists: no second round trip.
     this.focusedKey = await this.adapter.focusedPaneKey(FOCUS_FROM_SNAPSHOT_MS).catch(() => null);
+    if (this.focusedKey) this.lastFocusedKey = this.focusedKey;
     // The user moved to another pane Orca can report: the deck's last focus is over.
     if (this.focusedKey && this.focusedKey !== prev && this.focusedKey !== this.pressedKey) {
       this.pressedKey = null;
@@ -546,6 +553,7 @@ export class DeckController {
         : 'No pane selected in Orca';
       return null;
     }
+    this.lastFocusedKey = key;
     this.holdHint = 'Pane not found';
     const find = () => this.snapshot.panes.find((p) => p.paneKey === key);
     let pane = find();

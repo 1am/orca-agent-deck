@@ -676,7 +676,8 @@ it('pairing: names the pane A sent, pins it on the pressed slot and un-releases 
   expect(target?.paneKey).toBe('b:1');
   d.pairing.start('r1', target, true);
   expect(d.pairing.press('s1', 'tap')).toBe(true);
-  expect(results).toEqual([{ requestId: 'r1', ok: true, slot: 's1', action: 'mapped' }]);
+  // Auto-fill had put b:1 on s2: it moves to s1.
+  expect(results).toEqual([{ requestId: 'r1', ok: true, slot: 's1', action: 'moved' }]);
   expect((await d.refresh(['s1', 's2'])).get('s1')).toMatchObject({ label: 't-b:1' });
 });
 
@@ -756,5 +757,33 @@ describe('press after Orca rotated the terminal handles', () => {
     await t.d.refresh(['s1']);
     t.restart();
     expect(await t.d.press('s1')).toBe('focused');
+  });
+});
+
+describe('pairing target from the settings view', () => {
+  const setup = (focus: () => string | null) => {
+    const snap: Snapshot = { panes: [pane('a:1'), pane('b:1')], statuses: [], omittedHostIds: [] };
+    const a: OrcaAdapter = {
+      health: async () => ({ orcaRunning: true, version: '1.4.0', live: true, fast: true }),
+      snapshot: async () => snap,
+      listHosts: async () => [],
+      focus: async () => ({ ok: true }),
+      focusedPaneKey: async () => focus(),
+    };
+    return new DeckController(a, new MappingStore());
+  };
+
+  it('uses the last pane Orca reported focused when it reports none now', async () => {
+    let focus: string | null = 'b:1';
+    const d = setup(() => focus);
+    await d.refresh([]);
+    focus = null;
+    expect((await d.pairingTarget(null))?.paneKey).toBe('b:1');
+  });
+
+  it('is null when no pane was ever focused', async () => {
+    const d = setup(() => null);
+    await d.refresh([]);
+    expect(await d.pairingTarget(null)).toBeNull();
   });
 });

@@ -658,7 +658,7 @@ export default async function activate(orca) {
   const resumed = await recorder.resume();
   if (resumed) log(`record: resumed after a restart of this worker, writing to ${resumed}`);
   // activate() gets no app version, only the plugin API version; B reads the app version itself.
-  const pairing = { id: null, last: null };
+  const pairing = { id: null, last: null, reason: null };
   const bridge = createBridge({
     orcaVersion: orca.api ? `api ${orca.api.major}.${orca.api.minor}` : 'unknown',
     log,
@@ -671,6 +671,7 @@ export default async function activate(orca) {
         pairing.last = msg.ok
           ? `mapped to key ${msg.slot?.index} (page ${msg.slot?.page})`
           : msg.reason;
+        pairing.reason = msg.ok ? null : msg.reason;
         log(`pairing: ${msg.ok ? pairing.last : `not mapped (${msg.reason})`}`);
       }
     },
@@ -718,9 +719,15 @@ export default async function activate(orca) {
     }
     bridge.send({ v: PROTOCOL_VERSION, type, requestId, pane: null });
     log(`pairing: ${type} sent`);
-    return type === 'pairRequest'
-      ? 'Press a key on the deck to map this pane'
-      : 'Unmapping this pane';
+    if (type !== 'pairRequest') return 'Unmapping this pane';
+    // B answers at once when it has no pane to map (nothing focused, none seen before): say so, nothing is pairing.
+    for (let i = 0; i < 16 && pairing.id === requestId; i++)
+      await new Promise((r) => setTimeout(r, 50));
+    if (pairing.id !== requestId && pairing.reason === 'noFocusedPane')
+      return 'Focus a terminal pane first';
+    if (pairing.id !== requestId && pairing.last && pairing.reason)
+      return `Not mapped: ${pairing.last}`.slice(0, 200);
+    return 'Press a key on the deck to map this pane';
   };
   orca.commands.register('deck.map', sendPairing('pairRequest'));
   orca.commands.register('deck.unmap', sendPairing('unmapRequest'));
