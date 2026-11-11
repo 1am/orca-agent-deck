@@ -61,6 +61,18 @@ function clean(value: unknown, path: string, removed: string[]): unknown {
   return value;
 }
 
+/**
+ * Orca's event schema requires a `path` and a `branch` on workspace events, and the recorder never writes either (they
+ * name the user's folders and branches), so a replay would be refused: fill them with fixed placeholders.
+ */
+function withRequired(name: unknown, payload: unknown): unknown {
+  const p = (payload ?? {}) as Record<string, unknown>;
+  if (name === 'workspace.created')
+    return { kind: 'worktree', path: '/recorded', branch: 'recorded', ...p };
+  if (name === 'workspace.removed') return { kind: 'worktree', path: '/recorded', ...p };
+  return p;
+}
+
 export function recordScenario(
   log: string,
   opts: { name: string; description?: string; sides?: Side[] },
@@ -87,7 +99,7 @@ export function recordScenario(
         at,
         do: 'orca.event',
         name: e['name'],
-        payload: clean(e['payload'] ?? {}, `${where}.payload`, removed),
+        payload: withRequired(e['name'], clean(e['payload'] ?? {}, `${where}.payload`, removed)),
       };
     } else if (e.kind === 'bridge.frame') {
       const frame = (e['frame'] ?? {}) as { type?: unknown };

@@ -462,6 +462,59 @@ export function sanitizeForRecording(value) {
   return typeof value === 'string' && RECORD_SECRET_LIKE.test(value) ? '<redacted>' : value;
 }
 
+/**
+ * What is written is an allow-list, the drop pass above is the second line of defence. The fields are the ones the
+ * plugin itself reads (`toAgentStatus`, `onWorkspace`) and the replay schema needs; anything else Orca adds (a
+ * branch name, a terminal handle, a title, a path) never reaches the file. A value is kept only when it is a
+ * string, number, boolean or null; a spec of `1` means "this field", an object means "these fields of it".
+ */
+export const RECORD_EVENT_FIELDS = {
+  'agent.status.changed': {
+    workspaceId: 1,
+    paneKey: 1,
+    state: 1,
+    receivedAt: 1,
+    agentType: 1,
+    mainAgent: { state: 1, outcome: 1, stateStartedAt: 1, agentType: 1 },
+  },
+  'workspace.created': { workspaceId: 1, id: 1, kind: 1 },
+  'workspace.removed': { workspaceId: 1, id: 1, kind: 1 },
+};
+/** Per frame type of the bridge; a type not listed keeps only `v` and `type`. */
+export const RECORD_FRAME_FIELDS = {
+  agentStatus: {
+    v: 1,
+    type: 1,
+    paneKey: 1,
+    workspaceId: 1,
+    state: 1,
+    outcome: 1,
+    stateStartedAt: 1,
+    receivedAt: 1,
+    agentType: 1,
+  },
+  workspace: { v: 1, type: 1, event: 1, workspaceId: 1 },
+  pairRequest: { v: 1, type: 1, requestId: 1, pane: 1 },
+  unmapRequest: { v: 1, type: 1, requestId: 1, pane: 1 },
+  pairCancel: { v: 1, type: 1, requestId: 1 },
+  requestSnapshot: { v: 1, type: 1 },
+  pairResult: { v: 1, type: 1, requestId: 1, ok: 1, reason: 1, slot: { index: 1, page: 1 } },
+};
+const RECORD_FRAME_DEFAULT = { v: 1, type: 1 };
+
+export function pickFields(value, spec) {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return {};
+  const out = {};
+  for (const [k, want] of Object.entries(spec)) {
+    const v = value[k];
+    if (v === undefined) continue;
+    if (want === 1) {
+      if (v === null || ['string', 'number', 'boolean'].includes(typeof v)) out[k] = v;
+    } else if (v && typeof v === 'object') out[k] = pickFields(v, want);
+  }
+  return out;
+}
+
 /** A recording stops by itself after this long or this many bytes. */
 export const RECORD_MAX_MS = 10 * 60 * 1000;
 export const RECORD_MAX_BYTES = 5 * 1024 * 1024;
@@ -511,8 +564,18 @@ export function createRecorder({
       return file;
     },
     stop,
-    event: (name, payload) => add({ kind: 'orca.event', name, payload: payload ?? {} }),
-    frame: (from, frame) => add({ kind: 'bridge.frame', from, frame }),
+    event: (name, payload) =>
+      add({
+        kind: 'orca.event',
+        name,
+        payload: pickFields(payload, RECORD_EVENT_FIELDS[name] ?? {}),
+      }),
+    frame: (from, frame) =>
+      add({
+        kind: 'bridge.frame',
+        from,
+        frame: pickFields(frame, RECORD_FRAME_FIELDS[frame?.type] ?? RECORD_FRAME_DEFAULT),
+      }),
     /** Resolves once every accepted line is on disk. */
     flush: () => queue,
   };
