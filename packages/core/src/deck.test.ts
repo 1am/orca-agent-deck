@@ -96,6 +96,27 @@ it('keeps a key on a host only one listing omitted, without counting it down', a
   expect((await d.refresh(['s1'])).get('s1')?.state).toBe('unreachable');
   expect(store.get('s1')?.pane?.paneKey).toBe('a:1');
   expect(d.overview().hostsDown).toBe(1);
+  expect(d.overview().hostsDownNames).toEqual(['x']);
+});
+
+it('names a down host by alias, then Orca name, then its id', async () => {
+  const snap: Snapshot = {
+    panes: [
+      pane('a:1', { hostId: 'ssh:box', hostName: 'build box' }),
+      pane('b:1', { hostId: 'env:E1' }),
+    ],
+    statuses: [],
+    omittedHostIds: [],
+    downHostIds: [],
+  };
+  const d = new DeckController(fake(snap).a, new MappingStore());
+  d.hostAliases = { 'env:E1': 'silver' };
+  await d.refresh(['s1']);
+  snap.panes = [];
+  snap.omittedHostIds = ['ssh:box', 'env:E1', 'ssh:gone%201'];
+  snap.downHostIds = ['ssh:box', 'env:E1', 'ssh:gone%201'];
+  await d.refresh(['s1']);
+  expect(d.overview().hostsDownNames).toEqual(['build box', 'silver', 'gone 1']);
 });
 
 it('press focuses the mapped pane and reports failures', async () => {

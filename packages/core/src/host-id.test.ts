@@ -1,5 +1,12 @@
 import { expect, it } from 'vitest';
-import { envHostId, isLocalHost, isRuntimeHostId, parseHostId, runtimeHostId } from './host-id.ts';
+import {
+  envHostId,
+  isLocalHost,
+  isRuntimeHostId,
+  parseHostId,
+  readableHostId,
+  runtimeHostId,
+} from './host-id.ts';
 
 it('builds Orca runtime ids with an encoded environment id and ours without', () => {
   expect(runtimeHostId('E1')).toBe('runtime:E1');
@@ -23,4 +30,11 @@ it('parses kinds and keeps the reference byte for byte, encoded or not', () => {
   expect(parseHostId('env:env 1')).toEqual({ kind: 'env', ref: 'env 1' });
   expect(parseHostId('wsl:x')).toEqual({ kind: 'unknown', ref: 'wsl:x' });
   expect(parseHostId('')).toEqual({ kind: 'unknown', ref: '' });
+});
+
+it('shows a host id without prefix, decoded, and survives a broken escape', () => {
+  expect(readableHostId('ssh:build%201')).toBe('build 1');
+  expect(readableHostId('env:silver')).toBe('silver');
+  expect(readableHostId('runtime:%E0%A4%A')).toBe('%E0%A4%A');
+  expect(readableHostId('local')).toBe('This machine');
 });

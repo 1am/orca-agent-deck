@@ -275,4 +275,10 @@ describe('doctor v2 checks', () => {
     expect(by({ hostsDown: [] }, 'remote-hosts')[0]?.result).toBe('ok');
     expect(by({}, 'remote-hosts')).toEqual([]);
   });
+
+  it('the Status key and the list agree: the same warn row, naming the hosts', () => {
+    const checks = runChecks({ ...good, hostsDown: ['build-1', 'nas'] });
+    expect(doctorInfo(checks, { ...ok, hostsDown: 2 }).caption).toBe('2 hosts down');
+    expect(worstCheck(checks)?.reason).toContain('build-1, nas');
+  });
 });

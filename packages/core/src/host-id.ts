@@ -29,3 +29,14 @@ export function parseHostId(hostId: string): { kind: HostIdKind; ref: string } {
   }
   return { kind: 'unknown', ref: hostId };
 }
+
+/** A host id as a person would read it when Orca gave no name: the decoded id without its prefix. */
+export function readableHostId(hostId: string): string {
+  const { kind, ref } = parseHostId(hostId);
+  if (kind === 'local') return 'This machine';
+  try {
+    return decodeURIComponent(ref);
+  } catch {
+    return ref;
+  }
+}

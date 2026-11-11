@@ -1,5 +1,5 @@
 import type { OrcaAdapter, PaneInfo, PaneStatusEvent, Snapshot } from './adapter.ts';
-import { isLocalHost, LOCAL_HOST } from './host-id.ts';
+import { isLocalHost, LOCAL_HOST, readableHostId } from './host-id.ts';
 import { splitPaneKey } from './pane-key.ts';
 import { MappingStore, type PaneBinding, type SlotPosition } from './mapping.ts';
 import { PaneRegistry } from './registry.ts';
@@ -39,6 +39,8 @@ export interface Overview {
   unsupported: boolean;
   /** Hosts whose panes are currently missing. */
   hostsDown: number;
+  /** The same hosts by name (alias, Orca's name, else the id), for the Setup list. */
+  hostsDownNames: string[];
   /** Number of panes that need the user (needs_input, awaiting_reply, error). */
   urgent: number;
   /** State of the most urgent pane; null when nothing is urgent. */
@@ -212,6 +214,11 @@ export class DeckController {
 
   private hostName(hostId: string | undefined, name?: string | null): string | null {
     return hostLabel(hostId, (hostId && this.hostAliases[hostId]?.trim()) || name);
+  }
+
+  private downHostName(hostId: string): string {
+    const seen = this.remotePanes.get(hostId)?.find((p) => p.hostName)?.hostName;
+    return this.hostAliases[hostId]?.trim() || seen || readableHostId(hostId);
   }
 
   /** Optional trace of mapping changes and slow refreshes, for the plugin log. Ids only, never content. */
@@ -589,12 +596,14 @@ export class DeckController {
   overview(): Overview {
     const urgent = this.urgentPanes();
     const onKeys = this.store.mappedPaneKeys();
+    // Omitted hosts keep their keys' last known state; only hosts no listing reached are down.
+    const down = this.snapshot.downHostIds ?? this.snapshot.omittedHostIds;
     return {
       mode: !this.orcaRunning ? 'down' : this.health.live ? 'live' : 'degraded',
       version: this.health.version,
       unsupported: this.health.unsupported,
-      // Omitted hosts keep their keys' last known state; only hosts no listing reached are down.
-      hostsDown: (this.snapshot.downHostIds ?? this.snapshot.omittedHostIds).length,
+      hostsDown: down.length,
+      hostsDownNames: down.map((id) => this.downHostName(id)),
       urgent: urgent.length,
       topState: urgent[0]?.state ?? null,
       offDeck: urgent.filter((u) => !onKeys.has(u.pane.paneKey)).length,
