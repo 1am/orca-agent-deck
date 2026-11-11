@@ -7,7 +7,8 @@ All notable changes to this project are documented here. Format: [Keep a Changel
 ### Added
 
 - **orca-plugin:** an Agent Deck panel in Orca's right sidebar with the deck as a grid of keys: a click puts the focused pane on a key (a key that shows a pane asks to replace it, or unmaps it). Bridge protocol minor 1 carries it (the major stays 1; an older Stream Deck plugin ignores the new frames and the panel says to update it).
-- **orca-plugin:** keyboard shortcuts for "Agent Deck: Map pane to key" (Cmd+Alt+K, Ctrl+Alt+K on Windows and Linux) and "Agent Deck: Unmap pane" (with Shift). Orca lets you change them in its shortcut settings.
+- **orca-plugin:** keyboard shortcuts for "Agent Deck: Map pane to key" (Cmd+Alt+K, Ctrl+Alt+K on Windows and Linux) and "Agent Deck: Unmap pane" (with Shift). Orca lets you change them in its shortcut settings. Orca does not run plugin shortcuts while a terminal has the keyboard (see `docs/known-issues.md`).
+- **orca-plugin:** a "Map pane" button in Orca's status bar runs "Map pane to key" for the terminal pane you focused last. It reads "Deck offline", "No Stream Deck" or "Update Agent Deck" when mapping cannot work.
 - **streamdeck:** tells the Elgato Stream Deck app from OpenDeck on macOS, Windows and Linux, and the Setup tab has a "Stream Deck app" row with what it concluded. The log line `host:` carries the same.
 - **streamdeck:** key mappings survive switching between the Elgato app and OpenDeck. A key at the same position inherits the mapping of the vanished one even though the other app names the device differently.
 - **streamdeck:** when the Orca plugin is not installed, the Status key says "Install the Orca plugin" and the Setup tab has a button that opens the install link in Orca. The deck keeps working from polled status meanwhile.
@@ -20,7 +21,10 @@ All notable changes to this project are documented here. Format: [Keep a Changel
 
 ### Changed
 
-- **orca-plugin:** needs Orca 1.4.246 or newer. The manifest no longer declares `publisher`, which Orca deprecated and now takes from the repository owner. On Orca 1.4.245, the catalog keeps offering v0.2.1.
+- **orca-plugin:** needs Orca 1.4.248 or newer (for the status bar button). The manifest no longer declares `publisher`, which Orca deprecated and now takes from the repository owner. On older Orca, the catalog keeps offering v0.2.1.
+- **streamdeck:** "hosts down" counts only hosts that showed something in Orca (a worktree, a terminal or an agent) the last time they answered, or that a key is mapped to. A configured SSH host or paired server you do not use no longer counts.
+- **streamdeck:** on Windows a key press brings Orca to the front: the plugin asks Orca to reveal the pane, and Orca raises its own window.
+- **streamdeck:** while mapping a pane, free keys show their number and "Assign here" (the pane name, cut to 14 characters, said little).
 - **streamdeck:** a key waiting for permission always reads "needs you". It used to read the tool name when the status came from polling and "needs you" when Orca pushed it.
 - **streamdeck:** the working spinner turns in eighths at 4 frames per second while at most 2 keys are working and at 2 with more (as before), because Elgato asks for about 10 image updates per second in total. Ticks with nothing to animate no longer repaint.
 - **streamdeck:** key text prefers Liberation Sans and DejaVu Sans, so labels lay out the same on Linux and Windows hosts that lack Helvetica.

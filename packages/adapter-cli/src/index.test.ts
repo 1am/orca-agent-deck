@@ -29,6 +29,50 @@ it('focus returns ok', async () => {
   ).toEqual({ ok: true });
 });
 
+it('revealLocal focuses a local pane through terminal reveal, without an execution host', async () => {
+  const calls: string[][] = [];
+  const exec: Exec = async (args) => {
+    calls.push(args);
+    return JSON.stringify({ ok: true, result: { reveal: { navigated: true } } });
+  };
+  const a = new CliAdapter(exec);
+  a.revealLocal = true;
+  const pane = { paneKey: 't1:l1', hostId: 'local', handle: 'h', worktreeId: 'w1' };
+  expect(await a.focus(pane)).toEqual({ ok: true });
+  expect(calls).toEqual([
+    ['terminal', 'reveal', '--worktree', 'w1', '--tab', 't1', '--leaf', 'l1', '--json'],
+  ]);
+});
+
+it('revealLocal falls back to terminal switch when reveal is not available', async () => {
+  const calls: string[] = [];
+  const exec: Exec = async (args) => {
+    calls.push(args.slice(0, 2).join(' '));
+    if (args[1] === 'reveal') throw new Error('reveal needs the runtime socket');
+    return fixtureExec(args);
+  };
+  const a = new CliAdapter(exec);
+  a.revealLocal = true;
+  const pane = { paneKey: 't1:l1', hostId: 'local', handle: 'h', worktreeId: 'w1' };
+  expect(await a.focus(pane)).toEqual({ ok: true });
+  expect(calls).toEqual(['terminal reveal', 'terminal switch']);
+});
+
+it('focus of a local pane uses terminal switch unless revealLocal is set', async () => {
+  const calls: string[] = [];
+  const exec: Exec = async (args) => {
+    calls.push(args.slice(0, 2).join(' '));
+    return fixtureExec(args);
+  };
+  await new CliAdapter(exec).focus({
+    paneKey: 't1:l1',
+    hostId: 'local',
+    handle: 'h',
+    worktreeId: 'w1',
+  });
+  expect(calls).toEqual(['terminal switch']);
+});
+
 it('focus reports errors instead of throwing', async () => {
   const bad: Exec = async () => {
     throw new Error('boom');
@@ -79,6 +123,25 @@ it('keeps the union of omissions for state, and counts only hosts no listing rea
   expect(s.omittedHostIds).toEqual(['ssh:build', 'runtime:peer']);
   // Only the host no listing reached counts as down.
   expect(s.downHostIds).toEqual(['runtime:peer']);
+});
+
+it('reports the hosts a read shows a worktree or terminal on as busy', async () => {
+  const exec: Exec = async (args) => {
+    const k = args.slice(0, 2).join(' ');
+    if (k === 'host list') return JSON.stringify({ ok: true, result: { hosts: [] } });
+    if (k === 'worktree ps')
+      return JSON.stringify({
+        ok: true,
+        result: {
+          worktrees: [{ worktreeId: 'w', hostId: 'ssh:box', agents: [] }],
+          hostScope: { hostIds: ['local', 'ssh:box', 'ssh:idle'], omittedHostIds: [] },
+        },
+      });
+    if (k === 'terminal list') return JSON.stringify({ ok: true, result: { terminals: [] } });
+    throw new Error(`unexpected ${k}`);
+  };
+  const s = await new CliAdapter(exec).snapshot();
+  expect(s.busyHostIds).toEqual(['ssh:box']);
 });
 
 it('health is down when orca is unreachable', async () => {
@@ -154,6 +217,8 @@ it('queries paired environments with --environment and focuses with it', async (
   expect(remote[0]?.hostId).toBe('env:E1');
   expect(s.omittedHostIds).toEqual([]);
   expect(s.downHostIds).toEqual([]);
+  // The server's own `local` rows are the server's.
+  expect(s.busyHostIds).toContain('env:E1');
   await a.focus(remote[0]!);
   expect(calls.at(-1)).toContain('E1');
 });

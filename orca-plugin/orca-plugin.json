@@ -18,7 +18,7 @@
     }
   ],
   "engines": {
-    "orca": ">=1.4.246"
+    "orca": ">=1.4.248"
   },
   "main": "main.mjs",
   "capabilities": [
@@ -67,6 +67,15 @@
         "icon": "agent",
         "entry": "panel.jsx",
         "ui": "components"
+      }
+    ],
+    "statusBarItems": [
+      {
+        "id": "deck",
+        "icon": "link",
+        "text": "Map pane",
+        "tooltip": "Agent Deck: map the last focused terminal pane to a Stream Deck key",
+        "command": "deck.map"
       }
     ],
     "keybindings": [

@@ -176,7 +176,7 @@ export function runChecks(f: DoctorFacts): Check[] {
       reason:
         'Reading Orca through the orca CLI, which is slow (the runtime socket is not answering); see the plugin log for the reason',
       caption: 'slow link (CLI)',
-      hint: 'Restart Orca, or check that Orca 1.4.246+ is running as the same user',
+      hint: 'Restart Orca, or check that Orca 1.4.248+ is running as the same user',
     });
   } else if (f.liveLink === 'socket') {
     checks.push({

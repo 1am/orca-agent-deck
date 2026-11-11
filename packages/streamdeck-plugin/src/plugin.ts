@@ -53,16 +53,16 @@ async function createController(): Promise<DeckController> {
     const r = await raiser.raise();
     streamDeck.logger.info(`raise ok=${r.ok} ms=${r.ms}${r.error ? ` error=${r.error}` : ''}`);
   };
+  // Steady state reads the runtime socket (no process spawns); the CLI is the degraded fallback.
+  const orca = createRuntimeAdapter({
+    fallback: makeExec(),
+    onFallback: (r) => streamDeck.logger.warn(`runtime socket unusable, using CLI: ${r}`),
+    onRecover: () => streamDeck.logger.info('runtime socket back, CLI fallback off'),
+  });
+  // Windows does not let the plugin raise Orca; Orca's reveal raises its own window.
+  orca.revealLocal = process.platform === 'win32';
   const deck = new DeckController(
-    new BridgedAdapter(
-      // Steady state reads the runtime socket (no process spawns); the CLI is the degraded fallback.
-      createRuntimeAdapter({
-        fallback: makeExec(),
-        onFallback: (r) => streamDeck.logger.warn(`runtime socket unusable, using CLI: ${r}`),
-        onRecover: () => streamDeck.logger.info('runtime socket back, CLI fallback off'),
-      }),
-      statusFeed,
-    ),
+    new BridgedAdapter(orca, statusFeed),
     store,
     raise,
     // Off for 0.1.0: it did not fill keys on a second machine. Keys show pinned panes only.

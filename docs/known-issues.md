@@ -22,6 +22,17 @@ Checked: 2026-11-11.
 - **Deck impact.** None at runtime. A panel cannot be type-checked against Orca's typings here, so the panel in this repository is plain JSX checked with `orca plugin check` and `orca plugin test`, and its API was read from Orca's shipped schemas.
 - **Workaround.** None needed. Re-check on each Orca update and report upstream if it persists.
 
+## Orca plugin shortcuts
+
+Checked: 2026-11-11 (Orca 1.4.251, not reported upstream).
+
+### Plugin shortcuts do not fire while a terminal has the keyboard
+
+- **What.** Orca runs a plugin's `contributes.keybindings` only when the key press does not come from a terminal: its key handler tells the terminal (xterm's input) from the rest of the window and skips plugin shortcuts for the terminal. Any chord is affected, not only Cmd+Alt+K. Orca's own shortcuts are not.
+- **Deck impact.** "Map pane to key" (Cmd+Alt+K, Ctrl+Alt+K) and "Unmap pane" (with Shift) do nothing while you type in a terminal pane, which is where you are when you want to map it. They work with the sidebar or an editor focused.
+- **Workaround.** Click "Map pane" in Orca's status bar, click a key in the Agent Deck panel in the right sidebar, or run "Agent Deck: Map pane to key" from the command palette. All three take the terminal pane you focused last.
+- **Upstream.** Needs Orca to offer plugin shortcuts in terminals too (as it does for its own, under the terminal shortcut policy).
+
 ## Paired Orca servers
 
 Checked: 2026-11-06.

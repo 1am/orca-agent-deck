@@ -160,6 +160,8 @@ export class DeckController {
   private lastKnown = new Map<string, DeckState>();
   /** Last seen panes per remote host, so the picker keeps listing a host that drops out for a poll. */
   private remotePanes = new Map<string, PaneInfo[]>();
+  /** Hosts that showed something (worktree, terminal, agent) the last time they answered: only these count as down. */
+  private busyHosts = new Set<string>();
   /**
    * Panes the user took off a key (hold release, picker clear) -> their host and that key.
    * Auto-fill skips them until they are pinned again, their key goes back to auto, or they are
@@ -327,6 +329,7 @@ export class DeckController {
     for (const [h, list] of byHost) this.remotePanes.set(h, list);
     for (const h of [...this.remotePanes.keys()])
       if (!byHost.has(h) && !snap.omittedHostIds.includes(h)) this.remotePanes.delete(h);
+    if (this.orcaRunning && snap.busyHostIds) this.trackBusyHosts(snap);
     // A pane that is only temporarily missing (host down) must keep its mapping.
     const keep = new Set(snap.panes.map((p) => p.paneKey));
     for (const s of slots) {
@@ -641,12 +644,33 @@ export class DeckController {
     return this.store.mappedCount();
   }
 
+  /** A host that answered keeps its mark only while it shows something; one that is down keeps the last one. */
+  private trackBusyHosts(snap: Snapshot): void {
+    const busy = new Set(snap.busyHostIds);
+    const quiet = new Set([...snap.omittedHostIds, ...(snap.downHostIds ?? [])]);
+    for (const h of busy) this.busyHosts.add(h);
+    for (const h of [...this.busyHosts])
+      if (!busy.has(h) && !quiet.has(h)) this.busyHosts.delete(h);
+  }
+
+  /**
+   * Down hosts that matter: ones that showed something when they last answered, or that a key is
+   * mapped to (that survives a restart while the host is down). A configured host the user does
+   * not use is not "down".
+   */
+  private downHostsInUse(): string[] {
+    const down = this.snapshot.downHostIds ?? this.snapshot.omittedHostIds;
+    if (!this.snapshot.busyHostIds) return down;
+    const mapped = new Set(this.store.bindings().map((b) => b.executionHostId ?? LOCAL_HOST));
+    return down.filter((h) => this.busyHosts.has(h) || mapped.has(h));
+  }
+
   /** Health plus urgent count, from the latest refresh. */
   overview(): Overview {
     const urgent = this.urgentPanes();
     const onKeys = this.store.mappedPaneKeys();
     // Omitted hosts keep their keys' last known state; only hosts no listing reached are down.
-    const down = this.snapshot.downHostIds ?? this.snapshot.omittedHostIds;
+    const down = this.downHostsInUse();
     return {
       mode: !this.orcaRunning ? 'down' : this.health.live ? 'live' : 'degraded',
       version: this.health.version,

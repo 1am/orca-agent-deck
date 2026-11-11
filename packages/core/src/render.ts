@@ -301,10 +301,11 @@ export function renderKey(m: KeyModel, o: RenderOptions = {}): string {
   // from every other key at a glance and keeps its state colour in the frame.
   const pal = m.focused ? { bg: FOCUS_BG, fg: base.fg } : base;
   const { lines, size: fs } = layoutLabel(m.keyNumber ? `${m.keyNumber}: ${m.label}` : m.label);
-  // Pairing mode: a big number to find the key by, the label as one short line under it.
+  // Pairing mode: a big number to find the key by and "Assign here" under it (a pane label cut to
+  // 14 characters said little; the pane is the one focused in Orca).
   const big = m.bigNumber
     ? `<text x="72" y="100" font-size="${m.bigNumber.length > 2 ? 56 : 72}" font-weight="700" text-anchor="middle">${esc(m.bigNumber)}</text>` +
-      `<text x="72" y="130" font-size="14" text-anchor="middle">${esc(ellipsis(m.label, 14))}</text>`
+      `<text x="72" y="130" font-size="14" text-anchor="middle">Assign here</text>`
     : '';
   // Pane name fills the box below the top line, top-aligned.
   const text = m.bigNumber

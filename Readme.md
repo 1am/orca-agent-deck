@@ -11,7 +11,7 @@ https://github.com/user-attachments/assets/1dfea071-0276-4011-b159-7916241eb2ca
 ## Features
 
 - Pane key shows each pane's state (working, needs input, awaiting reply, done, error, offline).
-- Press a pane key to focus that pane in Orca; hold to assign the current pane, or press Cmd+Alt+K (Ctrl+Alt+K on Windows and Linux) in Orca and then the key. Cmd+Alt+Shift+K (Ctrl+Alt+Shift+K) unmaps a pane. Both are in Orca's keyboard shortcuts settings, where you can change them.
+- Press a pane key to focus that pane in Orca; hold to assign the current pane, or click "Map pane" in Orca's status bar (or a key in the Agent Deck sidebar panel) and then the key. Cmd+Alt+K (Ctrl+Alt+K on Windows and Linux) does the same and Cmd+Alt+Shift+K (Ctrl+Alt+Shift+K) unmaps a pane, but Orca runs plugin shortcuts only outside terminals (see `docs/known-issues.md`).
 - The Agent Deck panel in Orca's right sidebar shows the connected deck as a grid of keys: click an empty key to put the pane that is focused in Orca on it, click a mapped key to replace or unmap it. It needs the Stream Deck plugin and the Orca plugin from the same release.
 - Status key displays setup checks.
 - Attention key counts panes that need you.
@@ -26,7 +26,7 @@ https://github.com/user-attachments/assets/1dfea071-0276-4011-b159-7916241eb2ca
 ## Requirements
 
 - macOS 13 or newer, Windows 10 or newer, or Linux (tested on Ubuntu 22.04). Pane raising on press works on macOS, and on Linux under X11 with `xdotool` or `wmctrl` installed.
-- Orca 1.4.246 or newer, with the `orca` shell command registered (Orca: Settings, register CLI).
+- Orca 1.4.248 or newer, with the `orca` shell command registered (Orca: Settings, register CLI).
 - The Elgato Stream Deck app 7.1 or newer (macOS, Windows) or [OpenDeck](https://github.com/nekename/opendeck) (Linux), and a Stream Deck (hardware or Stream Deck Mobile).
 
 Agent Deck for Orca has two parts and needs both: a **Stream Deck plugin** (draws the keys, talks to Orca) and a small **Orca plugin** (pushes agent status to the deck as it changes).

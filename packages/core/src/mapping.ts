@@ -215,7 +215,12 @@ export class MappingStore {
   }
 
   mappedPaneKeys(): Set<string> {
-    return new Set(Object.values(this.slots).flatMap((s) => (s.pane ? [s.pane.paneKey] : [])));
+    return new Set(this.bindings().map((b) => b.paneKey));
+  }
+
+  /** The pane of every mapped slot. */
+  bindings(): PaneBinding[] {
+    return Object.values(this.slots).flatMap((s) => (s.pane ? [s.pane] : []));
   }
 
   /**

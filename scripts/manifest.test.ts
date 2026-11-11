@@ -8,6 +8,7 @@ const read = (file: string) =>
     contributes: {
       commands: { id: string; when?: string }[];
       keybindings: { command: string; key: string; when?: string }[];
+      panels: { entry: string }[];
     };
   };
 
@@ -25,8 +26,13 @@ it('every shortcut belongs to a command the plugin contributes, once per chord',
   expect(new Set(chords).size).toBe(chords.length);
 });
 
-it('the repository-root manifest carries the same contributions', () => {
-  expect(read('orca-plugin.json').contributes).toEqual(
-    read('orca-plugin/orca-plugin.json').contributes,
-  );
+it('the repository-root manifest carries the same contributions, with panel files under orca-plugin/', () => {
+  const plugin = read('orca-plugin/orca-plugin.json').contributes;
+  expect(read('orca-plugin.json').contributes).toEqual({
+    ...plugin,
+    panels: plugin.panels.map((p) => ({
+      ...p,
+      entry: `orca-plugin/${p.entry}`,
+    })),
+  });
 });

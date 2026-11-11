@@ -175,6 +175,7 @@ export function createBridge({
   handshakeMs = HANDSHAKE_MS,
   onAck = () => {},
   onMessage: onBridgeMessage = () => {},
+  onChange = () => {},
 }) {
   let ws = null;
   let state = 'disconnected';
@@ -189,8 +190,10 @@ export function createBridge({
   let delay = retryMs;
 
   const setState = (s) => {
-    if (s !== state) log(`bridge: ${state} -> ${s}`);
+    if (s === state) return;
+    log(`bridge: ${state} -> ${s}`);
     state = s;
+    onChange();
   };
   const schedule = () => {
     if (stopped || timer) return;
@@ -234,6 +237,7 @@ export function createBridge({
         // after B proved it knows the token: anything else on the port can say anything, and is ignored below.
         if (proven && msg && typeof msg === 'object' && msg.v !== PROTOCOL_VERSION) {
           versionNote = `B speaks bridge ${String(msg.v)}, this plugin ${PROTOCOL_VERSION}`;
+          onChange();
           log(
             `bridge: ${versionNote}: update Agent Deck for Orca (both plugins from the same release)`,
           );
@@ -277,6 +281,7 @@ export function createBridge({
           peerMinor = Number.isInteger(msg.minor) && msg.minor > 0 ? msg.minor : 0;
           session++;
           log('connected to Agent Deck for Orca');
+          onChange();
           onAck(msg);
         } else if (msg?.type) {
           onBridgeMessage(msg);
@@ -287,8 +292,8 @@ export function createBridge({
       onClose: () => {
         clearTimeout(deadline);
         if (ws === socket) ws = null;
-        if (state !== 'b-not-running') setState('disconnected');
         deck = null;
+        if (state !== 'b-not-running') setState('disconnected');
         schedule();
       },
     });
@@ -664,6 +669,39 @@ export function statusSummary({ state, deck, seen, tracked, ago, versionNote = n
   return body.slice(0, 200 - tail.length) + tail;
 }
 
+const STATUS_ITEM = 'deck';
+const MAP_TIP =
+  'Agent Deck: map the last focused terminal pane to a Stream Deck key (the shortcut does not fire while a terminal has the keyboard)';
+
+/**
+ * The status bar button (`contributes.statusBarItems`, id `deck`): it always runs Map pane, and its
+ * text says when that cannot work. Null while connecting, so a reconnect does not flicker.
+ * `deckConnected` is the last `deckState` of this connection, else what `helloAck` said.
+ */
+export function statusBarItem({ state, deck, versionNote = null, deckConnected = null }) {
+  if (versionNote)
+    return {
+      text: 'Update Agent Deck',
+      tone: 'warning',
+      tooltip: 'The Orca and Stream Deck plugins are from different releases: update both',
+    };
+  if (state === 'connecting') return null;
+  if (state !== 'connected')
+    return {
+      text: 'Deck offline',
+      tone: 'warning',
+      tooltip:
+        'Agent Deck: the Stream Deck plugin is not running (open the Elgato app or OpenDeck)',
+    };
+  if (!(deckConnected ?? deck?.connected ?? false))
+    return {
+      text: 'No Stream Deck',
+      tone: 'warning',
+      tooltip: 'Agent Deck: the Stream Deck app shows no device with Agent Deck keys',
+    };
+  return { text: 'Map pane', tone: 'neutral', tooltip: MAP_TIP };
+}
+
 /** How long the panel waits for the deck's state, and for the result of a click. */
 const DECK_WAIT_MS = 2000;
 const RESULT_WAIT_MS = 10_000;
@@ -763,19 +801,42 @@ export default async function activate(orca) {
   const pairing = { id: null, last: null, reason: null };
   // The panel's calls are registered once the bridge exists; its messages arrive before that only if B is fast.
   let panelApi = { onMessage: () => {} };
+  // Orca before 1.4.248 has no status bar for plugins; the button is a convenience, never an error.
+  const canShowItem = orca.host?.has?.('statusBar.update') === true;
+  let shownItem = '';
+  let lastDeck = { session: -1, connected: null };
+  const updateItem = () => {
+    if (!canShowItem) return;
+    const s = bridge.status();
+    const item = statusBarItem({
+      ...s,
+      deckConnected: lastDeck.session === s.session ? lastDeck.connected : null,
+    });
+    const sig = JSON.stringify(item);
+    if (!item || sig === shownItem) return;
+    shownItem = sig;
+    orca.host.call('statusBar.update', { id: STATUS_ITEM, ...item }).catch((e) => {
+      shownItem = '';
+      log(`status bar: update failed (${e?.message ?? e})`);
+    });
+  };
   const bridge = createBridge({
     orcaVersion: orca.api ? `api ${orca.api.major}.${orca.api.minor}` : 'unknown',
     log,
     onAck: () => forwarder?.replay(),
+    onChange: () => updateItem(),
     onMessage: (msg) => {
       recorder.frame('b', msg);
       panelApi.onMessage(msg);
+      if (msg.type === 'deckState') {
+        lastDeck = { session: bridge.status().session, connected: msg.connected === true };
+        updateItem();
+      }
       if (msg.type === 'requestSnapshot') forwarder?.replay();
       else if (msg.type === 'pairResult' && msg.requestId === pairing.id) {
         pairing.id = null;
-        pairing.last = msg.ok
-          ? `mapped to key ${msg.slot?.index} (page ${msg.slot?.page})`
-          : msg.reason;
+        // No page: the Stream Deck SDK does not tell which profile page shows, so it is always 1.
+        pairing.last = msg.ok ? `mapped to key ${msg.slot?.index}` : msg.reason;
         pairing.reason = msg.ok ? null : msg.reason;
         log(`pairing: ${msg.ok ? pairing.last : `not mapped (${msg.reason})`}`);
       }
@@ -815,6 +876,7 @@ export default async function activate(orca) {
     forwarder.onWorkspace('removed', ev);
   });
   await bridge.ensure();
+  updateItem();
   // The feedback that matters is on the deck; the returned string is only the palette toast.
   const sendPairing = (type) => async () => {
     await bridge.ensure();

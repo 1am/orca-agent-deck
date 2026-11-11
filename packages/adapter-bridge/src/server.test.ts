@@ -34,6 +34,7 @@ const plugin = (await import(pluginPath.href)) as {
     size: () => number;
   };
   toAgentStatus: (ev: object, now?: number) => Record<string, unknown> | null;
+  statusBarItem: (s: Record<string, unknown>) => { text: string; tone: string } | null;
   default: (orca: unknown) => Promise<void>;
 };
 
@@ -768,6 +769,63 @@ describe('plugin A activate() and the Show status command', () => {
       await new Promise((r) => setTimeout(r, 100));
       expect(received.map((m) => m.type)).toEqual(['pairRequest', 'unmapRequest']);
     }
+  });
+});
+
+describe('status bar button', () => {
+  it.each([
+    [{ state: 'connected', deck: { connected: true } }, 'Map pane'],
+    [{ state: 'connected', deck: { connected: false } }, 'No Stream Deck'],
+    // The last deckState of this connection wins over what helloAck said.
+    [{ state: 'connected', deck: { connected: false }, deckConnected: true }, 'Map pane'],
+    [{ state: 'b-not-running', deck: null }, 'Deck offline'],
+    [{ state: 'disconnected', deck: null }, 'Deck offline'],
+    [{ state: 'disconnected', deck: null, versionNote: 'B speaks bridge 2' }, 'Update Agent Deck'],
+  ])('%o shows %s', (status, text) => {
+    expect(plugin.statusBarItem(status)?.text).toBe(text);
+  });
+
+  it('keeps the last text while connecting, so a reconnect does not flicker', () => {
+    expect(plugin.statusBarItem({ state: 'connecting', deck: null })).toBeNull();
+  });
+
+  it('activate() sets the button from the link, once per change, and skips an Orca without a status bar', async () => {
+    await server.start();
+    const updates: { id: string; text: string }[] = [];
+    const base = {
+      log: () => {},
+      commands: { register: () => {} },
+      events: { on: () => {} },
+    };
+    fakeUserDirs();
+    const { writeDiscovery, defaultDiscoveryPath } = await import('./discovery.ts');
+    const d = await readDiscovery(discoveryPath);
+    await writeDiscovery(defaultDiscoveryPath(), d!);
+    vi.resetModules();
+    const fresh = (await import(`${pluginPath.href}?fresh=${Date.now()}`)) as typeof plugin;
+    await fresh.default({
+      ...base,
+      host: {
+        has: (m: string) => m === 'statusBar.update',
+        call: async (m: string, p: { id: string; text: string }) => {
+          if (m === 'statusBar.update') updates.push(p);
+          return { ok: true };
+        },
+      },
+    });
+    await new Promise((r) => setTimeout(r, 200));
+    expect(updates.at(-1)).toMatchObject({ id: 'deck', text: 'Map pane', tone: 'neutral' });
+    expect(new Set(updates.map((u) => u.text)).size).toBe(updates.length);
+    // Orca before 1.4.248: no host call at all.
+    const calls: string[] = [];
+    vi.resetModules();
+    const older = (await import(`${pluginPath.href}?older=${Date.now()}`)) as typeof plugin;
+    await older.default({
+      ...base,
+      host: { has: () => false, call: async (m: string) => calls.push(m) },
+    });
+    await new Promise((r) => setTimeout(r, 100));
+    expect(calls).toEqual([]);
   });
 });
 
