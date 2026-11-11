@@ -40,9 +40,18 @@ Versions and platforms that have been tested: [compatibility](compatibility.md).
 - `orca-agent-deck-<version>.streamDeckPlugin` - the Stream Deck plugin
 - `orca-agent-deck-orca-plugin-<version>.zip` - the Orca plugin, for the offline install only
 - `collect-diagnostics.mjs` - for bug reports (see Logs); needs Node 18 or newer
-- `SHA256SUMS` - check with `shasum -a 256 -c SHA256SUMS` (`sha256sum -c SHA256SUMS` on Linux)
+- `SHA256SUMS` - check with `shasum -a 256 -c SHA256SUMS` (`sha256sum -c SHA256SUMS` on Linux; see Verify the download)
 
-The packages are unsigned, so macOS may warn when you open them.
+The packages are not notarized by Apple (no native code), so macOS may warn when you open them; see Verify the download for who built them.
+
+## Verify the download
+
+Every release file is signed by GitHub as built from this repository's release workflow (build attestation).
+
+1. With the [GitHub CLI](https://cli.github.com): `gh attestation verify <file> --repo 1am/orca-agent-deck`. It must say the verification succeeded.
+2. Without it: `shasum -a 256 -c SHA256SUMS` in the folder with the downloads (this checks the files against the list, not who made the list).
+
+A changed file fails both checks. The Orca plugin installed from the catalog needs neither: Orca pins the commit.
 
 ## Offline install of the Orca plugin
 
@@ -58,8 +67,8 @@ If your agents run inside tmux, read `docs/working-with-tmux.md` first. The refe
 
 ## Logs
 
-- Orca plugin: `~/.orca-deck/plugin-a.log`, or `orca plugin logs 1am.agent-deck`. "Agent Deck: Show status" shows a one-line summary as a toast and writes the details to the log. Orca's Logs pane in the plugin settings is read once when opened and does not refresh.
-- Stream Deck plugin: `~/Library/Application Support/com.elgato.StreamDeck/Plugins/pl.1am.orca-agent-deck.sdPlugin/logs/` (`pl.1am.orca-agent-deck.0.log` is the newest). `~/Library/Logs/ElgatoStreamDeck/` holds only the Elgato app's own log.
+- Orca plugin: `~/.orca-deck/plugin-a.log` (on Windows `%APPDATA%\orca-deck\plugin-a.log`), or `orca plugin logs 1am.agent-deck`. "Agent Deck for Orca: Show status" shows a one-line summary as a toast and writes the details to the log. Orca's Logs pane in the plugin settings is read once when opened and does not refresh.
+- Stream Deck plugin: `~/Library/Application Support/com.elgato.StreamDeck/Plugins/pl.1am.orca-agent-deck.sdPlugin/logs/` (`pl.1am.orca-agent-deck.0.log` is the newest). `~/Library/Logs/ElgatoStreamDeck/` holds only the Elgato app's own log. On Windows the Elgato app's plugins are in `%APPDATA%\Elgato\StreamDeck\Plugins\`. OpenDeck writes the plugin's log to `<its log dir>/plugins/pl.1am.orca-agent-deck.sdPlugin.log` (macOS `~/Library/Logs/opendeck`, Windows `%LOCALAPPDATA%\opendeck\logs`, Linux `~/.local/share/opendeck/logs`).
 - When reporting a problem, run `node collect-diagnostics.mjs` (from the release files; in a clone `pnpm diagnostics`) and attach the file it writes. It collects versions and both plugin logs with tokens, home paths and e-mail addresses removed.
 
 ## Uninstall

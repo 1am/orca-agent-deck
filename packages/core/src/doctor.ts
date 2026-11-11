@@ -1,5 +1,6 @@
 import type { DeckState } from './status.ts';
 import type { InfoModel } from './render.ts';
+import type { DeckHostInfo } from './host.ts';
 
 export type CheckResult = 'ok' | 'warn' | 'fail';
 export type CheckId =
@@ -11,13 +12,26 @@ export type CheckId =
   | 'orca-plugin'
   | 'tmux-env'
   | 'hooks'
+  | 'deck-host'
   | 'device'
   | 'remote-hosts';
 
+/**
+ * Orca's install link for plugin A (`orca://plugins/<publisher.id>?catalog=<official|community|git URL>`, parsed by
+ * Orca's plugin-install-link); the same link as docs/install.md.
+ */
+export const ORCA_PLUGIN_INSTALL_URL =
+  'orca://plugins/1am.agent-deck?catalog=https://github.com/1am/orca-agent-deck.git';
+
+/** The Node major the plugin needs (the Elgato app's bundled Node, and what OpenDeck must find on the machine). */
+export const MIN_NODE_MAJOR = 20;
+
 /** A button next to a result: the surface (PI, Orca) runs the named action; core only names it. */
 export interface Fix {
-  action: 'enable-hooks' | 'install-profile' | 'open-orca-hosts' | 'download-host';
+  action: 'enable-hooks' | 'install-profile' | 'open-orca-hosts' | 'download-host' | 'open-url';
   label: string;
+  /** Link for `open-url`: the surface hands it to the host app, which opens it. */
+  url?: string;
   /** Harness id for `enable-hooks`. */
   harness?: string;
 }
@@ -55,8 +69,10 @@ export interface DoctorFacts {
   orcaPlugin?: 'connected' | 'asleep' | 'missing' | 'outdated' | null;
   /** Version A reported in `hello`, while connected. */
   orcaPluginVersion?: string | null;
-  /** Stream Deck host running plugin B; `unknown` when it cannot be told (see streamdeck-plugin host.ts). */
-  host?: 'elgato' | 'opendeck' | 'unknown' | null;
+  /** Stream Deck host running plugin B and the OS; `host: 'unknown'` when it cannot be told. */
+  host?: DeckHostInfo | null;
+  /** `process.version` of the running plugin; below 20 the Stream Deck app row warns. */
+  nodeVersion?: string;
   /**
    * Orca's agent hooks per harness. `not_installed` is a warning for Claude Code and Pi (no status
    * arrives), but not for Codex, which Orca tracks even then (development-changelog 2026-11).
@@ -197,9 +213,9 @@ export function runChecks(f: DoctorFacts): Check[] {
       label: 'Orca plugin',
       result: 'warn',
       reason:
-        'The installed Orca plugin is older than this Stream Deck plugin and cannot connect; the deck works with slower, polled status',
-      caption: 'Orca plugin outdated',
-      hint: 'Update the Orca plugin: both plugins must come from the same release',
+        'The Orca plugin and the Stream Deck plugin do not speak the same bridge version, so the Orca plugin cannot connect; the deck works with slower, polled status',
+      caption: 'Update Agent Deck for Orca',
+      hint: 'Update Agent Deck for Orca: both plugins must come from the same release (the older one needs the update)',
     });
   } else if (f.orcaPlugin === 'missing') {
     checks.push({
@@ -207,9 +223,10 @@ export function runChecks(f: DoctorFacts): Check[] {
       label: 'Orca plugin',
       result: 'warn',
       reason:
-        'The Agent Deck for Orca plugin has not connected; the deck works with slower, polled status',
-      caption: 'Orca plugin missing',
-      hint: 'Install or enable the Agent Deck for Orca plugin in Orca',
+        'The Agent Deck for Orca plugin is not installed (or is disabled) in Orca; the deck works with slower, polled status',
+      caption: 'Install the Orca plugin',
+      hint: 'Install it in Orca with the link, accept its access consent, then run "Agent Deck for Orca: Show status"',
+      fix: { action: 'open-url', label: 'Install the Orca plugin', url: ORCA_PLUGIN_INSTALL_URL },
     });
   } else if (f.orcaPlugin === 'connected' || f.orcaPlugin === 'asleep') {
     checks.push({
@@ -266,6 +283,38 @@ export function runChecks(f: DoctorFacts): Check[] {
       });
   }
 
+  if (f.host) {
+    const seen =
+      f.host.host === 'unknown'
+        ? `Host not recognised (app ${f.host.version || '?'}, ${f.host.os}); set ORCA_DECK_HOST to elgato or opendeck`
+        : `${f.host.host === 'elgato' ? 'Elgato Stream Deck' : 'OpenDeck'} ${f.host.version}, ${f.host.os} (by ${f.host.basis})`;
+    const node = f.nodeVersion ? `, Node ${f.nodeVersion.replace(/^v/, '')}` : '';
+    // OpenDeck runs plugins on the Node installed on the machine; the Elgato app brings Node 20.
+    const old =
+      f.nodeVersion !== undefined && Number(/^v?(\d+)/.exec(f.nodeVersion)?.[1]) < MIN_NODE_MAJOR;
+    checks.push(
+      old
+        ? {
+            id: 'deck-host',
+            label: 'Stream Deck app',
+            result: 'warn',
+            reason: `${seen}${node}: older than Node ${MIN_NODE_MAJOR}`,
+            caption: 'Node too old',
+            hint:
+              f.host.host === 'elgato'
+                ? `Update the Elgato Stream Deck app (it brings Node ${MIN_NODE_MAJOR})`
+                : `OpenDeck uses your system Node: install Node ${MIN_NODE_MAJOR}+`,
+          }
+        : {
+            id: 'deck-host',
+            label: 'Stream Deck app',
+            result: 'ok',
+            reason: `${seen}${node}`,
+            caption: '',
+          },
+    );
+  }
+
   if (f.devices) {
     checks.push(
       f.devices.connected === 0
@@ -276,7 +325,7 @@ export function runChecks(f: DoctorFacts): Check[] {
             reason: 'No Stream Deck device is connected',
             caption: 'no deck',
             hint: 'Connect a device, or quit the other Stream Deck host that holds it',
-            ...(f.host === 'unknown' || !f.host
+            ...(!f.host || f.host.host === 'unknown'
               ? {}
               : { fix: { action: 'download-host' as const, label: 'Get the Stream Deck app' } }),
           }

@@ -3,6 +3,7 @@ import {
   BridgeServer,
   BridgeStatusFeed,
   PluginInstallProbe,
+  portsFromEnv,
 } from '@orca-agent-deck/adapter-bridge';
 import { makeExec } from '@orca-agent-deck/adapter-cli';
 
@@ -16,7 +17,13 @@ const deckInfo = () => ({
     .filter((d) => d.isConnected)
     .map((d) => ({ model: String(d.type), keys: d.size.columns * d.size.rows })),
 });
+// `ORCA_DECK_BRIDGE_PORTS` replaces the default port range (see `portsFromEnv`); the replay suite uses it so test
+// instances never share a port with a running Agent Deck for Orca. A finds B through the discovery file only.
+const { ports, bad } = portsFromEnv(process.env.ORCA_DECK_BRIDGE_PORTS);
+if (bad)
+  streamDeck.logger.warn('ORCA_DECK_BRIDGE_PORTS is not a list of ports, using the default range');
 export const bridgeServer = new BridgeServer({
+  ...(ports ? { ports } : {}),
   deck: deckInfo,
   // Metadata only; the bridge never logs tokens or terminal content.
   log: (m) => streamDeck.logger.info(m),

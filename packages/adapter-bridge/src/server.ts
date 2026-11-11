@@ -142,6 +142,8 @@ export class BridgeServer {
       } catch (e) {
         if (e instanceof UnsupportedVersionError) {
           this.opts.log?.(`unsupported protocol version from A: ${String(e.received)}`);
+          // Reported like an A from before the handshake: the Setup doctor says to update.
+          this.outdatedPeerAt = Date.now();
           ws.close(4002, 'unsupported protocol version');
         } else if (!authed) {
           ws.close(4001, 'unauthorized');
