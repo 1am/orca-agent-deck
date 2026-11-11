@@ -63,11 +63,12 @@ export class PaneSlot extends SingletonAction {
     super();
     this.create = create;
     setInterval(() => void this.refresh(), 2000);
-    // Spinner advances a quarter turn per tick; keys without a spinner produce an identical image and are not re-sent.
+    // Spinner advances an eighth turn per tick (4 fps, under Elgato's 10 updates per second); keys
+    // without a spinner produce an identical image and are not re-sent.
     setInterval(() => {
       this.tick++;
       void this.repaint();
-    }, 500);
+    }, 250);
   }
 
   /** Created on first use, i.e. after the plugin connected to Stream Deck. */
@@ -244,7 +245,7 @@ export class PaneSlot extends SingletonAction {
                 waiting.pane.lastKnown.paneTitle ??
                   waiting.pane.lastKnown.title ??
                   waiting.pane.paneKey,
-                this.tick % 2 === 0,
+                this.tick % 4 < 2,
               )
             : base;
         if (!v) return;

@@ -23,7 +23,11 @@ export interface RenderOptions {
   /** Output size in px; the drawing is always 144 units wide so it stays crisp at 72 and 144. */
   size?: 72 | 144;
   highContrast?: boolean;
-  /** Spinner rotation in quarter turns (0-3), advanced by the caller for 'working' keys (<= 2 fps). */
+  /**
+   * Spinner rotation in eighth turns (taken modulo `SPIN_STEPS`), advanced by the caller for
+   * 'working' keys. Elgato's guidelines ask plugins to stay at or below 10 image updates per
+   * second, and Stream Deck Mobile runs over Wi-Fi, so the caller paints at 4 fps (not more).
+   */
   spin?: number;
 }
 
@@ -109,6 +113,9 @@ export function harnessLabel(kind: string): string {
  * Liberation Sans has Arial's metrics, so a Linux host that has it (or Windows with Arial) lays
  * text out as `textWidth` expects; DejaVu Sans (often fontconfig's pick) is about 10% wider.
  */
+/** Positions of the working arc per turn. */
+export const SPIN_STEPS = 8;
+
 const FONT_STACK = 'Helvetica, Arial, Liberation Sans, DejaVu Sans, sans-serif';
 
 const esc = (s: string) =>
@@ -241,11 +248,11 @@ export function renderKey(m: KeyModel, o: RenderOptions = {}): string {
   const host = m.host
     ? `<text x="${RIGHT}" y="${MY + 17}" font-size="12" text-anchor="end">${esc(ellipsis(m.host, 7))}</text>`
     : '';
-  // The working arc turns a quarter per step; other icons are static.
+  // The working arc turns an eighth per step; other icons are static.
   const art = ICONS[m.state].replace(/var\(--bg\)/g, pal.bg);
   const icon =
     m.state === 'working'
-      ? `<g transform="rotate(${((o.spin ?? 0) % 4) * 90} 20 20)">${art}</g>`
+      ? `<g transform="rotate(${(((o.spin ?? 0) % SPIN_STEPS) * 360) / SPIN_STEPS} 20 20)">${art}</g>`
       : art;
   // Top line: agent badge, then the state icon; host name on the right.
   const iconX = glyph ? MX + 32 : MX;
