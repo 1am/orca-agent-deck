@@ -225,8 +225,9 @@ export function createBridge({
         } catch {
           return;
         }
-        // Every message of B carries its bridge major; another one means one of the two plugins is outdated.
-        if (msg && typeof msg === 'object' && msg.v !== PROTOCOL_VERSION) {
+        // Every message of B carries its bridge major; another one means one of the two plugins is outdated. Only
+        // after B proved it knows the token: anything else on the port can say anything, and is ignored below.
+        if (proven && msg && typeof msg === 'object' && msg.v !== PROTOCOL_VERSION) {
           versionNote = `B speaks bridge ${String(msg.v)}, this plugin ${PROTOCOL_VERSION}`;
           log(
             `bridge: ${versionNote}: update Agent Deck for Orca (both plugins from the same release)`,

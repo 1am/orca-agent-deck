@@ -117,6 +117,22 @@ export class BridgeServer {
   /** When a plugin A last said hello without the challenge handshake (an older release), else null. */
   outdatedPeerAt: number | null = null;
 
+  /** Is this raw frame an `auth` with a valid MAC for our challenge, whatever bridge version it names? */
+  private provesToken(data: unknown, nonce: string): boolean {
+    try {
+      const m = JSON.parse(String(data)) as { type?: unknown; nonce?: unknown; mac?: unknown };
+      return (
+        m.type === 'auth' &&
+        typeof m.nonce === 'string' &&
+        typeof m.mac === 'string' &&
+        NONCE.test(m.nonce) &&
+        macMatches(m.mac, authMac(this.token, nonce, m.nonce))
+      );
+    } catch {
+      return false;
+    }
+  }
+
   /** Connections that have not said hello yet, oldest first. */
   private readonly pending: WebSocket[] = [];
 
@@ -142,8 +158,9 @@ export class BridgeServer {
       } catch (e) {
         if (e instanceof UnsupportedVersionError) {
           this.opts.log?.(`unsupported protocol version from A: ${String(e.received)}`);
-          // Reported like an A from before the handshake: the Setup doctor says to update.
-          this.outdatedPeerAt = Date.now();
+          // Reported like an A from before the handshake (the Setup doctor says to update), but only when the peer
+          // proved it holds the token: any local process can open this port and say anything.
+          if (proven || this.provesToken(data, nonce)) this.outdatedPeerAt = Date.now();
           ws.close(4002, 'unsupported protocol version');
         } else if (!authed) {
           ws.close(4001, 'unauthorized');
