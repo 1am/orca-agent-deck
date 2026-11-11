@@ -74,6 +74,30 @@ it('keeps a mapping when its host is down and shows unreachable', async () => {
   expect(store.get('s1')?.pane?.paneKey).toBe('a:1');
 });
 
+it('keeps a key on a host only one listing omitted, without counting it down', async () => {
+  const store = new MappingStore();
+  const snap: Snapshot = {
+    panes: [pane('a:1', { hostId: 'ssh:x' })],
+    statuses: [],
+    omittedHostIds: [],
+    downHostIds: [],
+  };
+  const d = new DeckController(fake(snap).a, store);
+  await d.refresh(['s1']);
+  snap.panes = [];
+  snap.omittedHostIds = ['ssh:x'];
+  snap.downHostIds = [];
+  expect((await d.refresh(['s1'])).get('s1')?.state).toBe('unreachable');
+  expect(store.get('s1')?.pane?.paneKey).toBe('a:1');
+  expect(d.overview().hostsDown).toBe(0);
+
+  // No listing reached it: the same key stays and the count reports it.
+  snap.downHostIds = ['ssh:x'];
+  expect((await d.refresh(['s1'])).get('s1')?.state).toBe('unreachable');
+  expect(store.get('s1')?.pane?.paneKey).toBe('a:1');
+  expect(d.overview().hostsDown).toBe(1);
+});
+
 it('press focuses the mapped pane and reports failures', async () => {
   const snap: Snapshot = {
     panes: [pane('a:1'), pane('b:1', { handle: 'bad' })],

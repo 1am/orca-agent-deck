@@ -82,6 +82,33 @@ export function awaitingOf(
   return classifyFinalMessage(a.lastAssistantMessage).asks ? 'text' : null;
 }
 
+/**
+ * Hosts no listing could reach. Orca's `hostScope` reports the hosts a listing covered (`hostIds`)
+ * and the ones it left out (`omittedHostIds`). A host one listing covered answered that query, even
+ * when the other had nothing to report for it: an SSH host with worktrees but no terminals appears
+ * only in the terminal listing's gaps.
+ *
+ * This drives the "hosts down" count only. `omittedHostIds` stays the union of both listings, so a
+ * key keeps its last known state for every host a listing could not see.
+ */
+export function unreachableHostIds(
+  terminalScope: ListingHostScope | undefined,
+  worktreeScope: ListingHostScope | undefined,
+): string[] {
+  const scopes = [terminalScope, worktreeScope].filter(
+    (scope): scope is ListingHostScope => scope !== undefined,
+  );
+  const covered = new Set(scopes.flatMap((scope) => scope.hostIds ?? []));
+  const omitted = new Set(scopes.flatMap((scope) => scope.omittedHostIds ?? []));
+  // `local` answered the call it came from.
+  return [...omitted].filter((id) => id !== 'local' && !covered.has(id));
+}
+
+export type ListingHostScope = {
+  hostIds?: readonly string[];
+  omittedHostIds?: readonly string[];
+};
+
 export class CliAdapter implements OrcaAdapter {
   /**
    * One read costs 4 `orca` spawns (status, terminal list, worktree ps, host list), and NFR-2 allows
@@ -139,10 +166,13 @@ export class CliAdapter implements OrcaAdapter {
       hostsKnown = false;
     }
     const omitted = new Set(local.omittedHostIds);
+    const down = new Set(local.downHostIds ?? []);
     for (const env of hosts.filter((h) => h.kind === 'environment')) {
       omitted.delete(`runtime:${env.id}`);
+      down.delete(`runtime:${env.id}`);
       if (!hostsKnown) {
         omitted.add(`env:${env.id}`);
+        down.add(`env:${env.id}`);
         continue;
       }
       try {
@@ -150,11 +180,14 @@ export class CliAdapter implements OrcaAdapter {
         local.panes.push(...r.panes);
         local.statuses.push(...r.statuses);
         for (const h of r.omittedHostIds) omitted.add(h);
+        for (const h of r.downHostIds ?? []) down.add(h);
       } catch {
         omitted.add(`env:${env.id}`);
+        down.add(`env:${env.id}`);
       }
     }
     local.omittedHostIds = [...omitted];
+    local.downHostIds = [...down];
     // Remote panes carry the host's display name; the raw host id means nothing to the user.
     const names = new Map(
       hosts.flatMap(
@@ -225,13 +258,20 @@ export class CliAdapter implements OrcaAdapter {
       if (!p.agentType)
         p.agentType = statuses.find((x) => x.paneKey === p.paneKey)?.agentType ?? null;
     }
+    const termScope = terms.result.hostScope;
+    const psScope = ps.result.hostScope;
     const omitted = new Set([
-      ...(terms.result.hostScope?.omittedHostIds ?? []),
-      ...(ps.result.hostScope?.omittedHostIds ?? []),
+      ...(termScope?.omittedHostIds ?? []),
+      ...(psScope?.omittedHostIds ?? []),
     ]);
     // Orca answering means its own host is up; it was seen flapping into omittedHostIds.
     omitted.delete('local');
-    return { panes, statuses, omittedHostIds: [...omitted] };
+    return {
+      panes,
+      statuses,
+      omittedHostIds: [...omitted],
+      downHostIds: unreachableHostIds(termScope, psScope),
+    };
   }
 
   async listHosts(): Promise<HostInfo[]> {

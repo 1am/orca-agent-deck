@@ -1,6 +1,6 @@
 import { readFileSync } from 'node:fs';
 import { expect, it } from 'vitest';
-import { CliAdapter, type Exec } from './index.ts';
+import { CliAdapter, unreachableHostIds, type Exec } from './index.ts';
 
 const fx = (n: string) => readFileSync(`test/fixtures/orca/${n}`, 'utf8');
 
@@ -36,6 +36,49 @@ it('focus reports errors instead of throwing', async () => {
   expect(
     (await new CliAdapter(bad).focus({ paneKey: 'a:b', hostId: 'local', handle: 'h' })).ok,
   ).toBe(false);
+});
+
+it('counts a host as down only when no listing covered it', () => {
+  const scope = (hostIds: string[], omittedHostIds: string[]) => ({ hostIds, omittedHostIds });
+  // An SSH host with worktrees but no terminals: covered by worktree ps, absent from terminal list.
+  expect(
+    unreachableHostIds(
+      scope(['local'], ['ssh:build', 'runtime:peer']),
+      scope(['local', 'ssh:build'], ['runtime:peer']),
+    ),
+  ).toEqual(['runtime:peer']);
+  // No listing reached it: down.
+  expect(
+    unreachableHostIds(scope(['local'], ['ssh:build']), scope(['local'], ['ssh:build'])),
+  ).toEqual(['ssh:build']);
+  // `local` answered the call it came from.
+  expect(unreachableHostIds(scope([], ['local']), scope([], ['local']))).toEqual([]);
+});
+
+it('keeps the gaps of the only scope a listing publishes', () => {
+  const scope = { hostIds: ['local'], omittedHostIds: ['ssh:build'] };
+  expect(unreachableHostIds(scope, undefined)).toEqual(['ssh:build']);
+  expect(unreachableHostIds(undefined, scope)).toEqual(['ssh:build']);
+  expect(unreachableHostIds(undefined, undefined)).toEqual([]);
+});
+
+it('keeps the union of omissions for state, and counts only hosts no listing reached', async () => {
+  const exec: Exec = async (args) => {
+    const o = JSON.parse(await fixtureExec(args));
+    if (args[0] === 'terminal' && args[1] === 'list')
+      o.result.hostScope = { hostIds: ['local'], omittedHostIds: ['ssh:build', 'runtime:peer'] };
+    if (args[0] === 'worktree' && args[1] === 'ps')
+      o.result.hostScope = {
+        hostIds: ['local', 'ssh:build'],
+        omittedHostIds: ['runtime:peer'],
+      };
+    return JSON.stringify(o);
+  };
+  const s = await new CliAdapter(exec).snapshot();
+  // The key keeps its last known state for both.
+  expect(s.omittedHostIds).toEqual(['ssh:build', 'runtime:peer']);
+  // Only the host no listing reached counts as down.
+  expect(s.downHostIds).toEqual(['runtime:peer']);
 });
 
 it('health is down when orca is unreachable', async () => {
@@ -79,6 +122,7 @@ it('never reports the local host as omitted and hides stale toolName', async () 
   };
   const s = await new CliAdapter(withOmitted).snapshot();
   expect(s.omittedHostIds).toEqual(['ssh-1']);
+  expect(s.downHostIds).toEqual(['ssh-1']);
   expect(s.statuses.every((x) => x.toolName === null)).toBe(true);
 });
 
@@ -109,6 +153,7 @@ it('queries paired environments with --environment and focuses with it', async (
   expect(remote).toHaveLength(1);
   expect(remote[0]?.hostId).toBe('env:E1');
   expect(s.omittedHostIds).toEqual([]);
+  expect(s.downHostIds).toEqual([]);
   await a.focus(remote[0]!);
   expect(calls.at(-1)).toContain('E1');
 });
@@ -202,5 +247,6 @@ it('a failing host list keeps the last paired servers and marks them down instea
   hostsFail = true;
   const s = await a.snapshot();
   expect(s.omittedHostIds).toContain('env:E1');
+  expect(s.downHostIds).toContain('env:E1');
   expect(s.panes.some((p) => p.hostId === 'env:E1')).toBe(false);
 });

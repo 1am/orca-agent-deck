@@ -76,6 +76,12 @@ export interface Snapshot {
   statuses: PaneStatusEvent[];
   /** Hosts whose panes are missing from the snapshot. */
   omittedHostIds: string[];
+  /**
+   * Hosts no listing could reach, for the Setup "hosts down" count. A host omitted by one listing
+   * but covered by the other is not down. Adapters that do not report it fall back to
+   * `omittedHostIds`.
+   */
+  downHostIds?: string[];
 }
 
 export interface OrcaAdapter {
