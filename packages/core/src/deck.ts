@@ -1,4 +1,5 @@
 import type { OrcaAdapter, PaneInfo, PaneStatusEvent, Snapshot } from './adapter.ts';
+import { isLocalHost, LOCAL_HOST } from './host-id.ts';
 import { MappingStore, type PaneBinding, type SlotPosition } from './mapping.ts';
 import { PaneRegistry } from './registry.ts';
 import { ShellActivity } from './shell-activity.ts';
@@ -98,7 +99,7 @@ function bindingOf(p: PaneInfo): PaneBinding {
 
 /** Remote panes show their host name; "Remote" when Orca did not tell us one. */
 function hostLabel(hostId: string | undefined, name?: string | null): string | null {
-  return !hostId || hostId === 'local' ? null : name || 'Remote';
+  return !hostId || isLocalHost(hostId) ? null : name || 'Remote';
 }
 
 function labelOf(b: PaneBinding): string {
@@ -269,7 +270,7 @@ export class DeckController {
     this.registry.update(snap.panes);
     const byHost = new Map<string, PaneInfo[]>();
     for (const p of snap.panes)
-      if (p.hostId !== 'local') byHost.set(p.hostId, [...(byHost.get(p.hostId) ?? []), p]);
+      if (!isLocalHost(p.hostId)) byHost.set(p.hostId, [...(byHost.get(p.hostId) ?? []), p]);
     for (const [h, list] of byHost) this.remotePanes.set(h, list);
     for (const h of [...this.remotePanes.keys()])
       if (!byHost.has(h) && !snap.omittedHostIds.includes(h)) this.remotePanes.delete(h);
@@ -277,7 +278,7 @@ export class DeckController {
     const keep = new Set(snap.panes.map((p) => p.paneKey));
     for (const s of slots) {
       const b = this.store.get(s)?.pane;
-      if (b && snap.omittedHostIds.includes(b.executionHostId ?? 'local')) keep.add(b.paneKey);
+      if (b && snap.omittedHostIds.includes(b.executionHostId ?? LOCAL_HOST)) keep.add(b.paneKey);
     }
     if (this.orcaRunning) {
       for (const [k, r] of this.released)
@@ -420,7 +421,7 @@ export class DeckController {
         p.paneKey !== paneKey &&
         this.acks.view(p.paneKey, Date.now())?.unread,
     );
-    if (!stillUnread && pane.hostId === 'local') {
+    if (!stillUnread && isLocalHost(pane.hostId)) {
       void this.adapter.markWorktreeRead?.(pane.worktreeId)?.catch(() => {});
     }
   }
@@ -453,7 +454,7 @@ export class DeckController {
         return {
           paneKey: p.paneKey,
           host: this.hostName(p.hostId, p.hostName) ?? 'This machine',
-          remote: p.hostId !== 'local',
+          remote: !isLocalHost(p.hostId),
           repo: p.repo ?? '',
           branch: p.branch ?? '',
           tab: p.tabTitle ?? '',
@@ -482,14 +483,14 @@ export class DeckController {
   /** Empties a slot for good and keeps its pane off auto-fill. */
   private release(slot: string): void {
     const b = this.store.get(slot)?.pane;
-    if (b) this.released.set(b.paneKey, { host: b.executionHostId ?? 'local', slot });
+    if (b) this.released.set(b.paneKey, { host: b.executionHostId ?? LOCAL_HOST, slot });
     this.store.set(slot, { mode: 'pinned' });
   }
 
   /** Execution host of the pane on a slot ('local', 'ssh:..', 'env:..'), for the press log. */
   slotHost(slot: string): string | null {
     const b = this.store.get(slot)?.pane;
-    return b ? (b.executionHostId ?? 'local') : null;
+    return b ? (b.executionHostId ?? LOCAL_HOST) : null;
   }
 
   /** Pins a pane to a slot (null = back to auto-fill); a pane lives on one slot at a time. */
@@ -717,7 +718,7 @@ export class DeckController {
       return { state: 'unmapped', stale: false, label: '', line2: lineTwo('unmapped') };
     const pane = this.registry.get(b.paneKey);
     const status = this.snapshot.statuses.find((e) => e.paneKey === b.paneKey);
-    const hostDown = this.snapshot.omittedHostIds.includes(b.executionHostId ?? 'local');
+    const hostDown = this.snapshot.omittedHostIds.includes(b.executionHostId ?? LOCAL_HOST);
     // Trust the live agentType while the pane exists (agent exited -> plain shell); lastKnown only when offline.
     const liveAgent = pane ? (pane.agentType ?? null) : (b.lastKnown.agent ?? null);
     // tmux hides its agents from Orca (stablyai/orca#7797): without hook state the pane is "tmux", not a stale harness.

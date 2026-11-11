@@ -1,5 +1,6 @@
 import type { PaneInfo } from './adapter.ts';
 import type { DeckState } from './status.ts';
+import { LOCAL_HOST } from './host-id.ts';
 import { rank } from './priority.ts';
 
 /** Spec 7.5. Every field narrows the eligible panes; absent means no restriction. */
@@ -47,7 +48,7 @@ export function matchesFilter(c: AutoCandidate, f: AutoFilter | undefined): bool
   const p = c.pane;
   if (f.agents?.length && !f.agents.includes(p.agentType ?? '')) return false;
   if (f.hosts?.length) {
-    const host = p.hostId || 'local';
+    const host = p.hostId || LOCAL_HOST;
     if (!f.hosts.some((h) => globToRegExp(h).test(host))) return false;
   }
   if (f.repos?.length && !f.repos.includes(p.repo ?? '')) return false;

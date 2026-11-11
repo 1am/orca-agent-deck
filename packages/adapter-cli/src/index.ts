@@ -10,7 +10,16 @@ import type {
   PaneStatusEvent,
   Snapshot,
 } from '@orca-agent-deck/core';
-import { classifyFinalMessage, type AgentRawState, type AwaitingKind } from '@orca-agent-deck/core';
+import {
+  classifyFinalMessage,
+  envHostId,
+  isLocalHost,
+  isRuntimeHostId,
+  LOCAL_HOST,
+  runtimeHostId,
+  type AgentRawState,
+  type AwaitingKind,
+} from '@orca-agent-deck/core';
 import type { z } from 'zod';
 import { resolveOrcaBinCached } from './resolve-bin.ts';
 import {
@@ -101,7 +110,7 @@ export function unreachableHostIds(
   const covered = new Set(scopes.flatMap((scope) => scope.hostIds ?? []));
   const omitted = new Set(scopes.flatMap((scope) => scope.omittedHostIds ?? []));
   // `local` answered the call it came from.
-  return [...omitted].filter((id) => id !== 'local' && !covered.has(id));
+  return [...omitted].filter((id) => !isLocalHost(id) && !covered.has(id));
 }
 
 export type ListingHostScope = {
@@ -168,12 +177,11 @@ export class CliAdapter implements OrcaAdapter {
     const omitted = new Set(local.omittedHostIds);
     const down = new Set(local.downHostIds ?? []);
     for (const env of hosts.filter((h) => h.kind === 'environment')) {
-      // Orca's runtime ids are `runtime:` + encodeURIComponent(environment id).
-      omitted.delete(`runtime:${encodeURIComponent(env.id)}`);
-      down.delete(`runtime:${encodeURIComponent(env.id)}`);
+      omitted.delete(runtimeHostId(env.id));
+      down.delete(runtimeHostId(env.id));
       if (!hostsKnown) {
-        omitted.add(`env:${env.id}`);
-        down.add(`env:${env.id}`);
+        omitted.add(envHostId(env.id));
+        down.add(envHostId(env.id));
         continue;
       }
       try {
@@ -182,10 +190,10 @@ export class CliAdapter implements OrcaAdapter {
         local.statuses.push(...r.statuses);
         for (const h of r.omittedHostIds) omitted.add(h);
         // A paired server's own `runtime:` peers belong to its control plane, not to our census.
-        for (const h of r.downHostIds ?? []) if (!h.startsWith('runtime:')) down.add(h);
+        for (const h of r.downHostIds ?? []) if (!isRuntimeHostId(h)) down.add(h);
       } catch {
-        omitted.add(`env:${env.id}`);
-        down.add(`env:${env.id}`);
+        omitted.add(envHostId(env.id));
+        down.add(envHostId(env.id));
       }
     }
     local.omittedHostIds = [...omitted];
@@ -196,12 +204,12 @@ export class CliAdapter implements OrcaAdapter {
         (h) =>
           [
             [h.id, h.name],
-            [`env:${h.id}`, h.name],
+            [envHostId(h.id), h.name],
           ] as const,
       ),
     );
     for (const pane of local.panes) {
-      if (pane.hostId !== 'local') pane.hostName = names.get(pane.hostId) ?? null;
+      if (!isLocalHost(pane.hostId)) pane.hostName = names.get(pane.hostId) ?? null;
     }
     return local;
   }
@@ -217,7 +225,7 @@ export class CliAdapter implements OrcaAdapter {
     const wts = new Map(ps.result.worktrees.map((w) => [w.worktreeId, w]));
     const panes: PaneInfo[] = terms.result.terminals.map((t) => ({
       paneKey: `${t.tabId}:${t.leafId}`,
-      hostId: environment ? `env:${environment}` : t.executionHostId,
+      hostId: environment ? envHostId(environment) : t.executionHostId,
       handle: t.handle,
       worktreeId: t.worktreeId,
       // A title set in Orca (set-pane-title) wins, then the Orca tab title; the terminal's own
@@ -267,7 +275,7 @@ export class CliAdapter implements OrcaAdapter {
       ...(psScope?.omittedHostIds ?? []),
     ]);
     // Orca answering means its own host is up; it was seen flapping into omittedHostIds.
-    omitted.delete('local');
+    omitted.delete(LOCAL_HOST);
     return {
       panes,
       statuses,
@@ -348,7 +356,7 @@ export class CliAdapter implements OrcaAdapter {
           '--leaf',
           leafId,
           '--execution-host',
-          `runtime:${encodeURIComponent(pane.environment)}`,
+          runtimeHostId(pane.environment),
         ]);
         if (r.result.reveal.navigated) return { ok: true };
       } catch {
