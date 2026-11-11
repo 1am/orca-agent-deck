@@ -88,6 +88,53 @@ describe('locate (mapping survives a changed action context)', () => {
     expect(m.get('b')?.pane?.paneKey).toBe('p2');
   });
 
+  it('carries the mapping over when the other host names the device differently', () => {
+    const m = new MappingStore();
+    m.locate('old', pos, new Set());
+    m.set('old', { mode: 'pinned', pane: binding('p1') });
+    const other = { ...pos, device: 'sd-ABC' };
+    expect(m.locate('new', other, new Set(['new']))).toBe(true);
+    expect(m.get('new')?.pane?.paneKey).toBe('p1');
+    expect(m.get('new')?.pos).toEqual(other);
+    expect(m.get('old')).toBeUndefined();
+  });
+
+  it('prefers the exact device match over a key of another device', () => {
+    const m = new MappingStore();
+    for (const [k, device, p] of [
+      ['same', 'D1', 'p-same'],
+      ['other', 'D2', 'p-other'],
+    ] as const) {
+      m.locate(k, { ...pos, device }, new Set(['same', 'other']));
+      m.set(k, { mode: 'pinned', pane: binding(p) });
+    }
+    expect(m.locate('new', pos, new Set(['new']))).toBe(true);
+    expect(m.get('new')?.pane?.paneKey).toBe('p-same');
+    expect(m.get('other')?.pane?.paneKey).toBe('p-other');
+  });
+
+  it('never takes from a device that still has live keys', () => {
+    const m = new MappingStore();
+    m.locate('gone', { ...pos, device: 'D2' }, new Set());
+    m.set('gone', { mode: 'pinned', pane: binding('p2') });
+    m.locate('here', { device: 'D2', column: 0, row: 0 }, new Set());
+    expect(m.locate('new', pos, new Set(['new', 'here']))).toBe(false);
+    expect(m.get('new')?.pane).toBeUndefined();
+  });
+
+  it('does not guess when two vanished keys share the position on different devices', () => {
+    const m = new MappingStore();
+    for (const [k, device] of [
+      ['x', 'D2'],
+      ['y', 'D3'],
+    ] as const) {
+      m.locate(k, { ...pos, device }, new Set(['x', 'y']));
+      m.set(k, { mode: 'pinned', pane: binding(`p-${k}`) });
+    }
+    expect(m.locate('new', pos, new Set(['new']))).toBe(false);
+    expect(m.get('new')?.pane).toBeUndefined();
+  });
+
   it('does not guess when two vanished keys share the position', () => {
     const m = new MappingStore();
     for (const k of ['x', 'y']) {

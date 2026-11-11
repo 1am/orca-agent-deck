@@ -109,9 +109,23 @@ export class MappingStore {
       }
       return false;
     }
-    const orphans = Object.entries(this.slots).filter(
-      ([k, o]) => k !== slot && !live.has(k) && o.pane && samePos(o.pos, pos),
+    const vanished = Object.entries(this.slots).filter(
+      ([k, o]) =>
+        k !== slot &&
+        !live.has(k) &&
+        o.pane &&
+        o.pos?.column === pos.column &&
+        o.pos.row === pos.row,
     );
+    // The same deck seen by another host has another device id (OpenDeck: `sd-<serial>`): without an exact
+    // device match, take a vanished key whose device has no live key left, so two real decks are never merged.
+    const liveDevices = new Set(
+      Object.entries(this.slots).flatMap(([k, o]) => (live.has(k) && o.pos ? [o.pos.device] : [])),
+    );
+    const exact = vanished.filter(([, o]) => samePos(o.pos, pos));
+    const orphans = exact.length
+      ? exact
+      : vanished.filter(([, o]) => !liveDevices.has(o.pos!.device));
     if (orphans.length === 1) {
       const [k, o] = orphans[0]!;
       delete this.slots[k];
