@@ -9,7 +9,7 @@ import { homedir } from 'node:os';
 import { join } from 'node:path';
 
 export const PROTOCOL_VERSION = 1;
-export const PLUGIN_VERSION = '0.2.0';
+export const PLUGIN_VERSION = '0.2.1';
 const GUID = '258EAFA5-E914-47DA-95CA-C5AB0DC85B11';
 
 export const defaultDiscoveryPath = () => {
