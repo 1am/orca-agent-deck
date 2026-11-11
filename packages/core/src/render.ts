@@ -19,14 +19,30 @@ export interface KeyModel {
   focused?: boolean;
 }
 
+/** Positions of the working arc per turn. */
+export const SPIN_STEPS = 8;
+
+/** Spinning keys up to which the spinner advances on every 250 ms repaint tick (4 fps). */
+const FULL_RATE_KEYS = 8;
+
+/**
+ * Does the spinner advance on this repaint tick (250 ms apart)? Elgato asks plugins to keep to
+ * about 10 image updates per second (https://docs.elgato.com/guidelines/streamdeck/plugins/images-and-layouts),
+ * which reads as a total, not per key. Up to 8 spinning keys turn at 4 fps (32 updates per
+ * second at most); beyond that every other tick advances (2 fps), so a full 32-key deck sends no
+ * more than the 64 per second it did when the spinner moved a quarter turn every 500 ms.
+ */
+export function spinnerAdvances(tick: number, workingCount: number): boolean {
+  return workingCount <= FULL_RATE_KEYS || tick % 2 === 0;
+}
+
 export interface RenderOptions {
   /** Output size in px; the drawing is always 144 units wide so it stays crisp at 72 and 144. */
   size?: 72 | 144;
   highContrast?: boolean;
   /**
    * Spinner rotation in eighth turns (taken modulo `SPIN_STEPS`), advanced by the caller for
-   * 'working' keys. Elgato's guidelines ask plugins to stay at or below 10 image updates per
-   * second, and Stream Deck Mobile runs over Wi-Fi, so the caller paints at 4 fps (not more).
+   * 'working' keys at the pace `spinnerAdvances` allows.
    */
   spin?: number;
 }
@@ -113,9 +129,6 @@ export function harnessLabel(kind: string): string {
  * Liberation Sans has Arial's metrics, so a Linux host that has it (or Windows with Arial) lays
  * text out as `textWidth` expects; DejaVu Sans (often fontconfig's pick) is about 10% wider.
  */
-/** Positions of the working arc per turn. */
-export const SPIN_STEPS = 8;
-
 const FONT_STACK = 'Helvetica, Arial, Liberation Sans, DejaVu Sans, sans-serif';
 
 const esc = (s: string) =>

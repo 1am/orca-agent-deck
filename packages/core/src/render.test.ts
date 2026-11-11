@@ -4,6 +4,7 @@ import {
   layoutLabel,
   renderInfoKey,
   renderKey,
+  spinnerAdvances,
   textWidth,
   type KeyModel,
 } from './render.ts';
@@ -122,6 +123,14 @@ it('asks for a metric-compatible font before DejaVu Sans', () => {
   const stack = 'font-family="Helvetica, Arial, Liberation Sans, DejaVu Sans, sans-serif"';
   expect(renderKey({ state: 'idle', label: 'a', line2: 'b' })).toContain(stack);
   expect(renderInfoKey({ tone: 'idle', value: '1', caption: 'a' })).toContain(stack);
+});
+
+it('spinner: 4 fps up to 8 working keys, 2 fps above', () => {
+  const ticks = [0, 1, 2, 3, 4, 5, 6, 7];
+  expect(ticks.filter((t) => spinnerAdvances(t, 8))).toHaveLength(8);
+  expect(ticks.filter((t) => spinnerAdvances(t, 9))).toEqual([0, 2, 4, 6]);
+  expect(ticks.filter((t) => spinnerAdvances(t, 32))).toHaveLength(4);
+  expect(ticks.filter((t) => spinnerAdvances(t, 0))).toHaveLength(8);
 });
 
 it('high-contrast theme changes the palette', () => {

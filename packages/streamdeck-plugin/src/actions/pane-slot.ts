@@ -13,6 +13,7 @@ import {
   formatKeyNumber,
   keyNumber,
   pairingSlotView,
+  spinnerAdvances,
   renderKey,
   type DeckController,
   type SlotView,
@@ -53,6 +54,8 @@ export class PaneSlot extends SingletonAction {
   private readonly sent = new Map<string, string>();
   private readonly views = new Map<string, SlotView>();
   private tick = 0;
+  /** Spinner position, advanced by `spinnerAdvances` so a busy deck is not flooded with images. */
+  private spin = 0;
   /** A refresh was asked for while one ran; run once more so a press is not shown stale. */
   private again = false;
   /** Short text shown on a key for a moment after a failed hold. */
@@ -63,8 +66,8 @@ export class PaneSlot extends SingletonAction {
     super();
     this.create = create;
     setInterval(() => void this.refresh(), 2000);
-    // Spinner advances an eighth turn per tick (4 fps, under Elgato's 10 updates per second); keys
-    // without a spinner produce an identical image and are not re-sent.
+    // Spinner advances an eighth turn per tick, or every other tick on a busy deck; keys without a
+    // spinner produce an identical image and are not re-sent.
     setInterval(() => {
       this.tick++;
       void this.repaint();
@@ -232,6 +235,9 @@ export class PaneSlot extends SingletonAction {
 
   private async repaint(): Promise<void> {
     const now = Date.now();
+    let working = 0;
+    for (const id of this.keys.keys()) if (this.views.get(id)?.state === 'working') working++;
+    if (spinnerAdvances(this.tick, working)) this.spin++;
     await Promise.all(
       [...this.keys].map(async ([id, k]) => {
         const base = this.views.get(id);
@@ -259,7 +265,7 @@ export class PaneSlot extends SingletonAction {
               keyNumber: this.numbers.get(id),
               bigNumber: shown.assign ? (this.numbers.get(id) ?? null) : null,
             },
-            { size: 144, spin: this.tick },
+            { size: 144, spin: this.spin },
           ),
         );
         if (this.sent.get(id) === img) return;
