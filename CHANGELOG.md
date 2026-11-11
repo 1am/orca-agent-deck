@@ -6,7 +6,7 @@ All notable changes to this project are documented here. Format: [Keep a Changel
 
 ### Added
 
-- **orca-plugin:** an Agent Deck panel in Orca's right sidebar with the deck as a grid of keys: a click puts the focused pane on a key (a key that shows a pane asks to replace it, or unmaps it). Bridge protocol minor 1 carries it (the major stays 1; an older Stream Deck plugin ignores the new frames and the panel says to update it).
+- **orca-plugin:** an Agent Deck panel in Orca's right sidebar with the deck as a grid of numbered keys, laid out like your deck (a wide deck wraps instead of clipping). A click on a key opens its picker, as in the Stream Deck app: choose which terminal pane goes on that key (the focused one is listed first), Unmap it or go Back. A pane that is on another key moves, so a pane is on one key only. The panel names the deck model (MK.2, XL, Mini, Neo, ...). Bridge protocol minor 1 carries it (the major stays 1; an older Stream Deck plugin ignores the new frames and the panel says to update it).
 - **orca-plugin:** keyboard shortcuts for "Agent Deck: Map pane to key" (Cmd+Alt+K, Ctrl+Alt+K on Windows and Linux) and "Agent Deck: Unmap pane" (with Shift). Orca lets you change them in its shortcut settings. Orca does not run plugin shortcuts while a terminal has the keyboard (see `docs/known-issues.md`).
 - **orca-plugin:** a "Map pane" button in Orca's status bar runs "Map pane to key" for the terminal pane you focused last. It reads "Deck offline", "No Stream Deck" or "Update Agent Deck" when mapping cannot work.
 - **streamdeck:** tells the Elgato Stream Deck app from OpenDeck on macOS, Windows and Linux, and the Setup tab has a "Stream Deck app" row with what it concluded. The log line `host:` carries the same.

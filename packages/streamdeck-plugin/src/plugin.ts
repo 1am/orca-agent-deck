@@ -105,17 +105,21 @@ streamDeck.actions.registerAction(paneSlot);
 /** Last `deckState` sent, so an unchanged deck is not sent again. */
 let lastDeck = '';
 /** Tells A (the Orca panel) how the deck looks, when it changed or `force`d. Only an A that knows the frame gets it. */
-function pushDeck(force = false): void {
+async function pushDeck(force = false): Promise<void> {
   if ((bridgeServer.connection?.minor ?? 0) < 1) return;
-  const state = paneSlot.deckState();
+  const c = await controller();
+  const state = {
+    ...paneSlot.deckState(),
+    panes: c.panelPanes((slot) => paneSlot.keyOfSlot(slot)),
+  };
   const sig = JSON.stringify(state);
   if (!force && sig === lastDeck) return;
   if (bridgeServer.send({ v: 1, type: 'deckState', ...state })) lastDeck = sig;
 }
-setInterval(() => pushDeck(), 1000);
-bridgeServer.on('hello', () => pushDeck(true));
+setInterval(() => void pushDeck(), 1000);
+bridgeServer.on('hello', () => void pushDeck(true));
 bridgeServer.on('message', (m) => {
-  if (m.type === 'requestDeck') return pushDeck(true);
+  if (m.type === 'requestDeck') return void pushDeck(true);
   if (
     m.type !== 'pairRequest' &&
     m.type !== 'unmapRequest' &&
@@ -128,7 +132,13 @@ bridgeServer.on('message', (m) => {
     const c = await controller();
     // Clicks in the Orca panel: B checks the key exists on the deck it shows, never A.
     if (m.type === 'assignKey')
-      return c.assignFocusedTo(m.requestId, paneSlot.slotOfKey(m.key), m.replace, deckConnected());
+      return c.assignFocusedTo(
+        m.requestId,
+        paneSlot.slotOfKey(m.key),
+        m.replace,
+        deckConnected(),
+        m.paneKey ?? null,
+      );
     if (m.type === 'unmapKey') {
       c.unmapSlot(m.requestId, paneSlot.slotOfKey(m.key));
       return paneSlot.nudge();

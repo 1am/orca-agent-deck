@@ -61,11 +61,15 @@ export const pairCancel = base('pairCancel').extend({ requestId: z.string() });
 /** Minor 1: A asks B to send `deckState` now (the Orca panel opened). */
 export const requestDeck = base('requestDeck');
 const key = z.number().int().min(1);
-/** Minor 1: put the focused pane on key `key` (1-based, row-major). A key that shows a pane needs `replace`. */
+/**
+ * Minor 1: put a pane on key `key` (1-based, row-major): the pane `paneKey` names (one of `deckState.panes`),
+ * else the focused one. A key that shows a pane needs `replace`.
+ */
 export const assignKey = base('assignKey').extend({
   requestId: z.string(),
   key,
   replace: z.boolean(),
+  paneKey: z.string().optional(),
 });
 /** Minor 1: empty key `key`. */
 export const unmapKey = base('unmapKey').extend({ requestId: z.string(), key });
@@ -89,6 +93,24 @@ export const deckState = base('deckState').extend({
   cols: z.number().int().min(0),
   rows: z.number().int().min(0),
   keys: z.array(z.object({ key, label: z.string(), state: z.string(), mapped: z.boolean() })),
+  /** The panes the panel offers for a key (at most 200, the focused one first); absent from an older B. */
+  panes: z
+    .array(
+      z.object({
+        paneKey: z.string(),
+        /** Repo and branch, or the pane's title when it has neither. */
+        label: z.string(),
+        /** Host, tab and pane title: what tells two panes of one worktree apart. */
+        detail: z.string(),
+        agent: z.string().nullable(),
+        state: z.string(),
+        remote: z.boolean(),
+        focused: z.boolean(),
+        /** The 1-based key the pane is on, when it is on one. */
+        onKey: z.number().int().min(1).optional(),
+      }),
+    )
+    .optional(),
 });
 export const requestSnapshot = base('requestSnapshot');
 export const pairState = base('pairState').extend({
@@ -116,6 +138,7 @@ export const pairResult = base('pairResult')
           'deckOffline',
           'noSuchKey',
           'occupied',
+          'noSuchPane',
         ]),
       }),
     ]),

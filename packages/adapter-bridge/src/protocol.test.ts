@@ -22,6 +22,7 @@ const fromA = [
   { v: 1, type: 'hello', orcaVersion: 'api 1.0', pluginVersion: '0.3.0', minor: 1 },
   { v: 1, type: 'requestDeck' },
   { v: 1, type: 'assignKey', requestId: 'r4', key: 3, replace: false },
+  { v: 1, type: 'assignKey', requestId: 'r6', key: 2, replace: true, paneKey: 'a:1' },
   { v: 1, type: 'unmapKey', requestId: 'r5', key: 3 },
 ];
 
@@ -48,6 +49,7 @@ const fromB = [
   },
   { v: 1, type: 'pairResult', requestId: 'r4', ok: false, reason: 'occupied' },
   { v: 1, type: 'pairResult', requestId: 'r4', ok: false, reason: 'noSuchKey' },
+  { v: 1, type: 'pairResult', requestId: 'r6', ok: false, reason: 'noSuchPane' },
   {
     v: 1,
     type: 'deckState',
@@ -58,6 +60,18 @@ const fromB = [
     keys: [
       { key: 1, label: 'agent-deck/main', state: 'working', mapped: true },
       { key: 2, label: '', state: 'unmapped', mapped: false },
+    ],
+    panes: [
+      {
+        paneKey: 'a:1',
+        label: 'agent-deck / main',
+        detail: 'build-1 · Tab 1',
+        agent: 'claude',
+        state: 'working',
+        remote: true,
+        focused: true,
+        onKey: 1,
+      },
     ],
   },
 ];

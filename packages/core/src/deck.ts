@@ -64,6 +64,21 @@ export interface PickerPane {
   state: DeckState;
 }
 
+/** One pane in the Orca panel's picker (the `deckState.panes` entry). */
+export interface PanelPane {
+  paneKey: string;
+  label: string;
+  detail: string;
+  agent: string | null;
+  state: DeckState;
+  remote: boolean;
+  focused: boolean;
+  onKey?: number;
+}
+
+/** The panel lists at most this many panes: the frame stays far under the bridge's 256 KiB. */
+export const PANEL_PANES_MAX = 200;
+
 /** What the Property Inspector shows for one slot. */
 export interface SlotConfig {
   mode: 'pinned' | 'auto';
@@ -228,11 +243,16 @@ export class DeckController {
     slot: string | null,
     replace: boolean,
     deckConnected: boolean,
+    paneKey: string | null = null,
   ): Promise<void> {
     if (!slot) return this.onPairingResult?.({ requestId, ok: false, reason: 'noSuchKey' });
     if (!replace && this.store.get(slot)?.pane)
       return this.onPairingResult?.({ requestId, ok: false, reason: 'occupied' });
-    this.pairing.start(requestId, await this.pairingTarget(null), deckConnected);
+    // A pane the panel chose must still be there: never fall back to the focused one.
+    const target = await this.pairingTarget(paneKey);
+    if (paneKey && !target)
+      return this.onPairingResult?.({ requestId, ok: false, reason: 'noSuchPane' });
+    this.pairing.start(requestId, target, deckConnected);
     this.pairing.press(slot, 'tap');
   }
 
@@ -520,6 +540,41 @@ export class DeckController {
           state,
         };
       });
+  }
+
+  /**
+   * The panes the Orca panel offers for a key: the focused one first, then the rest as listed.
+   * `keyOf` turns a slot into the key number it has on the deck the panel draws.
+   */
+  panelPanes(keyOf: (slot: string) => number | null): PanelPane[] {
+    const focus = this.currentFocusKey();
+    return this.listPanes()
+      .map((p) => {
+        const onKey = this.store
+          .slotsFor(p.paneKey)
+          .map(keyOf)
+          .find((k): k is number => k !== null);
+        const where = [p.repo, p.branch].filter(Boolean).join(' / ');
+        return {
+          paneKey: p.paneKey,
+          label: where || p.title,
+          detail: [p.remote ? p.host : '', p.tab, where ? p.title : '']
+            .filter((s) => s && s !== where)
+            .join(' · '),
+          agent: p.agent,
+          state: p.state,
+          remote: p.remote,
+          focused: p.paneKey === focus,
+          ...(onKey !== undefined ? { onKey } : {}),
+        };
+      })
+      .sort((a, b) => Number(b.focused) - Number(a.focused))
+      .slice(0, PANEL_PANES_MAX);
+  }
+
+  /** The pane key focused in Orca at the last poll, else the last one that was. */
+  currentFocusKey(): string | null {
+    return this.focusedKey ?? this.lastFocusedKey;
   }
 
   slotConfig(slot: string): SlotConfig {

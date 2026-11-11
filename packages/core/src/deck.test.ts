@@ -933,6 +933,40 @@ describe('clicks in the Orca panel', () => {
     expect(v.get('s1')?.state).toBe('unmapped');
   });
 
+  it('assign puts the pane the panel chose on the key, not the focused one', async () => {
+    const { d, results } = world();
+    await d.refresh(['s1', 's2']);
+    await d.assignFocusedTo('r1', 's2', false, true, 'a:1');
+    expect(results).toEqual([{ requestId: 'r1', ok: true, slot: 's2', action: 'mapped' }]);
+    expect((await d.refresh(['s1', 's2'])).get('s2')).toMatchObject({ label: 't-a:1' });
+  });
+
+  it('a chosen pane that is on another key moves, and one that is gone is refused', async () => {
+    const { d, results } = world();
+    await d.refresh(['s1', 's2']);
+    await d.assignFocusedTo('r1', 's1', false, true, 'a:1');
+    await d.assignFocusedTo('r2', 's2', false, true, 'a:1');
+    await d.assignFocusedTo('r3', 's1', false, true, 'zz:9');
+    expect(results[1]).toEqual({ requestId: 'r2', ok: true, slot: 's2', action: 'moved' });
+    expect(results[2]).toEqual({ requestId: 'r3', ok: false, reason: 'noSuchPane' });
+    const v = await d.refresh(['s1', 's2']);
+    expect(v.get('s1')?.state).toBe('unmapped');
+    expect(v.get('s2')).toMatchObject({ label: 't-a:1' });
+  });
+
+  it('lists the panes for the panel: the focused one first, with the key each is on', async () => {
+    const { d } = world();
+    await d.refresh(['s1', 's2']);
+    await d.assignFocusedTo('r1', 's2', false, true, 'a:1');
+    await d.pairingTarget(null); // reads the focus: b:1
+    const keyOf = (slot: string) => (slot === 's2' ? 2 : null);
+    const panes = d.panelPanes(keyOf);
+    expect(panes.map((p) => [p.paneKey, p.focused, p.onKey])).toEqual([
+      ['b:1', true, undefined],
+      ['a:1', false, 2],
+    ]);
+  });
+
   it('unmap empties the key and keeps its pane off auto-fill', async () => {
     const { d, results } = world();
     await d.refresh(['s1']);

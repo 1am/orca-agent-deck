@@ -520,7 +520,7 @@ export const RECORD_FRAME_FIELDS = {
     action: 1,
     slot: { index: 1, page: 1 },
   },
-  assignKey: { v: 1, type: 1, requestId: 1, key: 1, replace: 1 },
+  assignKey: { v: 1, type: 1, requestId: 1, key: 1, replace: 1, paneKey: 1 },
   unmapKey: { v: 1, type: 1, requestId: 1, key: 1 },
   // No labels: they are pane names.
   deckState: { v: 1, type: 1, connected: 1, cols: 1, rows: 1 },
@@ -763,9 +763,14 @@ export function createPanelApi(
 
   return {
     get,
-    assign: ({ key, replace }) =>
+    assign: ({ key, replace, paneKey }) =>
       Number.isInteger(key) && key >= 1
-        ? click({ type: 'assignKey', key, replace: replace === true })
+        ? click({
+            type: 'assignKey',
+            key,
+            replace: replace === true,
+            ...(typeof paneKey === 'string' && paneKey ? { paneKey } : {}),
+          })
         : { ok: false, reason: 'noSuchKey' },
     unmap: ({ key }) =>
       Number.isInteger(key) && key >= 1

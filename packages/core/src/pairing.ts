@@ -10,7 +10,9 @@ export type PairingReason =
   /** A panel click named a key that does not exist on the deck. */
   | 'noSuchKey'
   /** A panel click named a key that already shows a pane, without asking to replace it. */
-  | 'occupied';
+  | 'occupied'
+  /** A panel click named a pane Orca does not list (it closed meanwhile). */
+  | 'noSuchPane';
 
 export type PairingState =
   | { phase: 'idle' }

@@ -224,6 +224,13 @@ export class PaneSlot extends SingletonAction {
     return null;
   }
 
+  /** The key number a slot has on the deck the Orca panel shows, or null. */
+  keyOfSlot(slot: string): number | null {
+    const dev = this.shownDevice();
+    const a = this.actions.find((x) => x.id === slot);
+    return a && a.device.id === dev ? (this.indexes.get(slot) ?? null) : null;
+  }
+
   /** The first connected device that has our keys on it: the one the Orca panel draws. */
   private shownDevice(): string | null {
     for (const d of streamDeck.devices)
