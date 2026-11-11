@@ -1,5 +1,13 @@
 import { describe, expect, it } from 'vitest';
-import { doctorInfo, runChecks, tmuxMissingVars, worstCheck, type DoctorFacts } from './doctor.ts';
+import type { DeckHostInfo } from './host.ts';
+import {
+  ORCA_PLUGIN_INSTALL_URL,
+  doctorInfo,
+  runChecks,
+  tmuxMissingVars,
+  worstCheck,
+  type DoctorFacts,
+} from './doctor.ts';
 
 const good: DoctorFacts = {
   orcaRunning: true,
@@ -11,6 +19,41 @@ const good: DoctorFacts = {
 const ok = { mode: 'live' as const, version: '1.4.2', hostsDown: 0 };
 
 describe('runChecks', () => {
+  it('shows the detected host and never makes it a problem', () => {
+    const host = {
+      os: 'mac',
+      host: 'opendeck',
+      version: '7.1.0',
+      basis: 'version-pixel-ratio',
+    } as const;
+    const checks = runChecks({ ...good, host });
+    expect(checks.find((c) => c.id === 'deck-host')).toMatchObject({
+      result: 'ok',
+      reason: 'OpenDeck 7.1.0, mac (by version-pixel-ratio)',
+    });
+    const unknown = runChecks({ ...good, host: { ...host, host: 'unknown', basis: 'none' } });
+    expect(unknown.find((c) => c.id === 'deck-host')?.reason).toContain('ORCA_DECK_HOST');
+    expect(worstCheck(unknown)).toBeNull();
+  });
+
+  it('warns on a Node below 20 in the Stream Deck app row, with the OpenDeck hint', () => {
+    const od: DeckHostInfo = { os: 'linux', host: 'opendeck', version: '7.1.0', basis: 'linux' };
+    const row = (nodeVersion: string, host = od) =>
+      runChecks({ ...good, host, nodeVersion }).find((c) => c.id === 'deck-host');
+    expect(row('v18.19.0')).toMatchObject({
+      result: 'warn',
+      caption: 'Node too old',
+      hint: 'OpenDeck uses your system Node: install Node 20+',
+    });
+    expect(row('v18.19.0', { ...od, host: 'elgato' })?.hint).toMatch(/Update the Elgato/);
+    expect(row('v20.20.2')).toMatchObject({ result: 'ok' });
+    expect(row('v20.20.2')?.reason).toContain('Node 20.20.2');
+    expect(row('v9.11.2')?.result).toBe('warn');
+    expect(
+      runChecks({ ...good, host: od }).find((c) => c.id === 'deck-host')?.reason,
+    ).not.toContain('Node');
+  });
+
   it('passes everything on a healthy setup', () => {
     const checks = runChecks(good);
     expect(checks.every((c) => c.result === 'ok')).toBe(true);
@@ -73,7 +116,11 @@ describe('runChecks', () => {
     ).toBe('Orca plugin 0.1.0 connected');
     expect(plugin('asleep')).toMatchObject({ result: 'ok' });
     expect(plugin('asleep')?.reason).toMatch(/installed and connects on the next agent event/);
-    expect(plugin('missing')).toMatchObject({ result: 'warn', caption: 'Orca plugin missing' });
+    expect(plugin('missing')).toMatchObject({
+      result: 'warn',
+      caption: 'Install the Orca plugin',
+      fix: { action: 'open-url', url: ORCA_PLUGIN_INSTALL_URL },
+    });
     expect(plugin(null)).toBeUndefined();
     expect(plugin(undefined)).toBeUndefined();
   });
@@ -131,7 +178,7 @@ describe('doctorInfo', () => {
       mode: 'degraded',
       orcaPlugin: 'missing',
     });
-    expect(m).toMatchObject({ value: '!', caption: 'Orca plugin missing' });
+    expect(m).toMatchObject({ value: '!', caption: 'Install the Orca plugin' });
   });
 
   it('reports hosts down after setup checks pass', () => {
@@ -147,7 +194,7 @@ describe('outdated Orca plugin', () => {
     expect(worstCheck(runChecks({ ...good, orcaPlugin: 'outdated' }))).toMatchObject({
       id: 'orca-plugin',
       result: 'warn',
-      caption: 'Orca plugin outdated',
+      caption: 'Update Agent Deck for Orca',
     });
   });
 });

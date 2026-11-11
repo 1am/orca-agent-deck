@@ -14,6 +14,7 @@ import {
 } from '@orca-agent-deck/core';
 import { resolveOrcaBinCached, type ResolvedBin } from '@orca-agent-deck/adapter-cli';
 import { InfoKey } from './info-key.ts';
+import { currentHost } from '../host.ts';
 import { isCurrentPi, replyToPi } from './pi.ts';
 import { orcaPluginState, orcaPluginVersion, refreshInstalled } from '../bridge.ts';
 
@@ -59,6 +60,8 @@ function doctorFacts(c: DeckController): DoctorFacts {
     orcaPlugin: orcaPluginState(),
     orcaPluginVersion: orcaPluginVersion(),
     tmuxMissing: tmux.missing,
+    host: currentHost(),
+    nodeVersion: process.version,
   };
 }
 
