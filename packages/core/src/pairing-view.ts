@@ -7,7 +7,7 @@ type Waiting = Extract<PairingState, { phase: 'waitingForKey' }>;
 /**
  * What a pane slot shows while pairing mode waits for a key (spec 7.2 step 4): the pane's label on
  * every free slot ("Assign here"), a replace marker on mapped slots, and the slots that already
- * show the pane pulse (`pulse` alternates per repaint tick).
+ * show the pane pulse (`pulse` alternates every two repaint ticks).
  */
 export function pairingSlotView(
   p: Waiting,

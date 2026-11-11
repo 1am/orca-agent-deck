@@ -93,7 +93,8 @@ it('shows agent and host badges, link-broken marker; only the working icon spins
   expect(renderKey({ ...m, agent: 'kimi' })).toContain('>K</text>');
   expect(renderKey({ ...m, agent: null, state: 'unmapped' })).not.toContain('stroke-width="2.2"');
   expect(svg).toContain('devbox');
-  expect(renderKey(m, { spin: 1 })).toContain('rotate(90 20 20)');
+  expect(renderKey(m, { spin: 1 })).toContain('rotate(45 20 20)');
+  expect(renderKey(m, { spin: 8 })).toBe(renderKey(m, { spin: 0 }));
   expect(renderKey({ ...m, state: 'completed' }, { spin: 1 })).toBe(
     renderKey({ ...m, state: 'completed' }, { spin: 0 }),
   );
