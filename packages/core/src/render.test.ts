@@ -112,6 +112,9 @@ it('draws a distinct pictogram per known agent and two letters where first lette
     },
   );
   expect(new Set(glyphs).size).toBe(glyphs.length);
+  // Orca's agent type may come in any case.
+  expect(renderKey({ ...m, agent: 'DROID' })).toBe(renderKey({ ...m, agent: 'droid' }));
+  expect(renderKey({ ...m, agent: 'Cline' })).toContain('>Cl</text>');
   expect(harnessLabel('cline')).toBe('Cl');
   expect(harnessLabel('crush')).toBe('Cr');
   expect(harnessLabel('kimi')).toBe('K');

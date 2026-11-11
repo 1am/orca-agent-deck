@@ -117,7 +117,7 @@ const PICTOGRAM: Record<string, string> = {
 /** Agent types Orca reports that have no pictogram, so a first letter is ambiguous between them. */
 const LETTER_AGENTS = ['kimi', 'cline', 'qwen', 'goose', 'crush', 'aider'];
 
-/** Letters for the badge of an agent without a pictogram: two when another such agent starts alike. */
+/** Letters for the badge of an agent without a pictogram (`kind` lower-case): two when another such agent starts alike. */
 export function harnessLabel(kind: string): string {
   const first = kind.slice(0, 1).toUpperCase();
   const clash = LETTER_AGENTS.some(
@@ -301,7 +301,8 @@ export function renderKey(m: KeyModel, o: RenderOptions = {}): string {
         )
         .join('');
   // A pane with no detected agent but a live mapping is a plain shell.
-  const kind = m.agent ? m.agent : m.state === 'unmapped' ? '' : 'shell';
+  // Orca's agent type, lower-cased once here for the pictogram and letter lookups.
+  const kind = (m.agent ? m.agent : m.state === 'unmapped' ? '' : 'shell').toLowerCase();
   const glyph = kind
     ? (PICTOGRAM[kind] ??
       `<text x="12" y="${harnessLabel(kind).length > 1 ? 16 : 17}" font-size="${harnessLabel(kind).length > 1 ? 11 : 14}" font-weight="500" text-anchor="middle" fill="${pal.bg}" stroke="none">${esc(harnessLabel(kind))}</text>`)
