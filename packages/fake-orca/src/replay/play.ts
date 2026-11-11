@@ -11,6 +11,9 @@ export function applyOrca(s: SimState, step: Step): boolean {
     case 'orca.pane.remove':
       sim.removePane(s, step.pane);
       return true;
+    case 'orca.pane.exit':
+      sim.exitPane(s, step.pane, step.cause);
+      return true;
     case 'orca.agent':
       sim.setAgent(s, step.pane, step.state, step.toolName ?? null, {
         outcome: step.outcome,

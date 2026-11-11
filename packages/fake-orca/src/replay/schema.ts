@@ -63,6 +63,8 @@ export const stepSchema = z.discriminatedUnion('do', [
     /** The agent's last message as `worktree ps` reports it (`lastAssistantMessage`); a final question makes the key ask. */
     message: z.string().optional(),
   }),
+  /** The pane's process ends (a crash, a non-zero exit, or a clean one): Orca lists it disconnected with the cause. */
+  step('orca.pane.exit', { pane, cause: z.enum(['crash', 'nonzero', 'clean']) }),
   step('orca.host.add', {
     id: z.string(),
     kind: z.enum(['local', 'ssh', 'runtime']),

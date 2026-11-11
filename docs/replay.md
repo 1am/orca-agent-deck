@@ -10,7 +10,7 @@ A scenario is a timeline of what Orca and the Stream Deck do, plus what the keys
 {"at":1000,"do":"expect.key","key":1,"state":"unreachable"}
 ```
 
-- `at` is ms on a virtual clock. Steps are `orca.*` (Orca to plugin A), `deck.*` (host to plugin B), `bridge.*` (A to B) and `expect.*`. `orca.agent` uses Orca's own names (`state`: working, waiting, blocked, done, idle; `outcome`, `toolName`).
+- `at` is ms on a virtual clock. Steps are `orca.*` (Orca to plugin A), `deck.*` (host to plugin B), `bridge.*` (A to B) and `expect.*`. `orca.pane.exit {pane, cause}` ends a pane's process (crash, nonzero, clean). `orca.agent` uses Orca's own names (`state`: working, waiting, blocked, done, idle; `outcome`, `toolName`).
 - `keys` is the initial layout (key number to pane): every runner plays it as `willAppear` at t=0 with that pane pinned. `deck` defaults to the MK.2 (5x3).
 - `sides` names the runners that play it (`sim`, `a`, `b`, `e2e`); the others skip it and list it as skipped.
 

@@ -14,7 +14,7 @@ function terminal(p: Pane) {
     title: p.title,
     paneTitle: null,
     connected: p.connected,
-    exitCause: null,
+    exitCause: p.exitCause ?? null,
     verdict: null,
     writable: true,
     lastOutputAt: p.lastOutputAt,

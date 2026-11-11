@@ -60,8 +60,10 @@ export function deriveDeckState(obs: PaneObservation, lastKnown?: DeckState): De
   if (obs.hostDown) {
     return { state: 'unreachable', stale: true, lastKnown };
   }
-  if (!obs.found || !obs.connected) return fresh('offline');
+  if (!obs.found) return fresh('offline');
+  // Orca lists a pane whose process ended as disconnected with the cause: a crash is an error, not "offline".
   if (obs.exitCause === 'crash' || obs.exitCause === 'nonzero') return fresh('error');
+  if (!obs.connected) return fresh('offline');
   const a = obs.agent;
   if (!a) return fresh('idle');
   switch (a.state) {

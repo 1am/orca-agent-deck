@@ -1,0 +1,9 @@
+{"v":2,"name":"b-attention-crash","description":"An agent whose process crashed (Orca lists the pane disconnected with exitCause crash and no agent) shows as an error on its key and counts on the Attention key; a press focuses it. Revert check: put the connected check before the exit cause in deriveDeckState, or filter panes without an agent type in urgentPanes.","sides":["b"],"keys":{"1":"a","15":{"action":"attention"}}}
+{"at":0,"do":"orca.pane.add","pane":"a"}
+{"at":0,"do":"expect.key","key":15,"state":"unmapped","line2":"0","label":"all calm"}
+{"at":100,"do":"orca.pane.exit","pane":"a","cause":"crash"}
+{"at":100,"do":"expect.key","key":1,"state":"error"}
+{"at":100,"do":"expect.key","key":15,"state":"error","line2":"1","label":"errors"}
+{"at":200,"do":"deck.down","key":15}
+{"at":200,"do":"deck.up","key":15}
+{"at":200,"do":"expect.focus","pane":"a"}

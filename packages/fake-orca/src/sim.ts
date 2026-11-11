@@ -8,6 +8,8 @@ export interface Pane {
   agentIdentity: string | null;
   executionHostId: string;
   connected: boolean;
+  /** Set when the pane's process ended: Orca reports it with `connected: false`. */
+  exitCause?: 'crash' | 'nonzero' | 'clean' | null;
   preview: string;
   lastOutputAt: number;
   agent: {
@@ -133,4 +135,15 @@ export function focus(s: SimState, handle: string): void {
 
 function note(s: SimState, msg: string): void {
   s.log.push(`t+${s.now - BASE_TIME}ms ${msg}`);
+}
+
+/** The pane's process ended: Orca lists it as disconnected with the cause, and its agent is gone. */
+export function exitPane(s: SimState, paneId: string, cause: 'crash' | 'nonzero' | 'clean'): void {
+  const p = s.panes.find((x) => x.leafId === `leaf-${paneId}`);
+  if (!p) return;
+  p.connected = false;
+  p.exitCause = cause;
+  p.agentIdentity = null;
+  p.agent = null;
+  note(s, `pane ${paneId} exited (${cause})`);
 }

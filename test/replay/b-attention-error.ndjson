@@ -1,0 +1,16 @@
+{"v":2,"name":"b-attention-error","description":"An agent that fails its turn (outcome failure) counts on the Attention key as an error, below a permission wait, and a press focuses it; pressing it acknowledges the error and the key calms down. Revert check: leave the error state out of urgentPanes in DeckController.","sides":["b"],"keys":{"1":"a","2":"b","15":{"action":"attention"}}}
+{"at":0,"do":"orca.pane.add","pane":"a"}
+{"at":0,"do":"orca.pane.add","pane":"b"}
+{"at":0,"do":"expect.key","key":15,"state":"unmapped","line2":"0","label":"all calm"}
+{"at":100,"do":"orca.agent","pane":"a","state":"working"}
+{"at":100,"do":"bridge.frame","from":"a","frame":{"type":"agentStatus","paneKey":"tab-1:leaf-a","workspaceId":"w1","state":"working","outcome":null,"stateStartedAt":1800000000100,"receivedAt":1800000000100}}
+{"at":200,"do":"orca.agent","pane":"a","state":"done","outcome":"failure"}
+{"at":200,"do":"bridge.frame","from":"a","frame":{"type":"agentStatus","paneKey":"tab-1:leaf-a","workspaceId":"w1","state":"done","outcome":"failure","stateStartedAt":1800000000200,"receivedAt":1800000000200}}
+{"at":200,"do":"expect.key","key":1,"state":"error"}
+{"at":200,"do":"expect.key","key":15,"state":"error","line2":"1","label":"errors"}
+{"at":300,"do":"orca.agent","pane":"b","state":"waiting","toolName":"Bash"}
+{"at":300,"do":"bridge.frame","from":"a","frame":{"type":"agentStatus","paneKey":"tab-1:leaf-b","workspaceId":"w1","state":"waiting","outcome":null,"stateStartedAt":1800000000300,"receivedAt":1800000000300}}
+{"at":300,"do":"expect.key","key":15,"state":"needs_input","line2":"2","label":"need you"}
+{"at":400,"do":"deck.down","key":15}
+{"at":400,"do":"deck.up","key":15}
+{"at":400,"do":"expect.focus","pane":"b"}
