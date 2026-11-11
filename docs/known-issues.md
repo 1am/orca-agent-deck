@@ -12,6 +12,16 @@ Issues that affect Agent Deck for Orca but are not ours to fix, plus how the dec
 - **Deck impact.** The Setup tab's Check again shows "No answer from the plugin. If it was restarted, select the key again." after 5 s (10 s while Orca is read through the CLI).
 - **Workaround.** Select another key and then this one again; the app announces the inspector and the tab answers. Not yet verified whether the Elgato app or OpenDeck re-announce it after a restart.
 
+## Orca plugin tooling
+
+Checked: 2026-11-11.
+
+### Orca 1.4.251 ships no typings for plugin panels (not reported upstream)
+
+- **What.** `orca plugin create --template components` (and `worker-panel`) and `orca plugin types` stop with `ENOENT ... resources/plugins/declarative/orca.d.ts`: the `.d.ts` files the tooling reads are missing from the app bundle (`resources/plugins/declarative` holds only the `.mjs` runtimes). The scaffold still writes the plugin files.
+- **Deck impact.** None at runtime. A panel cannot be type-checked against Orca's typings here, so the panel in this repository is plain JSX checked with `orca plugin check` and `orca plugin test`, and its API was read from Orca's shipped schemas.
+- **Workaround.** None needed. Re-check on each Orca update and report upstream if it persists.
+
 ## Paired Orca servers
 
 Checked: 2026-11-06.
