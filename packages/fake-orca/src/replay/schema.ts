@@ -63,7 +63,11 @@ export const stepSchema = z.discriminatedUnion('do', [
     /** The agent's last message as `worktree ps` reports it (`lastAssistantMessage`); a final question makes the key ask. */
     message: z.string().optional(),
   }),
-  step('orca.host.add', { id: z.string(), kind: z.enum(['local', 'ssh']), name: z.string() }),
+  step('orca.host.add', {
+    id: z.string(),
+    kind: z.enum(['local', 'ssh', 'runtime']),
+    name: z.string(),
+  }),
   step('orca.host.set', { id: z.string(), connected: z.boolean() }),
   step('orca.restart', {}),
   /** What `orca plugin list` reports for a plugin (the Orca plugin A is `1am.agent-deck`); `absent` removes it. */

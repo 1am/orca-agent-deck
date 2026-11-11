@@ -45,6 +45,7 @@ Every bug closes with a scenario that fails when its fix is reverted (the revert
 | Orca restart rotates terminal handles | `b-orca-restart`, `b-orca-restart-press` (a press in the same instant retries with the fresh handle; + `a-idle-out-reconnect`, `a-b-restart` for the reconnects) | focus with a generation-1 handle (`deck.ts`): the press never focuses the pane |
 | Lazy wake: the event that woke plugin A is kept | `a-lazy-wake` | `onAck` replay removed (`main.mjs`): no agentStatus after B returns |
 | Plugin B restarts, A reconnects | `a-b-restart` | no reconnect scheduled (`main.mjs`): no hello after B restarts |
+| Status key says "2 hosts down" while the Setup list names none | `b-hosts-down` | drop the `hostsDown` fact in `doctorFacts` (`status.ts`): key 14 reads "hosts down" with 2 instead of "2 hosts down", and the list has no Remote hosts row |
 | Hold with Orca showing a paired server says "Remote pane: use the picker" | `b-hold-remote` | hint dropped (`deck.ts`): the key says "No pane selected in Orca" |
 | Needs-input reads the same by push and by poll | `b-needs-input-label` | tool name back in `lineTwo`: poll reads "permission" |
 | last-good host list, released panes off auto-fill | none: auto-fill is off in the shipped plugin, and a failing host list needs a paired Orca environment that the simulation does not model (unit tests in `adapter-cli` and `core`) | |

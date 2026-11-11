@@ -115,13 +115,15 @@ export function worktreePs(s: SimState) {
 
 export function hostList(s: SimState) {
   return envelope({
-    hosts: s.hosts.map((h) => ({
-      kind: h.kind,
-      name: h.name,
-      id: h.id,
-      selector: h.kind === 'local' ? '--host local' : `--host ssh:${h.id}`,
-      ...(h.kind === 'ssh' ? { connected: h.connected } : {}),
-    })),
+    hosts: s.hosts
+      .filter((h) => h.kind !== 'runtime')
+      .map((h) => ({
+        kind: h.kind,
+        name: h.name,
+        id: h.id,
+        selector: h.kind === 'local' ? '--host local' : `--host ssh:${h.id}`,
+        ...(h.kind === 'ssh' ? { connected: h.connected } : {}),
+      })),
   });
 }
 

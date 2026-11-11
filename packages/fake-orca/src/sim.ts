@@ -23,7 +23,8 @@ export interface Pane {
 
 export interface Host {
   id: string;
-  kind: 'local' | 'ssh';
+  /** `runtime`: a paired runtime that only shows up in the listings' host scope, not in `host list`. */
+  kind: 'local' | 'ssh' | 'runtime';
   name: string;
   connected: boolean;
 }
