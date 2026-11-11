@@ -34,7 +34,8 @@ import { PROFILES, type Profile } from './profiles.ts';
 const BASE_TIMEOUT_MS = 4000 * (Number(process.env['REPLAY_TIMEOUT_SCALE']) || 1);
 const SETTLE_MS = 30;
 const wait = (ms: number) => new Promise((r) => setTimeout(r, ms));
-const REPO = resolve(import.meta.dirname, '../..');
+// A bundled runner (replay-e2e) has no source tree next to it: the script says where the repository is.
+const REPO = process.env['REPLAY_REPO'] ?? resolve(import.meta.dirname, '../..');
 const SD = join(REPO, 'packages/streamdeck-plugin/pl.1am.orca-agent-deck.sdPlugin');
 
 type Frame = Record<string, unknown>;
@@ -89,8 +90,23 @@ async function writeShim(dir: string, name: string, js: string): Promise<string>
 export const canRun = (p: Profile): string | null =>
   p.os === process.platform ? null : `needs ${p.os} (this is ${process.platform})`;
 
+/**
+ * Plugin A for the end-to-end loop: the real worker on Orca's `mountWorker`, started once B has published its
+ * discovery file. With it, `orca.event` steps go to A and the frames A sends reach B for real, so a scenario's
+ * `bridge.frame` lines from A are not played (the simulator would be a second A).
+ */
+export interface PluginA {
+  mount(home: string): Promise<void>;
+  emit(name: string, payload: unknown): Promise<void>;
+  stop(): Promise<void>;
+}
+
 /** Plays one scenario on one profile; resolves with how often the `orca` CLI shim ran (each run is a node start). */
-export async function runB(sc: Scenario, profileId: string): Promise<{ orcaCalls: number }> {
+export async function runB(
+  sc: Scenario,
+  profileId: string,
+  a?: PluginA,
+): Promise<{ orcaCalls: number }> {
   const TIMEOUT_MS = BASE_TIMEOUT_MS * (sc.header.runtime ? 1 : 3);
   const profile = PROFILES[profileId]!;
   const root = await mkdtemp(join(tmpdir(), 'rb-'));
@@ -253,6 +269,14 @@ process.exit(r.status ?? 1);`,
     }
     appearAll();
     await pinAll();
+    if (a) {
+      await until(
+        () => existsSync(discovery),
+        'the bridge discovery file',
+        () => '',
+      );
+      await a.mount(home);
+    }
     for (let i = 0; i < steps.length;) {
       const at = steps[i]!.at;
       const group = steps.filter((x) => x.at === at);
@@ -318,6 +342,7 @@ process.exit(r.status ?? 1);`,
     throw new Error(`${(e as Error).message}\n${reqs}  plugin log:\n${log.replace(/^/gm, '    ')}`);
   } finally {
     sim?.close();
+    await a?.stop().catch(() => {});
     await host.stop().catch(() => {});
     await runtime?.stop().catch(() => {});
     await rm(root, { recursive: true, force: true }).catch(() => {});
@@ -363,8 +388,12 @@ process.exit(r.status ?? 1);`,
         appearAll();
         return;
       }
+      case 'orca.event':
+        if (a) await a.emit(st.name, st.payload);
+        return;
       case 'bridge.frame':
         if (st.from === 'a') {
+          if (a) return;
           if (!sim) await connectSim();
           sim!.send({ v: 1, ...st.frame });
         } else wantFrames.push(st.frame as Frame);

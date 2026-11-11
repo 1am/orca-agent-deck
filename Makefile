@@ -4,7 +4,7 @@ SD_PKG   := dist/orca-agent-deck-$(VERSION).streamDeckPlugin
 ORCA_DIR := orca-plugin
 ORCA_PKG := dist/orca-agent-deck-orca-plugin-$(VERSION).zip
 
-.PHONY: all build package package-sd package-orca test contract replay replay-a replay-b check clean
+.PHONY: all build package package-sd package-orca test contract replay replay-a replay-b replay-e2e check clean
 
 all: build
 
@@ -37,6 +37,10 @@ replay-a:
 replay-b: 
 	pnpm sd:build
 	REPLAY_NODE="$(NODE)" pnpm replay-b
+
+replay-e2e:
+	pnpm sd:build
+	pnpm replay-e2e
 
 check:
 	pnpm typecheck

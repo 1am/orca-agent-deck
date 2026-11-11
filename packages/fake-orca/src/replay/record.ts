@@ -1,4 +1,4 @@
-import { header, stepSchema, type Step } from './schema.ts';
+import { header, stepSchema, type Side, type Step } from './schema.ts';
 
 /**
  * Turns a sanitized event log into a replay scenario (docs/replay.md, "Write or record").
@@ -61,7 +61,7 @@ function clean(value: unknown, path: string, removed: string[]): unknown {
 
 export function recordScenario(
   log: string,
-  opts: { name: string; description?: string; sides?: Array<'sim' | 'a' | 'b'> },
+  opts: { name: string; description?: string; sides?: Side[] },
 ): Recorded {
   const removed: string[] = [];
   const lines = log.split('\n').flatMap((l, i) => (l.trim() ? [{ n: i + 1, l }] : []));

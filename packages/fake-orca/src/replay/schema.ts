@@ -7,7 +7,7 @@ import { z } from 'zod';
  * plugin B), `bridge.*` (the seam between A and B) and `expect.*` (checkpoints).
  */
 
-export const SIDES = ['sim', 'a', 'b'] as const;
+export const SIDES = ['sim', 'a', 'b', 'e2e'] as const;
 export type Side = (typeof SIDES)[number];
 
 /**

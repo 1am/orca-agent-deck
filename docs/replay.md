@@ -12,7 +12,7 @@ A scenario is a timeline of what Orca and the Stream Deck do, plus what the keys
 
 - `at` is ms on a virtual clock. Steps are `orca.*` (Orca to plugin A), `deck.*` (host to plugin B), `bridge.*` (A to B) and `expect.*`. `orca.agent` uses Orca's own names (`state`: working, waiting, blocked, done, idle; `outcome`, `toolName`).
 - `keys` is the initial layout (key number to pane): every runner plays it as `willAppear` at t=0 with that pane pinned. `deck` defaults to the MK.2 (5x3).
-- `sides` names the runners that play it (`sim`, `a`, and `b`); the others skip it and list it as skipped.
+- `sides` names the runners that play it (`sim`, `a`, `b`, `e2e`); the others skip it and list it as skipped.
 
 ## Two layers of assertions
 - `expect.*` lines are the intent: what the bug or feature is about. A scenario needs at least one, and a bug fix is only proven by an `expect` that fails when the fix is reverted. An `expect` field the runner cannot evaluate is an error, never a pass.
@@ -55,6 +55,13 @@ Every bug closes with a scenario that fails when its fix is reverted (the revert
 ## Run
 - `pnpm replay [file|dir ...]` or `make replay` (all scenarios); `--update` (`make replay ARGS=--update`) rewrites the snapshots - read the diff before committing it.
 - `pnpm test` runs every sim scenario and the loader tests (`replay.test.ts`); `make replay-a` runs the `a` ones, `make replay-b` the `b` ones.
+
+## Both plugins together (side `e2e`)
+`make replay-e2e` (builds B first) runs the whole loop with no Orca app and no Stream Deck app: `orca.event` steps go to the real plugin A on `mountWorker`, A pushes over the real bridge to the built plugin B behind the fake Stream Deck host, `expect.key` reads the key, a press reaches the fake runtime socket (`expect.focus`). Local only, like `replay-a`, and for the same reason: `orca/testing` exists only inside the installed Orca, so a CI run would need Orca installed or a vendored copy re-vendored on every Orca bump.
+- It is the B runner (`runB` in `test/replay-b/run-b.ts`) with plugin A plugged in: the steps and checks are the ones of side `b`, except that `orca.event` steps are played into A and `bridge.frame from:"a"` lines are not (the real A is the sender). Orca's own state (`orca.agent`) stays untouched when the point is that only A's push can move the key.
+- One host profile only (the first that runs on this OS): plugin A has no stop handle, so a worker of an earlier test would go on looking for the next test's bridge.
+- Staging, esbuild bundle, scratch HOME and the real-state guard are the same as `replay-a` (`scripts/replay-e2e.ts`). Each scenario states its revert check.
+- Where the suites sit: tests live outside `orca-plugin/` (it is what the catalog publishes), staged next to a copy of `main.mjs` for `orca plugin test`.
 
 ## Write or record
 - Write: copy a scenario, change the steps, add the `expect` for the behaviour, run with `--update`, check the timeline reads right.
