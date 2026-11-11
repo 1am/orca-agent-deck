@@ -109,7 +109,7 @@ function writeNotes(): void {
   mkdirSync(dist, { recursive: true });
   writeFileSync(
     join(dist, 'RELEASE_NOTES.md'),
-    `# Agent Deck for Orca ${version}\n\nUnofficial Stream Deck plugin for Orca. Install by double-clicking \`orca-agent-deck-${version}.streamDeckPlugin\`. Verify with \`shasum -a 256 -c SHA256SUMS\`.\n\n${body}\n`,
+    `# Agent Deck for Orca ${version}\n\nUnofficial Stream Deck plugin for Orca. Install by double-clicking \`orca-agent-deck-${version}.streamDeckPlugin\`. Verify with \`shasum -a 256 -c SHA256SUMS\` or, with the GitHub CLI, \`gh attestation verify <file> --repo 1am/orca-agent-deck\`.\n\n${body}\n`,
   );
   const header =
     '# Changelog\n\nAll notable changes to this project are documented here. Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), versioning: [SemVer](https://semver.org/).\n\n';
