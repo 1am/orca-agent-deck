@@ -122,6 +122,34 @@ describe('locate (mapping survives a changed action context)', () => {
     expect(m.get('new')?.pane).toBeUndefined();
   });
 
+  it('does not give a deck that went away to a new key on another live deck', () => {
+    // Stream Deck Mobile maps (1,0), disconnects; a fresh key at the same position of the hardware deck must not adopt it.
+    const m = new MappingStore();
+    const mobile = { ...pos, device: 'MOBILE' };
+    m.locate('m1', mobile, new Set());
+    m.set('m1', { mode: 'pinned', pane: binding('p-mobile') });
+    const seen = new Set(['MOBILE']); // it was live earlier in this run
+    expect(m.locate('hw1', pos, new Set(['hw1']), seen)).toBe(false);
+    expect(m.get('hw1')?.pane).toBeUndefined();
+    expect(m.get('m1')?.pane?.paneKey).toBe('p-mobile');
+  });
+
+  it('still carries a mapping across a host switch, where the old device was never live in this run', () => {
+    const m = new MappingStore();
+    m.locate('old', pos, new Set());
+    m.set('old', { mode: 'pinned', pane: binding('p1') });
+    expect(m.locate('new', { ...pos, device: 'sd-ABC' }, new Set(['new']), new Set())).toBe(true);
+  });
+
+  it('does not inherit when another live deck has a key at that position', () => {
+    const m = new MappingStore();
+    m.locate('gone', { ...pos, device: 'D2' }, new Set());
+    m.set('gone', { mode: 'pinned', pane: binding('p2') });
+    m.locate('third', { ...pos, device: 'D3' }, new Set());
+    expect(m.locate('new', { ...pos, device: 'D1' }, new Set(['new', 'third']))).toBe(false);
+    expect(m.get('new')?.pane).toBeUndefined();
+  });
+
   it('does not guess when two vanished keys share the position on different devices', () => {
     const m = new MappingStore();
     for (const [k, device] of [

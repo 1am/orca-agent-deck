@@ -223,6 +223,9 @@ export class DeckController {
     return hostLabel(hostId, (hostId && this.hostAliases[hostId]?.trim()) || name);
   }
 
+  /** Devices whose keys appeared in this run (see `MappingStore.locate`). */
+  private readonly seenDevices = new Set<string>();
+
   private downHostName(hostId: string): string {
     const seen = this.remotePanes.get(hostId)?.find((p) => p.hostName)?.hostName;
     return this.hostAliases[hostId]?.trim() || seen || readableHostId(hostId);
@@ -593,7 +596,9 @@ export class DeckController {
   /** Number of Pane slots holding a pane (for the Setup doctor). */
   /** A key appeared at `pos`: remember it, and inherit the mapping a key at that position had before. */
   locateSlot(slot: string, pos: SlotPosition, live: ReadonlySet<string>): boolean {
-    return this.store.locate(slot, pos, live);
+    const inherited = this.store.locate(slot, pos, live, this.seenDevices);
+    this.seenDevices.add(pos.device);
+    return inherited;
   }
 
   mappedSlotCount(): number {
