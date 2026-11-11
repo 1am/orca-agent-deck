@@ -13,7 +13,7 @@ All notable changes to this project are documented here. Format: [Keep a Changel
 - **streamdeck:** pictograms for OpenCode, Droid, Devin, Gemini, Copilot, Cursor and Amp on the key badge. Other agents show their first letter, or two letters when another agent starts alike (Kimi and Cline, for example).
 - **streamdeck:** the Setup tab shows that "Check again" is running and when the last check finished, and names the paired servers it cannot reach.
 - **orca-plugin:** "Agent Deck: Uninstall" removes the data folder (`~/.orca-deck`, `%APPDATA%\orca-deck` on Windows) with the bridge file, key mappings and the plugin log, and says how to remove the two plugins by hand. Run it twice within 10 seconds to confirm.
-- **orca-plugin:** "Agent Deck: Record events" is an opt-in capture of what Orca sends the plugin, for bug reports and replay tests. A second run stops it and shows the file; it stops by itself after 10 minutes or 5 MB. Terminal content, pane titles, paths and tokens are never written.
+- **orca-plugin:** "Agent Deck: Record events" is an opt-in capture of what Orca sends the plugin, for bug reports and replay tests. A second run stops it and shows the file; it stops by itself after 10 minutes or 5 MB, and carries on when Orca restarts the plugin's worker meanwhile. Only the fields a replay needs (pane, state, timestamps) are written: never terminal content, pane titles, branch names, paths or tokens.
 - Both plugins say "Update Agent Deck for Orca" when their bridge versions differ, instead of failing quietly.
 - Release files carry GitHub build attestations. "Verify the download" in `docs/install.md` shows how to check them with `gh attestation verify`.
 

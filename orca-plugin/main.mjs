@@ -4,7 +4,7 @@
 // Never log tokens or terminal content.
 import net from 'node:net';
 import { createHash, createHmac, randomBytes, timingSafeEqual } from 'node:crypto';
-import { appendFile, chmod, lstat, mkdir, readFile, rm } from 'node:fs/promises';
+import { appendFile, chmod, lstat, mkdir, readFile, rm, stat, writeFile } from 'node:fs/promises';
 import { homedir } from 'node:os';
 import { dirname, join, posix, win32 } from 'node:path';
 
@@ -533,6 +533,15 @@ export function createRecorder({
   let bytes = 0;
   let timer = null;
   let queue = Promise.resolve();
+  // Orca kills an idle worker and starts a new one for the next event: what is recording survives in this file, so
+  // the next worker keeps appending (within the same limits) and the toggle still knows a recording runs.
+  const statePath = join(dir, '.active.json');
+  const NAME = /^[0-9T-]+Z\.ndjson$/;
+  const arm = (ms) => {
+    clearTimeout(timer);
+    timer = setTimeout(() => stop('time limit reached'), ms);
+    timer.unref?.();
+  };
   const add = (entry) => {
     if (!file) return;
     const line = `${JSON.stringify({ ts: now(), ...sanitizeForRecording(entry) })}\n`;
@@ -546,6 +555,7 @@ export function createRecorder({
     const done = file;
     file = null;
     clearTimeout(timer);
+    queue = queue.then(() => rm(statePath, { force: true })).catch(() => {});
     onStop(done, why);
     return done;
   }
@@ -559,8 +569,43 @@ export function createRecorder({
       file = join(dir, `${new Date(now()).toISOString().replace(/[:.]/g, '-')}.ndjson`);
       bytes = 0;
       queue = Promise.resolve();
-      timer = setTimeout(() => stop('time limit reached'), maxMs);
-      timer.unref?.();
+      const startedAt = now();
+      arm(maxMs);
+      await writeFile(statePath, JSON.stringify({ active: true, path: file, startedAt, bytes }), {
+        mode: 0o600,
+      });
+      return file;
+    },
+    /**
+     * Picks up the recording of the worker that went before, when its file is ours, young and small enough; otherwise
+     * clears the note. Resolves to the file, or null.
+     */
+    async resume() {
+      if (file) return file;
+      let st;
+      try {
+        st = JSON.parse(await readFile(statePath, 'utf8'));
+      } catch {
+        return null;
+      }
+      const left = typeof st?.startedAt === 'number' ? st.startedAt + maxMs - now() : 0;
+      let size = Infinity;
+      // Only a file this recorder names, inside its own folder: the note is just a file and may be edited.
+      const ok =
+        typeof st?.path === 'string' && NAME.test(posix.basename(st.path.replaceAll('\\', '/')));
+      const path = ok ? join(dir, posix.basename(st.path.replaceAll('\\', '/'))) : '';
+      if (ok)
+        size = await stat(path).then(
+          (x) => x.size,
+          () => Infinity,
+        );
+      if (!ok || left <= 0 || size >= maxBytes) {
+        await rm(statePath, { force: true }).catch(() => {});
+        return null;
+      }
+      file = path;
+      bytes = size;
+      arm(left);
       return file;
     },
     stop,
@@ -610,6 +655,8 @@ export default async function activate(orca) {
   const recorder = createRecorder({
     onStop: (file, why) => log(`record: ${why}, recording is in ${file}`),
   });
+  const resumed = await recorder.resume();
+  if (resumed) log(`record: resumed after a restart of this worker, writing to ${resumed}`);
   // activate() gets no app version, only the plugin API version; B reads the app version itself.
   const pairing = { id: null, last: null };
   const bridge = createBridge({

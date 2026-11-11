@@ -128,13 +128,14 @@ export async function runA(sc: Scenario, env: Env): Promise<void> {
   let lastLogs: string[] = [];
   const realHome = process.env.HOME;
 
-  const activate = async () => {
-    gen++;
+  const activate = async (sameHome = false) => {
     // A reads `$HOME/.orca-deck/bridge.json` on every connect; a new HOME per start also lets an old
-    // instance of A (which has no way to be killed here) find nothing and stay quiet.
+    // instance of A (which has no way to be killed here) find nothing and stay quiet. `sameHome` is a worker
+    // that restarts where the last one ran, for what it left on disk.
+    if (!sameHome || gen === 0) gen++;
     await mkdir(join(homeOf(gen), '.orca-deck'), { recursive: true, mode: 0o700 });
     process.env.HOME = homeOf(gen);
-    if (gen > 1) await b.move(discoveryOf(gen));
+    if (gen > 1 && !sameHome) await b.move(discoveryOf(gen));
     worker = await env.mountWorker(env.plugin, {
       events: env.manifest.contributes.events.map((e) => e.on),
       hooks: [],
@@ -145,7 +146,7 @@ export async function runA(sc: Scenario, env: Env): Promise<void> {
   const apply = async (step: Step): Promise<void> => {
     switch (step.do) {
       case 'orca.activate':
-        return activate();
+        return activate(step.sameHome);
       case 'orca.deactivate':
         lastLogs = worker?.logs ?? [];
         await worker?.deactivate();

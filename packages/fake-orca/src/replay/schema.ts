@@ -75,7 +75,8 @@ export const stepSchema = z.discriminatedUnion('do', [
   /** Orca selects this pane (what hold-to-assign reads). */
   step('orca.focus', { pane }),
   /** Plugin A's worker (re)starts, as Orca does for the next event after it idled out; `orca.deactivate` is the idle-out. */
-  step('orca.activate', {}),
+  /** `sameHome`: the worker restarts in the HOME of the one before, as Orca does (the runner otherwise gives each start its own). */
+  step('orca.activate', { sameHome: z.boolean().optional() }),
   step('orca.deactivate', {}),
   /** A command from the palette; `result` is the text Orca shows as its toast. */
   step('orca.command', {

@@ -1,4 +1,4 @@
-import { mkdtemp, readFile, readdir } from 'node:fs/promises';
+import { mkdtemp, readFile, readdir, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
@@ -96,11 +96,13 @@ interface A {
     dir: string;
     maxBytes?: number;
     maxMs?: number;
+    now?: () => number;
     onStop?: (file: string, why: string) => void;
   }): {
     active: boolean;
     start(): Promise<string>;
     stop(why?: string): string | null;
+    resume(): Promise<string | null>;
     event(name: string, payload?: unknown): void;
     frame(from: string, frame: unknown): void;
     flush(): Promise<void>;
@@ -224,5 +226,52 @@ describe('plugin A recording', () => {
     await new Promise((r) => setTimeout(r, 80));
     expect(rec.active).toBe(false);
     expect(stops).toEqual(['time limit reached']);
+  });
+
+  describe('resume after the worker was replaced', () => {
+    const started = async (
+      over: { maxBytes?: number; maxMs?: number; now?: () => number } = {},
+    ) => {
+      const a = await loadA();
+      const dir = await mkdtemp(join(tmpdir(), 'rec-'));
+      const first = a.createRecorder({ dir, ...over });
+      const file = await first.start();
+      first.event('agent.status.changed', { paneKey: 't:one', state: 'working' });
+      await first.flush();
+      // The old worker is gone without stopping: only the note and the file are left.
+      return { a, dir, file, second: (o = {}) => a.createRecorder({ dir, ...over, ...o }) };
+    };
+
+    it('keeps appending to the same file and stops it from the new worker', async () => {
+      const t = await started();
+      const rec = t.second();
+      expect(rec.active).toBe(false);
+      expect(await rec.resume()).toBe(t.file);
+      expect(rec.active).toBe(true);
+      rec.event('agent.status.changed', { paneKey: 't:two', state: 'working' });
+      rec.stop();
+      await rec.flush();
+      const text = await readFile(t.file, 'utf8');
+      expect(text).toContain('t:one');
+      expect(text).toContain('t:two');
+      expect(await readdir(t.dir)).toEqual([t.file.split('/').pop()]);
+    });
+
+    it('does not resume past the time limit, or a file at the size limit', async () => {
+      const late = await started({ maxMs: 1000, now: () => 0 });
+      expect(await late.second({ now: () => 5000 }).resume()).toBeNull();
+      expect(await readdir(late.dir)).not.toContain('.active.json');
+      const big = await started();
+      expect(await big.second({ maxBytes: 10 }).resume()).toBeNull();
+    });
+
+    it('ignores a note that points outside the recordings folder', async () => {
+      const t = await started();
+      await writeFile(
+        join(t.dir, '.active.json'),
+        JSON.stringify({ path: '/etc/passwd', startedAt: Date.now() }),
+      );
+      expect(await t.second().resume()).toBeNull();
+    });
   });
 });
