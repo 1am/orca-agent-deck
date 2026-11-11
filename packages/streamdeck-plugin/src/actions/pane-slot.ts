@@ -66,12 +66,19 @@ export class PaneSlot extends SingletonAction {
     super();
     this.create = create;
     setInterval(() => void this.refresh(), 2000);
-    // Spinner advances an eighth turn per tick, or every other tick on a busy deck; keys without a
-    // spinner produce an identical image and are not re-sent.
+    // Spinner advances an eighth turn per tick, or every other tick with more than 2 working keys.
+    // A tick with nothing to animate does not repaint at all; keys that did not change are not re-sent.
     setInterval(() => {
       this.tick++;
-      void this.repaint();
+      if (this.animating()) void this.repaint();
     }, 250);
+  }
+
+  /** Is anything on the deck changing with time: a spinner, the pairing blink, a hint about to expire? */
+  private animating(): boolean {
+    if (this.hints.size > 0 || this.ctl?.pairing.state?.phase === 'waitingForKey') return true;
+    for (const id of this.keys.keys()) if (this.views.get(id)?.state === 'working') return true;
+    return false;
   }
 
   /** Created on first use, i.e. after the plugin connected to Stream Deck. */
