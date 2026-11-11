@@ -91,7 +91,12 @@ export class StatusKey extends InfoKey {
     if (!isCurrentPi(id)) return;
     const c = await this.create();
     await Promise.all([c.refresh([]), readTmux(), refreshInstalled()]);
-    await replyToPi(id, { type: 'checks', checks: runChecks(doctorFacts(c)) });
+    await replyToPi(id, {
+      type: 'checks',
+      checks: runChecks(doctorFacts(c)),
+      // The inspector waits longer for an answer while every read spawns the CLI.
+      slow: !c.overview().fast,
+    });
   }
 
   protected async press(c: DeckController) {

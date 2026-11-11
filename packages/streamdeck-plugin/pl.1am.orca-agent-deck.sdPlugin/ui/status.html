@@ -135,6 +135,8 @@
       const recheck = document.getElementById('recheck');
       const stamp = document.getElementById('stamp');
       let waiting = null;
+      // Reading Orca through the CLI takes seconds per refresh: wait longer before giving up.
+      let slow = false;
 
       function settle(text) {
         clearTimeout(waiting);
@@ -152,11 +154,16 @@
         document.getElementById('checks').classList.add('busy');
         stamp.textContent = '';
         clearTimeout(waiting);
-        waiting = setTimeout(() => settle('No answer from the plugin'), 5000);
+        waiting = setTimeout(
+          () => settle('No answer from the plugin. If it was restarted, select the key again.'),
+          slow ? 10000 : 5000,
+        );
         send({ type: 'load' });
       };
 
       const send = connectPi('checks', (m) => {
+        slow = m.slow === true;
+        // A reply that comes after the "no answer" message is still shown, and the message goes.
         render(m.checks);
         settle('Checked at ' + new Date().toLocaleTimeString());
       });
