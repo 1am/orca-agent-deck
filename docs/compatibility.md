@@ -43,6 +43,9 @@ Agent Deck for Orca draws what Orca reports, so each harness depends on Orca's a
 
 State names follow the colours on the key: working (blue), needs input (amber), asks you (orange), done (green), error (red), stopped (purple-grey), idle (grey). The mapping from Orca's states is in `packages/core/src/status.ts`.
 
+## Agent icons on the keys
+The badge on a pane key shows the agent's icon from Orca (see `NOTICE.md` for the attribution), read from Orca v1.4.251: aider, amp, ante, antigravity, aug, autohand, cline, codebuddy, codebuff, codex, command-code, continue, copilot, crush, cursor, devin, droid, dsh, freebuff, gemini, goose, grok, hermes, jcode, kilo, kimi, kiro, mimo-code, mistral-vibe, muse, omp, openclaude, openclaw, opencode, pi, prime-agent, qoder, qwen-code, rovo, trae, zcode. Solid favicons and round logos are shown as they are on the badge disc; logos on a transparent background take the key's colour. Claude Code, plain shells and tmux use our own glyphs, and an agent without an icon shows its first letter (two when another starts alike). The icons are PNGs and SVG paths inside the key image: not yet checked on a real Stream Deck in either host app.
+
 ## Hosts
 
 | | Status |

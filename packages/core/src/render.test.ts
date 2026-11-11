@@ -89,9 +89,10 @@ it('shows agent and host badges, link-broken marker; only the working icon spins
   };
   const svg = renderKey(m, { spin: 0 });
   expect(svg).toContain('M12 5v14');
-  expect(renderKey({ ...m, agent: 'pi' })).toContain('M6.5 8.5h11');
+  expect(renderKey({ ...m, agent: 'pi' })).toContain('M165.29 165.29'); // Orca's icon
   expect(renderKey({ ...m, agent: null })).toContain('M10 6.5l-1.2 11');
-  expect(renderKey({ ...m, agent: 'kimi' })).toContain('>K</text>');
+  expect(renderKey({ ...m, agent: 'kimi' })).toContain('data:image/png;base64,');
+  expect(renderKey({ ...m, agent: 'mystery-agent' })).toContain('>M</text>');
   expect(renderKey({ ...m, agent: null, state: 'unmapped' })).not.toContain('stroke-width="2.2"');
   expect(svg).toContain('devbox');
   expect(renderKey(m, { spin: 1 })).toContain('rotate(45 20 20)');
@@ -111,12 +112,12 @@ it('draws a distinct pictogram per known agent and two letters where first lette
     },
   );
   expect(new Set(glyphs).size).toBe(glyphs.length);
+  // Orca's agent type may come in any case.
+  expect(renderKey({ ...m, agent: 'DROID' })).toBe(renderKey({ ...m, agent: 'droid' }));
   expect(harnessLabel('cline')).toBe('Cl');
   expect(harnessLabel('crush')).toBe('Cr');
   expect(harnessLabel('kimi')).toBe('K');
   expect(harnessLabel('mystery')).toBe('M');
-  expect(renderKey({ ...m, agent: 'cline' })).toContain('>Cl</text>');
-  expect(renderKey({ ...m, agent: 'crush' })).toContain('>Cr</text>');
 });
 
 it('asks for a metric-compatible font before DejaVu Sans', () => {
@@ -211,4 +212,33 @@ it('statusInfo says the Orca response was unexpected, not that Orca is down', as
       hostsDown: 0,
     }),
   ).toEqual({ tone: 'error', value: '!', caption: 'unexpected Orca response' });
+});
+
+describe('Orca agent icons', () => {
+  const m: KeyModel = { state: 'idle', label: 'a', line2: 'b' };
+
+  it('draws a solid favicon as it is on the badge disc (chip)', () => {
+    const svg = renderKey({ ...m, agent: 'cursor' });
+    expect(svg).toContain('clip-path="url(#chip)"');
+    expect(svg).not.toContain('filter="url(#tint)"');
+  });
+
+  it('tints a logo on a transparent background with the key colour (mask)', () => {
+    const svg = renderKey({ ...m, agent: 'amp' });
+    expect(svg).toContain('filter="url(#tint)"');
+    expect(svg).toContain('<feFlood flood-color=');
+    expect(svg).not.toContain('url(#chip)');
+  });
+
+  it('an override picks the mode, an SVG glyph is filled with the key colour', () => {
+    expect(renderKey({ ...m, agent: 'goose' })).toContain('url(#chip)');
+    const codex = renderKey({ ...m, agent: 'codex' });
+    expect(codex).toContain('fill-rule="evenodd"');
+    expect(codex).not.toContain('<image');
+  });
+
+  it('keeps our own pictogram where Orca has no icon, and the letter where we have neither', () => {
+    expect(renderKey({ ...m, agent: 'claude' })).toContain('M12 5v14');
+    expect(renderKey({ ...m, agent: 'zzz-unknown' })).toContain('>Z</text>');
+  });
 });
