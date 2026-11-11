@@ -1,4 +1,4 @@
-{"v":2,"name":"a-uninstall","description":"Agent Deck for Orca: Uninstall asks twice (the first run only arms and removes nothing); the second run within 10 s removes the data dir under the worker HOME and says how to remove the two plugins. Revert checks: make removeDeckData a no-op; make the first run remove at once (skip the armed check).","sides":["a"],"keys":{}}
+{"v":2,"name":"a-uninstall","description":"Agent Deck: Uninstall asks twice (the first run only arms and removes nothing); the second run within 10 s removes the data dir under the worker HOME and says how to remove the two plugins. Revert checks: make removeDeckData a no-op; make the first run remove at once (skip the armed check).","sides":["a"],"keys":{}}
 {"at":0,"do":"orca.activate"}
 {"at":0,"do":"bridge.frame","from":"a","frame":{"type":"hello"}}
 {"at":100,"do":"expect.file","path":".orca-deck","exists":true}

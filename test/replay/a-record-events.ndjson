@@ -1,0 +1,12 @@
+{"v":2,"name":"a-record-events","description":"Agent Deck: Record events is a toggle: while it runs, the events Orca sends and the frames A sends are appended to a file under the data dir, with terminal content and credentials removed before anything is written; the second run stops it and says where the file is. Revert checks: write the event payload unsanitized (sanitizeForRecording); start the recording with the first run no longer creating the file.","sides":["a"],"keys":{}}
+{"at":0,"do":"orca.activate"}
+{"at":0,"do":"bridge.frame","from":"a","frame":{"type":"hello"}}
+{"at":100,"do":"expect.file","path":".orca-deck/recordings","exists":false}
+{"at":100,"do":"orca.command","id":"deck.record","resultContains":"Recording events to"}
+{"at":200,"do":"orca.event","name":"agent.status.changed","payload":{"workspaceId":"w1","paneKey":"t:a","state":"done","receivedAt":1800000000000,"title":"the secret plan","mainAgent":{"state":"done","stateStartedAt":1000}}}
+{"at":200,"do":"bridge.frame","from":"a","frame":{"type":"agentStatus","paneKey":"t:a","state":"done","stateStartedAt":1000}}
+{"at":300,"do":"orca.command","id":"deck.record","resultContains":"Recording stopped"}
+{"at":300,"do":"expect.file","path":".orca-deck/recordings","exists":true,"contains":"\"kind\":\"orca.event\""}
+{"at":300,"do":"expect.file","path":".orca-deck/recordings","exists":true,"contains":"\"kind\":\"bridge.frame\""}
+{"at":300,"do":"expect.file","path":".orca-deck/recordings","exists":true,"notContains":"secret plan"}
+{"at":300,"do":"expect.file","path":".orca-deck/recordings","exists":true,"notContains":"\"title\""}

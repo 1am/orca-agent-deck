@@ -50,8 +50,13 @@
         "when": "global"
       },
       {
+        "id": "deck.record",
+        "title": "Agent Deck: Record events",
+        "when": "global"
+      },
+      {
         "id": "deck.uninstall",
-        "title": "Agent Deck for Orca: Uninstall",
+        "title": "Agent Deck: Uninstall",
         "when": "global"
       }
     ],

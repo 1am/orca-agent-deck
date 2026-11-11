@@ -1,5 +1,5 @@
-import { existsSync } from 'node:fs';
-import { mkdir, mkdtemp, rm } from 'node:fs/promises';
+import { existsSync, readdirSync, statSync } from 'node:fs';
+import { mkdir, mkdtemp, readFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import {
@@ -174,12 +174,32 @@ export async function runA(sc: Scenario, env: Env): Promise<void> {
         );
         return;
       }
-      case 'expect.file':
-        if (existsSync(join(homeOf(gen), step.path)) !== step.exists)
+      case 'expect.file': {
+        const path = join(homeOf(gen), step.path);
+        if (existsSync(path) !== step.exists)
           throw new Error(
             `t=${step.at}: ${step.path} under the worker's HOME should ${step.exists ? '' : 'not '}exist`,
           );
+        if (step.contains === undefined && step.notContains === undefined) return;
+        // A recording is written asynchronously and named by its start time: read every file of the folder.
+        const text = (
+          await Promise.all(
+            (statSync(path).isDirectory()
+              ? readdirSync(path).map((f) => join(path, f))
+              : [path]
+            ).map((f) => readFile(f, 'utf8')),
+          )
+        ).join('\n');
+        if (step.contains !== undefined && !text.includes(step.contains))
+          throw new Error(
+            `t=${step.at}: ${step.path} should contain ${JSON.stringify(step.contains)}`,
+          );
+        if (step.notContains !== undefined && text.includes(step.notContains))
+          throw new Error(
+            `t=${step.at}: ${step.path} should not contain ${JSON.stringify(step.notContains)}`,
+          );
         return;
+      }
       case 'deck.device':
         b.deck = step.connected;
         return;

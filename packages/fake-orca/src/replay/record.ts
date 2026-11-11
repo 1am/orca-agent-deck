@@ -11,7 +11,7 @@ import { header, stepSchema, type Side, type Step } from './schema.ts';
  */
 
 /** Field names that carry terminal content or credentials, matched case-insensitively anywhere in a payload. */
-const DROP_KEYS = new Set([
+export const DROP_KEYS = new Set([
   'lastassistantmessage',
   'lastmessage',
   'message',
@@ -20,6 +20,8 @@ const DROP_KEYS = new Set([
   'text',
   'output',
   'prompt',
+  'title',
+  'path',
   'authtoken',
   'token',
   'secret',
@@ -30,7 +32,7 @@ const DROP_KEYS = new Set([
 /** Handshake frames carry nonces and MACs; they are not part of what a scenario describes. */
 const HANDSHAKE = new Set(['hello', 'helloAck', 'challenge', 'auth']);
 /** 32 or more hex characters, or a long base64-ish run, is treated as a secret. */
-const SECRET_LIKE = /^(?:[0-9a-f]{32,}|[A-Za-z0-9+/_-]{40,}={0,2})$/i;
+export const SECRET_LIKE = /^(?:[0-9a-f]{32,}|[A-Za-z0-9+/_-]{40,}={0,2})$/i;
 
 export interface Recorded {
   /** The scenario, NDJSON, ready to commit once `expect.*` lines are added. */

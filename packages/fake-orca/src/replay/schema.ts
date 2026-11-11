@@ -114,8 +114,16 @@ export const stepSchema = z.discriminatedUnion('do', [
   step('expect.pi', { key, messages: z.array(json) }),
   /** Plugin A: the toast or log lines the worker wrote so far contain this text. */
   step('expect.log', { contains: z.string() }),
-  /** Plugin A: a path under the worker's HOME exists (or not). */
-  step('expect.file', { path: z.string(), exists: z.boolean() }),
+  /**
+   * Plugin A: a path under the worker's HOME exists (or not). For a folder, `contains` / `notContains` look at the text of
+   * every file in it (a recording is named by its start time).
+   */
+  step('expect.file', {
+    path: z.string(),
+    exists: z.boolean(),
+    contains: z.string().optional(),
+    notContains: z.string().optional(),
+  }),
   step('expect.focus', { pane }),
   step('expect.reveal', { pane }),
 ]);

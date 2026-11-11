@@ -4,7 +4,7 @@
 // Never log tokens or terminal content.
 import net from 'node:net';
 import { createHash, createHmac, randomBytes, timingSafeEqual } from 'node:crypto';
-import { appendFile, lstat, mkdir, readFile, rm } from 'node:fs/promises';
+import { appendFile, chmod, lstat, mkdir, readFile, rm } from 'node:fs/promises';
 import { homedir } from 'node:os';
 import { dirname, join, posix, win32 } from 'node:path';
 
@@ -423,6 +423,100 @@ export const uninstallText = (dir) =>
     200,
   );
 
+/**
+ * "Record events": an opt-in capture of what Orca sends this plugin and what crosses the bridge, in the input format of
+ * `pnpm replay:record` (docs/replay.md). Sanitized before anything is written: fields that carry terminal content or
+ * credentials are dropped by name and secret-looking strings are replaced, so none of it is ever on disk. The two
+ * lists mirror `DROP_KEYS` in packages/fake-orca/src/replay/record.ts; a test keeps them equal.
+ */
+export const RECORD_DROP_KEYS = [
+  'lastassistantmessage',
+  'lastmessage',
+  'message',
+  'preview',
+  'content',
+  'text',
+  'output',
+  'prompt',
+  'title',
+  'path',
+  'authtoken',
+  'token',
+  'secret',
+  'password',
+  'nonce',
+  'mac',
+];
+/** 32 or more hex characters, or a long base64-ish run. */
+export const RECORD_SECRET_LIKE = /^(?:[0-9a-f]{32,}|[A-Za-z0-9+/_-]{40,}={0,2})$/i;
+
+export function sanitizeForRecording(value) {
+  if (Array.isArray(value)) return value.map(sanitizeForRecording);
+  if (value && typeof value === 'object') {
+    const out = {};
+    for (const [k, v] of Object.entries(value))
+      if (!RECORD_DROP_KEYS.includes(k.toLowerCase())) out[k] = sanitizeForRecording(v);
+    return out;
+  }
+  return typeof value === 'string' && RECORD_SECRET_LIKE.test(value) ? '<redacted>' : value;
+}
+
+/** A recording stops by itself after this long or this many bytes. */
+export const RECORD_MAX_MS = 10 * 60 * 1000;
+export const RECORD_MAX_BYTES = 5 * 1024 * 1024;
+
+/** The recordings folder of the data dir; files are named by the start time. */
+export const recordingsDir = (h = here()) => join(deckDataDir(h), 'recordings');
+
+export function createRecorder({
+  dir = recordingsDir(),
+  now = Date.now,
+  maxMs = RECORD_MAX_MS,
+  maxBytes = RECORD_MAX_BYTES,
+  onStop = () => {},
+} = {}) {
+  let file = null;
+  let bytes = 0;
+  let timer = null;
+  let queue = Promise.resolve();
+  const add = (entry) => {
+    if (!file) return;
+    const line = `${JSON.stringify({ ts: now(), ...sanitizeForRecording(entry) })}\n`;
+    bytes += Buffer.byteLength(line);
+    const target = file;
+    queue = queue.then(() => appendFile(target, line, { mode: 0o600 })).catch(() => {});
+    if (bytes >= maxBytes) stop('size limit reached');
+  };
+  function stop(why = 'stopped') {
+    if (!file) return null;
+    const done = file;
+    file = null;
+    clearTimeout(timer);
+    onStop(done, why);
+    return done;
+  }
+  return {
+    get active() {
+      return file !== null;
+    },
+    async start() {
+      await mkdir(dir, { recursive: true, mode: 0o700 });
+      await chmod(dir, 0o700).catch(() => {});
+      file = join(dir, `${new Date(now()).toISOString().replace(/[:.]/g, '-')}.ndjson`);
+      bytes = 0;
+      queue = Promise.resolve();
+      timer = setTimeout(() => stop('time limit reached'), maxMs);
+      timer.unref?.();
+      return file;
+    },
+    stop,
+    event: (name, payload) => add({ kind: 'orca.event', name, payload: payload ?? {} }),
+    frame: (from, frame) => add({ kind: 'bridge.frame', from, frame }),
+    /** Resolves once every accepted line is on disk. */
+    flush: () => queue,
+  };
+}
+
 const label = {
   connected: 'Orca plugin connected',
   connecting: 'Connecting to the Stream Deck plugin',
@@ -449,6 +543,9 @@ export default async function activate(orca) {
   };
   // The worker idles out and is restarted by the next event: reconnect on every activate.
   let forwarder;
+  const recorder = createRecorder({
+    onStop: (file, why) => log(`record: ${why}, recording is in ${file}`),
+  });
   // activate() gets no app version, only the plugin API version; B reads the app version itself.
   const pairing = { id: null, last: null };
   const bridge = createBridge({
@@ -456,6 +553,7 @@ export default async function activate(orca) {
     log,
     onAck: () => forwarder?.replay(),
     onMessage: (msg) => {
+      recorder.frame('b', msg);
       if (msg.type === 'requestSnapshot') forwarder?.replay();
       else if (msg.type === 'pairResult' && msg.requestId === pairing.id) {
         pairing.id = null;
@@ -466,6 +564,12 @@ export default async function activate(orca) {
       }
     },
   });
+  // Frames A sends are recorded where they leave (the handshake does not pass here).
+  const sendRaw = bridge.send;
+  bridge.send = (msg) => {
+    recorder.frame('a', msg);
+    return sendRaw(msg);
+  };
   forwarder = createForwarder(bridge);
   const seen = { status: 0, forwarded: 0, workspace: 0, lastAt: 0, wokeAt: Date.now() };
   log(`worker started: plugin ${PLUGIN_VERSION}, ${bridge.status().state}`);
@@ -473,15 +577,18 @@ export default async function activate(orca) {
   orca.events.on('agent.status.changed', async (ev) => {
     seen.status++;
     seen.lastAt = Date.now();
+    recorder.event('agent.status.changed', ev);
     if (forwarder.onStatus(ev)) seen.forwarded++;
     await bridge.ensure();
   });
   orca.events.on?.('workspace.created', (ev) => {
     seen.workspace++;
+    recorder.event('workspace.created', ev);
     forwarder.onWorkspace('created', ev);
   });
   orca.events.on?.('workspace.removed', (ev) => {
     seen.workspace++;
+    recorder.event('workspace.removed', ev);
     forwarder.onWorkspace('removed', ev);
   });
   await bridge.ensure();
@@ -512,12 +619,13 @@ export default async function activate(orca) {
     const dir = deckDataDir(here());
     if (Date.now() - armedAt > UNINSTALL_CONFIRM_MS) {
       armedAt = Date.now();
-      return `Run Agent Deck for Orca: Uninstall again within ${UNINSTALL_CONFIRM_MS / 1000} s to remove ${dir} (bridge file, key mappings, this plugin's log).`.slice(
+      return `Run Agent Deck: Uninstall again within ${UNINSTALL_CONFIRM_MS / 1000} s to remove ${dir} (bridge file, key mappings, this plugin's log).`.slice(
         0,
         200,
       );
     }
     armedAt = 0;
+    recorder.stop('uninstall');
     bridge.stop();
     uninstalled = true;
     await removeDeckData(dir);
@@ -525,6 +633,20 @@ export default async function activate(orca) {
       `uninstall: removed ${dir}; remove the Stream Deck plugin in the Elgato app or OpenDeck, then this plugin in Orca`,
     );
     return uninstallText(dir);
+  });
+  // A toggle: the first run starts a recording, the second stops it and says where the file is.
+  orca.commands.register('deck.record', async () => {
+    if (recorder.active) {
+      const file = recorder.stop('stopped by the command');
+      await recorder.flush();
+      return `Recording stopped: ${file}`.slice(0, 200);
+    }
+    const file = await recorder.start();
+    log(`record: started, writing to ${file}`);
+    return `Recording events to ${file}. Run Agent Deck: Record events again to stop (it stops by itself after 10 min or 5 MB).`.slice(
+      0,
+      200,
+    );
   });
   orca.commands.register('deck.status', async () => {
     await bridge.ensure();

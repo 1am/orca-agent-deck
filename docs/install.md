@@ -67,7 +67,7 @@ If your agents run inside tmux, read `docs/working-with-tmux.md` first. The refe
 
 ## Logs
 
-- Orca plugin: `~/.orca-deck/plugin-a.log` (on Windows `%APPDATA%\orca-deck\plugin-a.log`), or `orca plugin logs 1am.agent-deck`. "Agent Deck for Orca: Show status" shows a one-line summary as a toast and writes the details to the log. Orca's Logs pane in the plugin settings is read once when opened and does not refresh.
+- Orca plugin: `~/.orca-deck/plugin-a.log` (on Windows `%APPDATA%\orca-deck\plugin-a.log`), or `orca plugin logs 1am.agent-deck`. "Agent Deck: Show status" shows a one-line summary as a toast and writes the details to the log. Orca's Logs pane in the plugin settings is read once when opened and does not refresh.
 - Stream Deck plugin: `~/Library/Application Support/com.elgato.StreamDeck/Plugins/pl.1am.orca-agent-deck.sdPlugin/logs/` (`pl.1am.orca-agent-deck.0.log` is the newest). `~/Library/Logs/ElgatoStreamDeck/` holds only the Elgato app's own log. On Windows the Elgato app's plugins are in `%APPDATA%\Elgato\StreamDeck\Plugins\`. OpenDeck writes the plugin's log to `<its log dir>/plugins/pl.1am.orca-agent-deck.sdPlugin.log` (macOS `~/Library/Logs/opendeck`, Windows `%LOCALAPPDATA%\opendeck\logs`, Linux `~/.local/share/opendeck/logs`).
 - When reporting a problem, run `node collect-diagnostics.mjs` (from the release files; in a clone `pnpm diagnostics`) and attach the file it writes. It collects versions and both plugin logs with tokens, home paths and e-mail addresses removed.
 
