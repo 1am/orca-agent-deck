@@ -45,13 +45,16 @@ Fields marked `?` are optional, `null` marks nullable. All carry `v` and `type`.
 
 | type | Fields | Meaning |
 | --- | --- | --- |
-| `hello` | `orcaVersion: string`, `pluginVersion: string` | First message after proof. B answers `helloAck`. |
+| `hello` | `orcaVersion: string`, `pluginVersion: string`, `minor?: int` | First message after proof. B answers `helloAck`. `minor` is A's protocol minor (absent = 0). |
 | `auth` | `nonce: string` (32 hex), `mac: string` | Answer to `challenge`, see Handshake. |
 | `agentStatus` | `paneKey: string`, `workspaceId: string`, `state: string`, `outcome?: string \| null`, `stateStartedAt: number` (ms epoch), `receivedAt: number` (ms epoch), `agentType?: string \| null` | An agent in a pane changed state. `agentType` is the harness id (claude, codex, pi) when Orca's event has it. |
 | `workspace` | `event: "created" \| "removed"`, `workspaceId: string`, `path: string` | A workspace (worktree) appeared or went away. `path` is `""` when Orca gave none. |
 | `pairRequest` | `requestId: string`, `pane: { paneKey: string, worktreeId: string } \| null` | User asked to map a pane to a key. `null` means B resolves the focused pane. |
 | `unmapRequest` | `requestId: string`, `pane: { paneKey, worktreeId } \| null` | Same shape, remove the mapping. |
 | `pairCancel` | `requestId: string` | Cancel a pending `pairRequest`. |
+| `requestDeck` | none | Minor 1. Asks B to send `deckState` now (the Orca panel opened). |
+| `assignKey` | `requestId: string`, `key: int >= 1`, `replace: boolean` | Minor 1. A click on a key in the Orca panel: B puts the focused pane on that key like pairing followed by a tap, and answers `pairResult`. A key that shows a pane needs `replace: true`, else `pairResult` says `occupied`. B checks that the key exists on the deck it shows (`noSuchKey`), never A. |
+| `unmapKey` | `requestId: string`, `key: int >= 1` | Minor 1. Empties a key; B answers `pairResult` with `action: "unmapped"`. |
 
 ## Messages B -> A
 
@@ -59,10 +62,11 @@ Fields marked `?` are optional, `null` marks nullable. All carry `v` and `type`.
 | --- | --- | --- |
 | `challenge` | `nonce: string` (32 hex) | First message on every connection. |
 | `proof` | `mac: string` | B proves it knows the token, see Handshake. |
-| `helloAck` | `deck: { connected: boolean, devices: { model: string, keys: number }[] }` | Handshake done; reports whether the Stream Deck app is connected and which devices it sees. |
+| `helloAck` | `deck: { connected: boolean, devices: { model: string, keys: number }[] }`, `minor?: int` | Handshake done; reports whether the Stream Deck app is connected and which devices it sees. `minor` is B's protocol minor (absent = 0). |
 | `requestSnapshot` | none | A should replay its last `agentStatus` per pane. |
 | `pairState` | `requestId: string`, `state: string`, `pane?: { label: string }` | Pairing progress for the on-Orca feedback (for example `waitingForKey`). `state` is an open string. |
-| `pairResult` | `requestId: string`, then either `ok: true, slot: { page: int >= 1, index: int >= 1 }` or `ok: false, reason: "timeout" \| "cancelled" \| "noFocusedPane" \| "deckOffline"` | Final outcome. `slot` is 1-based, row-major. |
+| `pairResult` | `requestId: string`, then either `ok: true, slot: { page: int >= 1, index: int >= 1 }, action?: "mapped" \| "moved" \| "unmapped"` or `ok: false, reason: "timeout" \| "cancelled" \| "noFocusedPane" \| "deckOffline" \| "noSuchKey" \| "occupied"` | Final outcome. `slot` is 1-based, row-major. `action` and the last two reasons are minor 1. |
+| `deckState` | `connected: boolean`, `model: string \| null`, `cols: int`, `rows: int`, `keys: { key: int >= 1, label: string, state: string, mapped: boolean }[]` | Minor 1. The deck the Orca panel draws: sent after `hello` to an A of minor 1 or more, on every change (checked once a second) and on `requestDeck`. `key` is 1-based, row-major, the number "Assign here" shows. `label` is the pane's name on the key, `""` when empty. |
 
 ## Semantics
 
@@ -76,6 +80,7 @@ Fields marked `?` are optional, `null` marks nullable. All carry `v` and `type`.
 
 - `PROTOCOL_VERSION` (`v`) is the major version, currently 1. A message with another `v` throws `UnsupportedVersionError`; B closes the connection with **4002** and logs the received version. The Stream Deck plugin and the Orca plugin are released together; a breaking change bumps `v` and both sides ship in the same release (the Property Inspector shows "Update Agent Deck for Orca" when they disagree).
 - **Adding an optional field needs no bump.** zod objects strip unknown keys, so an old receiver ignores a field it does not know; a new receiver treats the field as optional. Precedent: `agentType` on `agentStatus`. Removing or renaming a field, changing a meaning, or adding a required field is breaking.
+- **Minor version.** `PROTOCOL_MINOR` (currently 1) counts additive features within a major. Each side tells its minor in `hello` / `helloAck`; a peer that sends none speaks minor 0 (v0.2.x). Minor 1 adds `requestDeck`, `assignKey`, `unmapKey`, `deckState` and the extra `pairResult` fields. A sender only uses a feature the peer's minor has: B sends `deckState` only to an A of minor 1 or more, and the Orca panel says "Update the Stream Deck plugin" when B's `helloAck` has no minor 1 or `deckState` does not arrive within 2 s of `hello`. A v0.2.1 peer ignores the new frames (B: "malformed message ignored" after auth, A: unknown types go to a handler that ignores them), so the old pair keeps working. New frames are accepted only from a proven peer, like all others.
 - Changing the handshake is breaking; changing only the transport binding is not.
 
 ## Limits

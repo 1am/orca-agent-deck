@@ -2,7 +2,15 @@ import type { MappingStore, PaneBinding } from './mapping.ts';
 
 export const DEFAULT_PAIRING_MS = 15_000;
 
-export type PairingReason = 'timeout' | 'cancelled' | 'noFocusedPane' | 'deckOffline';
+export type PairingReason =
+  | 'timeout'
+  | 'cancelled'
+  | 'noFocusedPane'
+  | 'deckOffline'
+  /** A panel click named a key that does not exist on the deck. */
+  | 'noSuchKey'
+  /** A panel click named a key that already shows a pane, without asking to replace it. */
+  | 'occupied';
 
 export type PairingState =
   | { phase: 'idle' }
@@ -19,8 +27,8 @@ export type PairingResult =
       requestId: string;
       ok: true;
       slot: string;
-      /** `moved`: the pane was on other slots and left them (a pane is on one key only). */
-      action: 'mapped' | 'moved';
+      /** `moved`: the pane was on other slots and left them (a pane is on one key only). `unmapped`: a panel click emptied the key. */
+      action: 'mapped' | 'moved' | 'unmapped';
     }
   | { requestId: string; ok: false; reason: PairingReason };
 

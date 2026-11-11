@@ -9,6 +9,8 @@ import { homedir } from 'node:os';
 import { dirname, join, posix, win32 } from 'node:path';
 
 export const PROTOCOL_VERSION = 1;
+/** Additive features of this major: 1 = the deck grid for the sidebar panel (see docs/bridge-protocol.md). */
+export const PROTOCOL_MINOR = 1;
 export const PLUGIN_VERSION = '0.2.1';
 const GUID = '258EAFA5-E914-47DA-95CA-C5AB0DC85B11';
 
@@ -178,6 +180,9 @@ export function createBridge({
   let state = 'disconnected';
   let timer = null;
   let deck = null;
+  /** B's protocol minor from `helloAck` (0 for a Stream Deck plugin that tells none), and which connection it is. */
+  let peerMinor = 0;
+  let session = 0;
   /** Set while B speaks another bridge major: A must not use its messages and says so. */
   let versionNote = null;
   let stopped = false;
@@ -259,6 +264,7 @@ export function createBridge({
               type: 'hello',
               orcaVersion,
               pluginVersion: PLUGIN_VERSION,
+              minor: PROTOCOL_MINOR,
             }),
           );
         } else if (!proven) {
@@ -268,6 +274,8 @@ export function createBridge({
           versionNote = null;
           delay = retryMs;
           deck = msg.deck ?? null;
+          peerMinor = Number.isInteger(msg.minor) && msg.minor > 0 ? msg.minor : 0;
+          session++;
           log('connected to Agent Deck for Orca');
           onAck(msg);
         } else if (msg?.type) {
@@ -306,7 +314,7 @@ export function createBridge({
       ws.send(JSON.stringify(msg));
       return true;
     },
-    status: () => ({ state, deck, versionNote }),
+    status: () => ({ state, deck, versionNote, minor: peerMinor, session }),
     /** Where the discovery file is read from, for the status report. */
     discoveryPath,
     stop() {
@@ -498,7 +506,19 @@ export const RECORD_FRAME_FIELDS = {
   unmapRequest: { v: 1, type: 1, requestId: 1, pane: 1 },
   pairCancel: { v: 1, type: 1, requestId: 1 },
   requestSnapshot: { v: 1, type: 1 },
-  pairResult: { v: 1, type: 1, requestId: 1, ok: 1, reason: 1, slot: { index: 1, page: 1 } },
+  pairResult: {
+    v: 1,
+    type: 1,
+    requestId: 1,
+    ok: 1,
+    reason: 1,
+    action: 1,
+    slot: { index: 1, page: 1 },
+  },
+  assignKey: { v: 1, type: 1, requestId: 1, key: 1, replace: 1 },
+  unmapKey: { v: 1, type: 1, requestId: 1, key: 1 },
+  // No labels: they are pane names.
+  deckState: { v: 1, type: 1, connected: 1, cols: 1, rows: 1 },
 };
 const RECORD_FRAME_DEFAULT = { v: 1, type: 1 };
 
@@ -644,6 +664,88 @@ export function statusSummary({ state, deck, seen, tracked, ago, versionNote = n
   return body.slice(0, 200 - tail.length) + tail;
 }
 
+/** How long the panel waits for the deck's state, and for the result of a click. */
+const DECK_WAIT_MS = 2000;
+const RESULT_WAIT_MS = 10_000;
+
+/**
+ * What the Agent Deck sidebar panel asks the worker (`plugin.request` in the panel, `orca.panels.handle`
+ * here). The deck is B's: this only asks for its state and forwards clicks as `assignKey` / `unmapKey`, and
+ * B checks the key and resolves the focused pane. `deckState` and `pairResult` arrive through `onMessage`.
+ */
+export function createPanelApi(
+  bridge,
+  { onDeck = () => {}, deckWaitMs = DECK_WAIT_MS, resultWaitMs = RESULT_WAIT_MS } = {},
+) {
+  let deckNow = null;
+  let deckSession = -1;
+  const pending = new Map();
+  const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+  const omit = (o, keys) =>
+    Object.fromEntries(Object.entries(o).filter(([k]) => !keys.includes(k)));
+
+  const current = () => (deckNow && deckSession === bridge.status().session ? deckNow : null);
+  /** The link as the panel needs it: connected with the new frames, or why not. */
+  async function link() {
+    if (bridge.status().state !== 'connected') {
+      await bridge.ensure();
+      await sleep(300);
+    }
+    const { state, minor } = bridge.status();
+    if (state !== 'connected') return 'offline';
+    return minor >= 1 ? 'ok' : 'update';
+  }
+  const idOf = () => randomBytes(8).toString('hex');
+
+  async function get() {
+    const status = await link();
+    if (status !== 'ok') return { status };
+    if (!current()) {
+      bridge.send({ v: PROTOCOL_VERSION, type: 'requestDeck' });
+      const end = Date.now() + deckWaitMs;
+      while (!current() && Date.now() < end) await sleep(50);
+    }
+    // A Stream Deck plugin of this minor answers at once: silence means it is not the one we know.
+    return current() ? { status: 'ok', deck: current() } : { status: 'update' };
+  }
+
+  async function click(frame) {
+    const status = await link();
+    if (status !== 'ok') return { ok: false, reason: status };
+    const requestId = idOf();
+    const answer = new Promise((resolve) => {
+      pending.set(requestId, resolve);
+      setTimeout(() => resolve({ ok: false, reason: 'timeout' }), resultWaitMs).unref?.();
+    });
+    bridge.send({ v: PROTOCOL_VERSION, requestId, ...frame });
+    const r = await answer;
+    pending.delete(requestId);
+    return r;
+  }
+
+  return {
+    get,
+    assign: ({ key, replace }) =>
+      Number.isInteger(key) && key >= 1
+        ? click({ type: 'assignKey', key, replace: replace === true })
+        : { ok: false, reason: 'noSuchKey' },
+    unmap: ({ key }) =>
+      Number.isInteger(key) && key >= 1
+        ? click({ type: 'unmapKey', key })
+        : { ok: false, reason: 'noSuchKey' },
+    onMessage(msg) {
+      if (msg.type === 'deckState') {
+        const state = omit(msg, ['type', 'v']);
+        deckNow = state;
+        deckSession = bridge.status().session;
+        onDeck(state);
+      } else if (msg.type === 'pairResult' && pending.has(msg.requestId)) {
+        pending.get(msg.requestId)(omit(msg, ['type', 'v', 'requestId']));
+      }
+    },
+  };
+}
+
 export default async function activate(orca) {
   uninstalled = false;
   const log = (m) => {
@@ -659,12 +761,15 @@ export default async function activate(orca) {
   if (resumed) log(`record: resumed after a restart of this worker, writing to ${resumed}`);
   // activate() gets no app version, only the plugin API version; B reads the app version itself.
   const pairing = { id: null, last: null, reason: null };
+  // The panel's calls are registered once the bridge exists; its messages arrive before that only if B is fast.
+  let panelApi = { onMessage: () => {} };
   const bridge = createBridge({
     orcaVersion: orca.api ? `api ${orca.api.major}.${orca.api.minor}` : 'unknown',
     log,
     onAck: () => forwarder?.replay(),
     onMessage: (msg) => {
       recorder.frame('b', msg);
+      panelApi.onMessage(msg);
       if (msg.type === 'requestSnapshot') forwarder?.replay();
       else if (msg.type === 'pairResult' && msg.requestId === pairing.id) {
         pairing.id = null;
@@ -683,6 +788,12 @@ export default async function activate(orca) {
     return sendRaw(msg);
   };
   forwarder = createForwarder(bridge);
+  panelApi = createPanelApi(bridge, {
+    onDeck: (state) => orca.panels?.post?.('deck.changed', { status: 'ok', deck: state }),
+  });
+  orca.panels?.handle?.('deck.get', () => panelApi.get());
+  orca.panels?.handle?.('deck.assign', (input) => panelApi.assign(input ?? {}));
+  orca.panels?.handle?.('deck.unmap', (input) => panelApi.unmap(input ?? {}));
   const seen = { status: 0, forwarded: 0, workspace: 0, lastAt: 0, wokeAt: Date.now() };
   log(`worker started: plugin ${PLUGIN_VERSION}, ${bridge.status().state}`);
   // The event that woke a lazy worker arrives right after activate(); keep it even if B is down.

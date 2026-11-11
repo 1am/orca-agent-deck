@@ -12,6 +12,7 @@ https://github.com/user-attachments/assets/1dfea071-0276-4011-b159-7916241eb2ca
 
 - Pane key shows each pane's state (working, needs input, awaiting reply, done, error, offline).
 - Press a pane key to focus that pane in Orca; hold to assign the current pane, or press Cmd+Alt+K (Ctrl+Alt+K on Windows and Linux) in Orca and then the key. Cmd+Alt+Shift+K (Ctrl+Alt+Shift+K) unmaps a pane. Both are in Orca's keyboard shortcuts settings, where you can change them.
+- The Agent Deck panel in Orca's right sidebar shows the connected deck as a grid of keys: click an empty key to put the pane that is focused in Orca on it, click a mapped key to replace or unmap it. It needs the Stream Deck plugin and the Orca plugin from the same release.
 - Status key displays setup checks.
 - Attention key counts panes that need you.
 - Works locally and over SSH.

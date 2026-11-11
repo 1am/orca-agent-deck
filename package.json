@@ -20,6 +20,7 @@
     "replay:record": "node --experimental-strip-types scripts/replay-record.ts",
     "replay-a": "node --experimental-strip-types scripts/replay-a.ts",
     "replay-e2e": "node --experimental-strip-types scripts/replay-e2e.ts",
+    "panel-test": "node --experimental-strip-types scripts/panel-test.ts",
     "replay-b": "node --experimental-strip-types scripts/replay-b.ts",
     "release:notes": "node --experimental-strip-types scripts/release.ts notes",
     "release:checksums": "node --experimental-strip-types scripts/release.ts checksums",

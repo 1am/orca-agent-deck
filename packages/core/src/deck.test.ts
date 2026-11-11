@@ -801,3 +801,77 @@ it('a pane whose process crashed counts on the Attention key even though its age
   await d.refresh([]);
   expect(d.overview()).toMatchObject({ urgent: 1, topState: 'error' });
 });
+
+describe('clicks in the Orca panel', () => {
+  const world = () => {
+    const snap: Snapshot = { panes: [pane('a:1'), pane('b:1')], statuses: [], omittedHostIds: [] };
+    const { a } = fake(snap);
+    a.focusedPaneKey = async () => 'b:1';
+    // Auto-fill is off in the shipped plugin: keys hold pinned panes only.
+    const d = new DeckController(a, new MappingStore(), undefined, { autofill: false });
+    const results: unknown[] = [];
+    d.onPairingResult = (r) => results.push(r);
+    return { d, results };
+  };
+
+  it('assign puts the focused pane on the key, as pairing followed by a tap does', async () => {
+    const { d, results } = world();
+    await d.refresh(['s1', 's2']);
+    await d.assignFocusedTo('r1', 's2', false, true);
+    expect(results).toEqual([{ requestId: 'r1', ok: true, slot: 's2', action: 'mapped' }]);
+    expect((await d.refresh(['s1', 's2'])).get('s2')).toMatchObject({ label: 't-b:1' });
+  });
+
+  it('a key that shows a pane needs replace, and the pane stays untouched without it', async () => {
+    const { d, results } = world();
+    await d.refresh(['s1']);
+    await d.assignFocusedTo('r1', 's1', false, true);
+    await d.assignFocusedTo('r2', 's1', false, true);
+    expect(results[1]).toEqual({ requestId: 'r2', ok: false, reason: 'occupied' });
+    d.configure('s1', { paneKey: 'a:1' });
+    await d.assignFocusedTo('r3', 's1', true, true);
+    expect(results[2]).toMatchObject({ requestId: 'r3', ok: true, slot: 's1' });
+    expect((await d.refresh(['s1'])).get('s1')).toMatchObject({ label: 't-b:1' });
+  });
+
+  it('answers a key that does not exist, a deck that is offline and no focused pane', async () => {
+    const { d, results } = world();
+    await d.refresh(['s1']);
+    await d.assignFocusedTo('r1', null, false, true);
+    await d.assignFocusedTo('r2', 's1', false, false);
+    d.unmapSlot('r3', null);
+    expect(results).toEqual([
+      { requestId: 'r1', ok: false, reason: 'noSuchKey' },
+      { requestId: 'r2', ok: false, reason: 'deckOffline' },
+      { requestId: 'r3', ok: false, reason: 'noSuchKey' },
+    ]);
+    const snap: Snapshot = { panes: [pane('a:1')], statuses: [], omittedHostIds: [] };
+    const { a } = fake(snap);
+    a.focusedPaneKey = async () => null;
+    const none = new DeckController(a, new MappingStore(), undefined, { autofill: false });
+    const got: unknown[] = [];
+    none.onPairingResult = (r) => got.push(r);
+    await none.assignFocusedTo('r4', 's1', false, true);
+    expect(got).toEqual([{ requestId: 'r4', ok: false, reason: 'noFocusedPane' }]);
+  });
+
+  it('a pane already on another key moves: the old key empties', async () => {
+    const { d, results } = world();
+    await d.refresh(['s1', 's2']);
+    await d.assignFocusedTo('r1', 's1', false, true);
+    await d.assignFocusedTo('r2', 's2', false, true);
+    expect(results[1]).toEqual({ requestId: 'r2', ok: true, slot: 's2', action: 'moved' });
+    const v = await d.refresh(['s1', 's2']);
+    expect(v.get('s2')).toMatchObject({ label: 't-b:1' });
+    expect(v.get('s1')?.state).toBe('unmapped');
+  });
+
+  it('unmap empties the key and keeps its pane off auto-fill', async () => {
+    const { d, results } = world();
+    await d.refresh(['s1']);
+    await d.assignFocusedTo('r1', 's1', false, true);
+    d.unmapSlot('r2', 's1');
+    expect(results[1]).toEqual({ requestId: 'r2', ok: true, slot: 's1', action: 'unmapped' });
+    expect((await d.refresh(['s1'])).get('s1')?.state).toBe('unmapped');
+  });
+});

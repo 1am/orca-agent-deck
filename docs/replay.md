@@ -34,6 +34,9 @@ A scenario is a timeline of what Orca and the Stream Deck do, plus what the keys
 - There is no timeline snapshot for side b: spinner frames and poll timing make one unstable, so the `expect.*` lines are the whole contract. A failure prints what the key showed over time.
 - Isolation: everything runs in a temp dir (HOME, APPDATA, XDG_CONFIG_HOME, a copy of the `.sdPlugin` folder as the working directory); `ORCA_BIN` is the fake-orca shim, `open` is a stub on `PATH`, and `ORCA_DECK_BRIDGE_PORTS=0` keeps B off the real bridge port range. `pnpm replay-b` fails if `git status` changed during the run. Pairing's 15 s timeout stays a unit test (`core/pairing.test.ts`).
 
+## Panel test
+`pnpm panel-test` runs `test/panel/panel.test.mjs` against the real `panel.jsx` on Orca's `orca/testing` mount (local only, Orca >= 1.4.251). The end-to-end case `e2e-panel-click` plays a click through both plugins.
+
 ## Wait budget
 Every wait in the A and B suites (and the end-to-end suite, which plays through the B runner) ends when its state arrives; the deadline (`test/replay-budget.ts`) only has to outlast a starved machine. It is 12 s times the load average per core, between 1 and 5 times (a hung run fails in about a minute); `REPLAY_TIMEOUT_SCALE=<n>` sets the factor by hand, uncapped. A timeout message says how the deadline came about.
 

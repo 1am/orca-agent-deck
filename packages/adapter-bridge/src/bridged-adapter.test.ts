@@ -157,6 +157,9 @@ describe('nothing A sends drives Orca', () => {
     pairRequest: { v, type: 'pairRequest', requestId: 'r', pane: pick },
     unmapRequest: { v, type: 'unmapRequest', requestId: 'r', pane: pick },
     pairCancel: { v, type: 'pairCancel', requestId: 'r' },
+    requestDeck: { v, type: 'requestDeck' },
+    assignKey: { v, type: 'assignKey', requestId: 'r', key: 1, replace: true },
+    unmapKey: { v, type: 'unmapKey', requestId: 'r', key: 1 },
   };
   // Hostile variants: fields that look like commands must stay inert data.
   const hostile = [

@@ -216,6 +216,31 @@ export class DeckController {
     return last && !last.orphaned ? bindingOf(last) : null;
   }
 
+  /**
+   * The Orca panel's click on a key: the focused pane goes to `slot`, like pairing mode followed by
+   * a tap on that key (so a pane already on another key moves here: a pane is on one key only). A key that already shows a pane needs
+   * `replace`. Reports through `onPairingResult`, like every pairing outcome.
+   */
+  async assignFocusedTo(
+    requestId: string,
+    slot: string | null,
+    replace: boolean,
+    deckConnected: boolean,
+  ): Promise<void> {
+    if (!slot) return this.onPairingResult?.({ requestId, ok: false, reason: 'noSuchKey' });
+    if (!replace && this.store.get(slot)?.pane)
+      return this.onPairingResult?.({ requestId, ok: false, reason: 'occupied' });
+    this.pairing.start(requestId, await this.pairingTarget(null), deckConnected);
+    this.pairing.press(slot, 'tap');
+  }
+
+  /** The Orca panel's Unmap on a key: the pane leaves it (and stays off auto-fill). */
+  unmapSlot(requestId: string, slot: string | null): void {
+    if (!slot) return this.onPairingResult?.({ requestId, ok: false, reason: 'noSuchKey' });
+    this.release(slot);
+    this.onPairingResult?.({ requestId, ok: true, slot, action: 'unmapped' });
+  }
+
   /** Unmaps every slot showing a pane (named, or the focused one); returns how many were cleared. */
   async unmapPane(paneKey: string | null): Promise<number> {
     const key = paneKey ?? (await this.focusedPane())?.paneKey;

@@ -87,7 +87,7 @@ async function createController(): Promise<DeckController> {
       type: 'pairResult',
       requestId: r.requestId,
       ...(r.ok
-        ? { ok: true as const, slot: slotAddress(r.slot) }
+        ? { ok: true as const, slot: slotAddress(r.slot), action: r.action }
         : { ok: false as const, reason: r.reason }),
     });
     paneSlot.nudge();
@@ -102,10 +102,37 @@ let shared: Promise<DeckController> | undefined;
 const controller = () => (shared ??= createController());
 const paneSlot = new PaneSlot(controller);
 streamDeck.actions.registerAction(paneSlot);
+/** Last `deckState` sent, so an unchanged deck is not sent again. */
+let lastDeck = '';
+/** Tells A (the Orca panel) how the deck looks, when it changed or `force`d. Only an A that knows the frame gets it. */
+function pushDeck(force = false): void {
+  if ((bridgeServer.connection?.minor ?? 0) < 1) return;
+  const state = paneSlot.deckState();
+  const sig = JSON.stringify(state);
+  if (!force && sig === lastDeck) return;
+  if (bridgeServer.send({ v: 1, type: 'deckState', ...state })) lastDeck = sig;
+}
+setInterval(() => pushDeck(), 1000);
+bridgeServer.on('hello', () => pushDeck(true));
 bridgeServer.on('message', (m) => {
-  if (m.type !== 'pairRequest' && m.type !== 'unmapRequest' && m.type !== 'pairCancel') return;
+  if (m.type === 'requestDeck') return pushDeck(true);
+  if (
+    m.type !== 'pairRequest' &&
+    m.type !== 'unmapRequest' &&
+    m.type !== 'pairCancel' &&
+    m.type !== 'assignKey' &&
+    m.type !== 'unmapKey'
+  )
+    return;
   void (async () => {
     const c = await controller();
+    // Clicks in the Orca panel: B checks the key exists on the deck it shows, never A.
+    if (m.type === 'assignKey')
+      return c.assignFocusedTo(m.requestId, paneSlot.slotOfKey(m.key), m.replace, deckConnected());
+    if (m.type === 'unmapKey') {
+      c.unmapSlot(m.requestId, paneSlot.slotOfKey(m.key));
+      return paneSlot.nudge();
+    }
     if (m.type === 'pairCancel') return c.pairing.cancel(m.requestId);
     if (m.type === 'unmapRequest') {
       const n = await c.unmapPane(m.pane?.paneKey ?? null);

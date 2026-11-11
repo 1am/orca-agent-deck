@@ -233,9 +233,12 @@ describe('server handshake', () => {
       v: 1,
       type: 'helloAck',
       deck: { connected: true, devices: [{ model: 'Mobile', keys: 15 }] },
+      minor: 1,
     });
-    expect(onHello).toHaveBeenCalledWith({ orcaVersion: '1.4.245', pluginVersion: '0.1.0' });
-    expect(server.connection).toEqual({ orcaVersion: '1.4.245', pluginVersion: '0.1.0' });
+    // A hello without a minor is a v0.2.x A: minor 0.
+    const info = { orcaVersion: '1.4.245', pluginVersion: '0.1.0', minor: 0 };
+    expect(onHello).toHaveBeenCalledWith(info);
+    expect(server.connection).toEqual(info);
   });
 
   it('closes a hello without a proof, even one carrying the token, with 4001', async () => {
@@ -619,6 +622,7 @@ describe('plugin A client against the real server', () => {
     expect(server.connection).toEqual({
       orcaVersion: '1.4.245',
       pluginVersion: plugin.PLUGIN_VERSION,
+      minor: 1,
     });
     expect(onAck).toHaveBeenCalledOnce();
     expect(a.status().deck).toEqual({ connected: true, devices: [{ model: 'Mobile', keys: 15 }] });

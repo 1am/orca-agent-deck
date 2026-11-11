@@ -96,6 +96,8 @@ export const canRun = (p: Profile): string | null =>
 export interface PluginA {
   mount(home: string): Promise<void>;
   emit(name: string, payload: unknown): Promise<void>;
+  /** What the sidebar panel's `plugin.request` gets from the worker. */
+  request(name: string, input?: unknown): Promise<unknown>;
   stop(): Promise<void>;
 }
 
@@ -503,6 +505,21 @@ process.exit(r.status ?? 1);`,
         `Orca to be asked to focus pane ${st.pane} at t=${st.at}`,
         () => `  focus requests: ${JSON.stringify(calls())}`,
       );
+    } else if (st.do === 'expect.panel') {
+      if (!a) throw new Error(`t=${st.at}: expect.panel needs plugin A (the end-to-end suite)`);
+      let got: unknown;
+      const once = async () => (got = await a.request(st.request, st.input));
+      if (st.request === 'deck.get') {
+        const end = Date.now() + TIMEOUT_MS;
+        while (!subset(st.result, await once())) {
+          if (Date.now() > end) break;
+          await wait(100);
+        }
+      } else await once();
+      if (!subset(st.result, got))
+        throw new Error(
+          `t=${st.at}: panel ${st.request} answered ${JSON.stringify(got)}, wanted ${JSON.stringify(st.result)}`,
+        );
     } else if (st.do === 'expect.reveal') {
       throw new Error(`t=${st.at}: the B runner cannot evaluate expect.reveal`);
     }

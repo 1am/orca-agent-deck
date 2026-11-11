@@ -133,6 +133,11 @@ export const stepSchema = z.discriminatedUnion('do', [
     contains: z.string().optional(),
     notContains: z.string().optional(),
   }),
+  /**
+   * Plugin A (end-to-end suite only): the sidebar panel asks the worker `request` with `input`; the answer must match
+   * `result` (a subset). A read such as `deck.get` is asked again until it matches; a click is asked once.
+   */
+  step('expect.panel', { request: z.string(), input: json.optional(), result: json }),
   step('expect.focus', { pane }),
   step('expect.reveal', { pane }),
 ]);

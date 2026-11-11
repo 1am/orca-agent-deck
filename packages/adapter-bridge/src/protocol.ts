@@ -3,6 +3,13 @@ import { z } from 'zod';
 /** Bridge protocol v1. Plugin A (in Orca) <-> plugin B (Stream Deck plugin, WebSocket server). */
 export const PROTOCOL_VERSION = 1;
 
+/**
+ * Minor version: additive features of the same major (new frames, optional fields). Each side
+ * advertises its own in `hello` / `helloAck`; a peer that sends none speaks minor 0 (v0.2.x).
+ * 1: the Orca panel's deck grid (`requestDeck`, `deckState`, `assignKey`, `unmapKey`).
+ */
+export const PROTOCOL_MINOR = 1;
+
 /** Thrown for a message whose major `v` we do not speak; B shows "update Agent Deck for Orca plugin". */
 export class UnsupportedVersionError extends Error {
   readonly received: unknown;
@@ -22,6 +29,7 @@ const panePick = z.object({ paneKey: z.string(), worktreeId: z.string() });
 export const hello = base('hello').extend({
   orcaVersion: z.string(),
   pluginVersion: z.string(),
+  minor: z.number().int().nonnegative().optional(),
 });
 /** HMAC-SHA256(token, nonceB || nonceA) as hex, answering B's `challenge`. */
 export const auth = base('auth').extend({ nonce: z.string(), mac: z.string() });
@@ -50,6 +58,17 @@ export const unmapRequest = base('unmapRequest').extend({
   pane: panePick.nullable(),
 });
 export const pairCancel = base('pairCancel').extend({ requestId: z.string() });
+/** Minor 1: A asks B to send `deckState` now (the Orca panel opened). */
+export const requestDeck = base('requestDeck');
+const key = z.number().int().min(1);
+/** Minor 1: put the focused pane on key `key` (1-based, row-major). A key that shows a pane needs `replace`. */
+export const assignKey = base('assignKey').extend({
+  requestId: z.string(),
+  key,
+  replace: z.boolean(),
+});
+/** Minor 1: empty key `key`. */
+export const unmapKey = base('unmapKey').extend({ requestId: z.string(), key });
 
 // B -> A
 /** First message on every connection: B's nonce. A answers with `auth`, B proves itself with `proof`. */
@@ -61,6 +80,15 @@ export const helloAck = base('helloAck').extend({
     connected: z.boolean(),
     devices: z.array(z.object({ model: z.string(), keys: z.number() })),
   }),
+  minor: z.number().int().nonnegative().optional(),
+});
+/** Minor 1: the deck as the Orca panel draws it; pushed after `hello`, on change and on `requestDeck`. */
+export const deckState = base('deckState').extend({
+  connected: z.boolean(),
+  model: z.string().nullable(),
+  cols: z.number().int().min(0),
+  rows: z.number().int().min(0),
+  keys: z.array(z.object({ key, label: z.string(), state: z.string(), mapped: z.boolean() })),
 });
 export const requestSnapshot = base('requestSnapshot');
 export const pairState = base('pairState').extend({
@@ -73,10 +101,22 @@ export const pairResult = base('pairResult')
   .extend({ requestId: z.string() })
   .and(
     z.union([
-      z.object({ ok: z.literal(true), slot }),
+      z.object({
+        ok: z.literal(true),
+        slot,
+        /** Minor 1: what happened to the key (absent from an older B). */
+        action: z.enum(['mapped', 'moved', 'unmapped']).optional(),
+      }),
       z.object({
         ok: z.literal(false),
-        reason: z.enum(['timeout', 'cancelled', 'noFocusedPane', 'deckOffline']),
+        reason: z.enum([
+          'timeout',
+          'cancelled',
+          'noFocusedPane',
+          'deckOffline',
+          'noSuchKey',
+          'occupied',
+        ]),
       }),
     ]),
   );
@@ -89,6 +129,9 @@ export const messageFromA = z.union([
   pairRequest,
   unmapRequest,
   pairCancel,
+  requestDeck,
+  assignKey,
+  unmapKey,
 ]);
 export const messageFromB = z.union([
   challenge,
@@ -97,6 +140,7 @@ export const messageFromB = z.union([
   requestSnapshot,
   pairState,
   pairResult,
+  deckState,
 ]);
 
 export type MessageFromA = z.infer<typeof messageFromA>;

@@ -216,6 +216,55 @@ export class PaneSlot extends SingletonAction {
     void this.repaint();
   }
 
+  /** The slot (action id) of a 1-based key number on the deck the Orca panel shows, or null. */
+  slotOfKey(key: number): string | null {
+    const dev = this.shownDevice();
+    for (const a of this.actions)
+      if (a.device.id === dev && this.indexes.get(a.id) === key) return a.id;
+    return null;
+  }
+
+  /** The first connected device that has our keys on it: the one the Orca panel draws. */
+  private shownDevice(): string | null {
+    for (const d of streamDeck.devices)
+      if (d.isConnected && this.actions.some((a) => a.device.id === d.id)) return d.id;
+    return null;
+  }
+
+  /** The deck as the Orca panel draws it (the `deckState` frame without its envelope). */
+  deckState(): {
+    connected: boolean;
+    model: string | null;
+    cols: number;
+    rows: number;
+    keys: { key: number; label: string; state: string; mapped: boolean }[];
+  } {
+    const id = this.shownDevice();
+    const dev = streamDeck.devices.find((d) => d.id === id);
+    if (!dev) return { connected: false, model: null, cols: 0, rows: 0, keys: [] };
+    const keys = this.actions
+      .filter((a) => a.device.id === id && this.indexes.has(a.id))
+      .toArray()
+      .map((a) => {
+        const v = this.views.get(a.id);
+        const mapped = !!v && v.state !== 'unmapped';
+        return {
+          key: this.indexes.get(a.id) ?? 0,
+          label: mapped ? v.label : '',
+          state: v?.state ?? 'unmapped',
+          mapped,
+        };
+      })
+      .sort((x, y) => x.key - y.key);
+    return {
+      connected: true,
+      model: String(dev.type),
+      cols: dev.size.columns,
+      rows: dev.size.rows,
+      keys,
+    };
+  }
+
   /** A push from plugin A arrived: refresh now instead of waiting for the next poll. */
   nudge(): void {
     void this.refresh();

@@ -8,6 +8,7 @@ import {
   type Discovery,
 } from './discovery.ts';
 import {
+  PROTOCOL_MINOR,
   PROTOCOL_VERSION,
   UnsupportedVersionError,
   parseFromA,
@@ -27,7 +28,8 @@ export interface BridgeServerOptions {
   log?: (msg: string) => void;
 }
 
-export type ConnectionInfo = { orcaVersion: string; pluginVersion: string };
+/** What A said in `hello`; `minor` is its protocol minor (0 when it sent none, i.e. v0.2.x). */
+export type ConnectionInfo = { orcaVersion: string; pluginVersion: string; minor: number };
 
 type Listener = {
   hello: (info: ConnectionInfo) => void;
@@ -200,12 +202,17 @@ export class BridgeServer {
         // A newer connection replaces the old one (worker restarted).
         if (this.socket && this.socket !== ws) this.socket.close(4003, 'replaced');
         this.socket = ws;
-        this.info = { orcaVersion: msg.orcaVersion, pluginVersion: msg.pluginVersion };
+        this.info = {
+          orcaVersion: msg.orcaVersion,
+          pluginVersion: msg.pluginVersion,
+          minor: msg.minor ?? 0,
+        };
         this.opts.log?.(`A connected: Orca ${msg.orcaVersion}, plugin ${msg.pluginVersion}`);
         this.send({
           v: PROTOCOL_VERSION,
           type: 'helloAck',
           deck: this.opts.deck?.() ?? { connected: false, devices: [] },
+          minor: PROTOCOL_MINOR,
         });
         for (const fn of this.listeners.hello) fn(this.info);
         return;
