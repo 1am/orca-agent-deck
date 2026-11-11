@@ -47,11 +47,20 @@ const cli: Exec = async (args) => {
   throw new Error(`unsupported ${args.join(' ')}`);
 };
 
-const until = async (fn: () => boolean, ms = 3000) => {
+// Conditions are waited for, never slept past: a loaded machine only makes them take longer.
+const until = async (fn: () => boolean, ms = 15_000) => {
   const end = Date.now() + ms;
   while (!fn()) {
     if (Date.now() > end) throw new Error('timeout');
     await new Promise((r) => setTimeout(r, 5));
+  }
+};
+
+const untilAsync = async (fn: () => Promise<boolean>, ms = 15_000) => {
+  const end = Date.now() + ms;
+  while (!(await fn())) {
+    if (Date.now() > end) throw new Error('timeout');
+    await new Promise((r) => setTimeout(r, 50));
   }
 };
 
@@ -165,12 +174,16 @@ describe('losing one source keeps the deck correct', () => {
     expect(cliCalls.length).toBeGreaterThan(0);
     await rt.start();
     await sim.connect();
-    await new Promise((r) => setTimeout(r, 1600));
+    // The info refresh is throttled, so ask again until it has really looked.
+    await untilAsync(async () => {
+      await d.refresh([]);
+      return d.overview().mode === 'live';
+    });
     cliCalls.length = 0;
-    await d.refresh([]);
+    await d.refresh(['k1']);
     expect(d.overview().mode).toBe('live');
     expect(cliCalls).toEqual([]);
-  }, 10_000);
+  }, 30_000);
 
   it('Orca restart (new token, handles rotate): the next call recovers without CLI', async () => {
     const a = adapter();
@@ -261,9 +274,8 @@ describe('awaiting reply end to end (fake Orca -> socket -> deck)', () => {
     expect([...(await d.refresh(['k1'])).values()][0]?.state).toBe('awaiting_reply');
     advance(s, 100);
     setAgent(s, 'a', 'working');
-    await new Promise((r) => setTimeout(r, 1600));
-    expect([...(await d.refresh(['k1'])).values()][0]?.state).toBe('working');
-  }, 10_000);
+    await untilAsync(async () => [...(await d.refresh(['k1'])).values()][0]?.state === 'working');
+  }, 30_000);
 
   it('never sends the message text anywhere the logs could see: snapshot has verdicts only', async () => {
     advance(s, 100);
@@ -294,12 +306,11 @@ describe('acknowledgement through the runtime socket', () => {
     // the user clicks the pane in Orca
     const { focus } = await import('../../packages/fake-orca/src/index.ts');
     focus(s, s.panes[0]!.handle);
-    await new Promise((r) => setTimeout(r, 1600));
-    expect([...(await d.refresh(['k1'])).values()][0]?.state).toBe('idle');
+    await untilAsync(async () => [...(await d.refresh(['k1'])).values()][0]?.state === 'idle');
     expect(cliCalls).toEqual([]);
     // the selected tab comes from the layout tree, one terminal.list, no resolveActive
     expect(rt.requests.some((r) => r.method === 'terminal.list')).toBe(true);
-  }, 10_000);
+  }, 30_000);
 
   it('pressing the key marks the Orca worktree read through worktree.set', async () => {
     const { createRuntimeAdapter } = await import('../../packages/adapter-runtime/src/index.ts');
