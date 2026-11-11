@@ -2,11 +2,33 @@
 
 All notable changes to this project are documented here. Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), versioning: [SemVer](https://semver.org/).
 
-## [Unreleased]
+## [0.3.0] - unreleased
+
+### Added
+
+- **streamdeck:** tells the Elgato Stream Deck app from OpenDeck on macOS, Windows and Linux, and the Setup tab has a "Stream Deck app" row with what it concluded. The log line `host:` carries the same.
+- **streamdeck:** key mappings survive switching between the Elgato app and OpenDeck. A key at the same position inherits the mapping of the vanished one even though the other app names the device differently.
+- **streamdeck:** when the Orca plugin is not installed, the Status key says "Install the Orca plugin" and the Setup tab has a button that opens the install link in Orca. The deck keeps working from polled status meanwhile.
+- **streamdeck:** pictograms for OpenCode, Droid, Devin, Gemini, Copilot, Cursor and Amp on the key badge. Other agents show their first letter, or two letters when another agent starts alike (Kimi and Cline, for example).
+- **streamdeck:** the Setup tab shows that "Check again" is running and when the last check finished, and names the paired servers it cannot reach.
+- **orca-plugin:** "Agent Deck: Uninstall" removes the data folder (`~/.orca-deck`, `%APPDATA%\orca-deck` on Windows) with the bridge file, key mappings and the plugin log, and says how to remove the two plugins by hand. Run it twice within 10 seconds to confirm.
+- **orca-plugin:** "Agent Deck: Record events" is an opt-in capture of what Orca sends the plugin, for bug reports and replay tests. A second run stops it and shows the file; it stops by itself after 10 minutes or 5 MB. Terminal content, pane titles, paths and tokens are never written.
+- Both plugins say "Update Agent Deck for Orca" when their bridge versions differ, instead of failing quietly.
+- Release files carry GitHub build attestations. "Verify the download" in `docs/install.md` shows how to check them with `gh attestation verify`.
 
 ### Changed
 
 - **orca-plugin:** needs Orca 1.4.246 or newer. The manifest no longer declares `publisher`, which Orca deprecated and now takes from the repository owner. On Orca 1.4.245, the catalog keeps offering v0.2.1.
+- **streamdeck:** a key waiting for permission always reads "needs you". It used to read the tool name when the status came from polling and "needs you" when Orca pushed it.
+- **streamdeck:** the working spinner turns in eighths at 4 frames per second and slows to 2 when more than 8 keys are working, to stay within Elgato's guidance on image updates.
+- **streamdeck:** key text prefers Liberation Sans and DejaVu Sans, so labels lay out the same on Linux and Windows hosts that lack Helvetica.
+
+### Fixed
+
+- **streamdeck:** a key press at the moment Orca restarts no longer fails: the plugin reads the panes again and retries with the new terminal handle.
+- **streamdeck:** the Status key no longer counts a paired server's runtime peers as hosts down, and paired servers whose id needs encoding are matched.
+- **streamdeck:** the Orca plugin installed from a local folder is detected, so the Status key does not call it missing.
+- **streamdeck:** the Setup tab no longer scrolls sideways in the inspector, and its result marks are drawn, not font glyphs.
 
 ## [0.2.1] - 2026-11-11
 
