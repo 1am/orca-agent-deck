@@ -7,3 +7,4 @@ export * from './replay/run.ts';
 export * from './replay/timeline.ts';
 export * from './bridge-sim.ts';
 export * from './runtime-sim.ts';
+export * from './replay/record.ts';

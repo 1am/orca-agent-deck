@@ -17,6 +17,7 @@
     "typecheck": "tsc --noEmit",
     "fake-orca": "node --experimental-strip-types packages/fake-orca/src/bin.ts",
     "replay": "node --experimental-strip-types scripts/replay.ts",
+    "replay:record": "node --experimental-strip-types scripts/replay-record.ts",
     "replay-a": "node --experimental-strip-types scripts/replay-a.ts",
     "replay-b": "node --experimental-strip-types scripts/replay-b.ts",
     "release:notes": "node --experimental-strip-types scripts/release.ts notes",
