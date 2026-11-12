@@ -186,8 +186,11 @@ process.exit(r.status ?? 1);`,
     pane: typeof v === 'string' ? v : null,
   }));
   const actionOf = (key: number): Action => layout.find((l) => l.key === key)?.action ?? 'pane';
-  const paneKey = (pane: string) => `tab-1:leaf-${pane}`;
-  const handleOf = (pane: string) => s.panes.find((p) => p.leafId === `leaf-${pane}`)?.handle;
+  const paneKey = (pane: string) => {
+    const p = s.panes.find((x) => x.key === pane);
+    return p ? `${p.tabId}:${p.leafId}` : `tab-1:leaf-${pane}`;
+  };
+  const handleOf = (pane: string) => s.panes.find((p) => p.key === pane)?.handle;
   const observed: string[] = [];
   const seen = new Map<number, string>();
   // Steps at t=0 are applied before the deck appears.

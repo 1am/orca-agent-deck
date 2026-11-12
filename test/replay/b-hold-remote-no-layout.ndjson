@@ -1,0 +1,11 @@
+{"v":2,"name":"b-hold-remote-no-layout","description":"Orca shows an SSH host's worktree but sends no layout for it: the only answer left is `terminal show`, which is the local runtime's first pane. The hold must not pin that pane: it says Remote pane: use the picker. Revert check: drop the isLocalHost guard before `terminal show` in adapter-cli focusedPaneKey: the key pins the local pane.","sides":["b"],"keys":{}}
+{"at":0,"do":"orca.host.add","id":"ssh-1","kind":"ssh","name":"remote"}
+{"at":0,"do":"orca.pane.add","pane":"a","title":"Local build"}
+{"at":0,"do":"orca.pane.add","pane":"r","host":"ssh-1","title":"Remote build"}
+{"at":0,"do":"orca.focus","pane":"a"}
+{"at":0,"do":"orca.layouts","remote":false}
+{"at":0,"do":"orca.focus","pane":"r"}
+{"at":0,"do":"deck.appear","key":1}
+{"at":100,"do":"deck.down","key":1}
+{"at":1300,"do":"deck.up","key":1}
+{"at":1300,"do":"expect.key","key":1,"label":"Remote pane: use the picker"}

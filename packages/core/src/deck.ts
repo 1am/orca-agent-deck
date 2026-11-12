@@ -54,6 +54,8 @@ export interface Overview {
 /** One row of the Property Inspector picker. */
 export interface PickerPane {
   paneKey: string;
+  /** Execution host id (tab and leaf ids repeat across hosts). */
+  hostId: string;
   host: string;
   remote: boolean;
   repo: string;
@@ -155,6 +157,9 @@ export class DeckController {
   private focusedKey: string | null | undefined = undefined;
   /** The last pane the focus read named: what "Map pane" uses when Orca reports none (the settings view is open). */
   private lastFocusedKey: string | null = null;
+  /** Execution host of the worktree shown at the last focus read: tab and leaf ids repeat across hosts. */
+  private focusedHost: string | null = null;
+  private lastFocusedHost: string | null = null;
   /**
    * Pane the deck focused last. Orca reports no focus while it shows a paired server, so this
    * keeps that key highlighted until Orca reports the user in another pane.
@@ -229,7 +234,9 @@ export class DeckController {
     if (focused) return bindingOf(focused);
     // Run from the plugin settings, Orca reports no focused pane: the last one it did is the one meant.
     const last =
-      !paneKey && this.lastFocusedKey ? this.registry.get(this.lastFocusedKey) : undefined;
+      !paneKey && this.lastFocusedKey
+        ? this.registry.get(this.lastFocusedKey, this.lastFocusedHost)
+        : undefined;
     return last && !last.orphaned ? bindingOf(last) : null;
   }
 
@@ -390,7 +397,7 @@ export class DeckController {
   async press(slot: string): Promise<PressResult> {
     const b = this.store.get(slot)?.pane;
     if (!b) return 'unmapped';
-    const pane = this.registry.get(b.paneKey);
+    const pane = this.registry.get(b.paneKey, b.executionHostId);
     if (!pane) {
       // The pane is missing for now (a paired server reconnecting after wake): at least bring
       // Orca forward, the key still shows the alert.
@@ -452,7 +459,7 @@ export class DeckController {
     const prev = this.focusedKey;
     // The snapshot just read the same worktree and terminal lists: no second round trip.
     this.focusedKey = await this.adapter.focusedPaneKey(FOCUS_FROM_SNAPSHOT_MS).catch(() => null);
-    if (this.focusedKey) this.lastFocusedKey = this.focusedKey;
+    this.noteFocus(this.focusedKey);
     // The user moved to another pane Orca can report: the deck's last focus is over.
     if (this.focusedKey && this.focusedKey !== prev && this.focusedKey !== this.pressedKey) {
       this.pressedKey = null;
@@ -530,6 +537,7 @@ export class DeckController {
         });
         return {
           paneKey: p.paneKey,
+          hostId: p.hostId,
           host: this.hostName(p.hostId, p.hostName) ?? 'This machine',
           remote: !isLocalHost(p.hostId),
           repo: p.repo ?? '',
@@ -547,7 +555,6 @@ export class DeckController {
    * `keyOf` turns a slot into the key number it has on the deck the panel draws.
    */
   panelPanes(keyOf: (slot: string) => number | null): PanelPane[] {
-    const focus = this.currentFocusKey();
     return this.listPanes()
       .map((p) => {
         const onKey = this.store
@@ -564,7 +571,7 @@ export class DeckController {
           agent: p.agent,
           state: p.state,
           remote: p.remote,
-          focused: p.paneKey === focus,
+          focused: this.isFocused(p),
           ...(onKey !== undefined ? { onKey } : {}),
         };
       })
@@ -575,6 +582,41 @@ export class DeckController {
   /** The pane key focused in Orca at the last poll, else the last one that was. */
   currentFocusKey(): string | null {
     return this.focusedKey ?? this.lastFocusedKey;
+  }
+
+  /** Whether `pane` is the one focused in Orca (key and host: a remote pane may share ids with a local one). */
+  private isFocused(pane: Pick<PaneInfo, 'paneKey' | 'hostId'>): boolean {
+    const key = this.currentFocusKey();
+    return (
+      !!key &&
+      this.isFocusedAt(pane, key, this.focusedKey ? this.focusedHost : this.lastFocusedHost)
+    );
+  }
+
+  private isFocusedAt(
+    pane: Pick<PaneInfo, 'paneKey' | 'hostId'>,
+    key: string,
+    host: string | null,
+  ): boolean {
+    if (pane.paneKey !== key) return false;
+    if (!host || pane.hostId === host) return true;
+    // The host Orca names may not be the pane's own id: only trust it when it tells panes apart.
+    return !this.snapshot.panes.some((p) => p.paneKey === key && p.hostId === host);
+  }
+
+  /**
+   * Keeps the last focus for "Map pane" when Orca reports none (the settings view is open). Not when
+   * Orca shows a remote host: the last local pane is not the one meant then.
+   */
+  private noteFocus(key: string | null): void {
+    this.focusedHost = this.adapter.focusHostId ?? null;
+    if (key) {
+      this.lastFocusedKey = key;
+      this.lastFocusedHost = this.focusedHost;
+    } else if (this.focusedHost && !isLocalHost(this.focusedHost)) {
+      this.lastFocusedKey = null;
+      this.lastFocusedHost = null;
+    }
   }
 
   slotConfig(slot: string): SlotConfig {
@@ -606,7 +648,7 @@ export class DeckController {
   }
 
   /** Pins a pane to a slot (null = back to auto-fill); a pane lives on one slot at a time. */
-  configure(slot: string, c: { paneKey: string | null }): void {
+  configure(slot: string, c: { paneKey: string | null; hostId?: string | null }): void {
     if (c.paneKey === null) {
       this.diag?.(`slot ${short(slot)} unmapped by the picker`);
       // Unmap: an empty auto slot would be refilled at once, which is the wanted "reset".
@@ -614,7 +656,7 @@ export class DeckController {
       this.store.remove(slot);
       return;
     }
-    const pane = this.registry.get(c.paneKey);
+    const pane = this.registry.get(c.paneKey, c.hostId);
     if (!pane) return;
     for (const other of this.store.slotsFor(c.paneKey)) {
       if (other === slot) continue;
@@ -631,17 +673,19 @@ export class DeckController {
     const key = await this.adapter.focusedPaneKey?.().catch(() => null);
     this.focusUnreadable = !key;
     if (!key) {
+      this.noteFocus(null);
       const note = this.adapter.focusNote || 'no detail';
       this.holdError = `cannot read the focused pane (${note}): use the picker`;
       // Orca marks no local worktree active while it shows a paired server.
-      this.holdHint = note.includes('no-active-worktree')
-        ? 'Remote pane: use the picker'
-        : 'No pane selected in Orca';
+      this.holdHint =
+        note.includes('no-active-worktree') || note.includes('remote-worktree')
+          ? 'Remote pane: use the picker'
+          : 'No pane selected in Orca';
       return null;
     }
-    this.lastFocusedKey = key;
+    this.noteFocus(key);
     this.holdHint = 'Pane not found';
-    const find = () => this.snapshot.panes.find((p) => p.paneKey === key);
+    const find = () => this.snapshot.panes.find((p) => this.isFocusedAt(p, key, this.focusedHost));
     let pane = find();
     if (!pane) {
       // The pane may be newer than the last poll.
@@ -683,7 +727,7 @@ export class DeckController {
       return 'released';
     }
     const had = !!this.store.get(slot)?.pane;
-    this.configure(slot, { paneKey: pane.paneKey });
+    this.configure(slot, { paneKey: pane.paneKey, hostId: pane.hostId });
     return had ? 'replaced' : 'mapped';
   }
 
@@ -809,7 +853,7 @@ export class DeckController {
       // Orca restarted since the last read and its terminal handles rotated: read the panes again, through the
       // same queue as every refresh, and retry once, only when the pane now has another handle (no loop).
       await this.refresh([], { force: true }).catch(() => {});
-      const fresh = this.registry.get(pane.paneKey);
+      const fresh = this.registry.get(pane.paneKey, pane.hostId);
       if (fresh && fresh.handle !== pane.handle) r = await focusPane(fresh);
     }
     if (!r.ok && this.pressedKey === pane.paneKey) this.pressedKey = before;
@@ -820,7 +864,7 @@ export class DeckController {
   private refreshBindings(slots: string[]): void {
     for (const s of slots) {
       const cur = this.store.get(s);
-      const pane = cur?.pane && this.registry.get(cur.pane.paneKey);
+      const pane = cur?.pane && this.registry.get(cur.pane.paneKey, cur.pane.executionHostId);
       if (!cur?.pane || !pane) continue;
       const fresh = bindingOf(pane);
       if (JSON.stringify(fresh.lastKnown) !== JSON.stringify(cur.pane.lastKnown)) {
@@ -861,7 +905,7 @@ export class DeckController {
     // Orca down: every slot looks empty (the Status key says why); mappings stay for the recovery.
     if (!b || !this.orcaRunning)
       return { state: 'unmapped', stale: false, label: '', line2: lineTwo('unmapped') };
-    const pane = this.registry.get(b.paneKey);
+    const pane = this.registry.get(b.paneKey, b.executionHostId);
     const status = this.snapshot.statuses.find((e) => e.paneKey === b.paneKey);
     const hostDown = this.snapshot.omittedHostIds.includes(b.executionHostId ?? LOCAL_HOST);
     // Trust the live agentType while the pane exists (agent exited -> plain shell); lastKnown only when offline.
@@ -902,7 +946,7 @@ export class DeckController {
       host: this.hostName(b.executionHostId, b.lastKnown.host),
       focused:
         !!pane &&
-        (this.focusedKey === pane.paneKey ||
+        ((this.focusedKey && this.isFocused(pane)) ||
           (!this.focusedKey && this.pressedKey === pane.paneKey)),
       line2: acked
         ? `done ${acked.doneMinutes ?? 0}m`

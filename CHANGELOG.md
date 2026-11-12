@@ -40,6 +40,7 @@ All notable changes to this project are documented here. Format: [Keep a Changel
 - **streamdeck:** the Status key no longer counts a paired server's runtime peers as hosts down, and paired servers whose id needs encoding are matched.
 - **streamdeck:** the Orca plugin installed from a local folder is detected, so the Status key does not call it missing.
 - **streamdeck:** the Setup tab no longer scrolls sideways in the inspector, and its result marks are drawn, not font glyphs.
+- **streamdeck:** mapping a pane while Orca shows a remote host (SSH or paired server) no longer maps the first local pane. The focus read does not ask `terminal show` (the local runtime's pane) for a remote worktree, says which host the focus is on, and the deck matches the pane by host as well as tab and leaf ids, so a remote pane that shares ids with a local one is the one mapped. "Use the focused pane" and the Focused mark in the panel no longer fall back to the last local pane while a remote one is shown.
 
 ## [0.2.1] - 2026-11-11
 

@@ -139,9 +139,10 @@ export class FakeRuntime {
         }
         return { worktree: { id: params['worktree'], isUnread: params['isUnread'] === true } };
       case 'terminal.resolveActive':
-        if (!s.focusedHandle)
+        // The local runtime's active terminal: a focused remote pane is not it.
+        if (!s.localFocusedHandle)
           throw Object.assign(new Error('no active terminal'), { code: 'no_active_terminal' });
-        return { handle: s.focusedHandle };
+        return { handle: s.localFocusedHandle };
       case 'terminal.show': {
         const p = s.panes.find((x) => x.handle === params['terminal']);
         if (!p)

@@ -6,7 +6,16 @@ import type { Scenario, Step } from './schema.ts';
 export function applyOrca(s: SimState, step: Step): boolean {
   switch (step.do) {
     case 'orca.pane.add':
-      sim.addPane(s, step.pane, { agent: step.agent, title: step.title, host: step.host });
+      sim.addPane(s, step.pane, {
+        agent: step.agent,
+        title: step.title,
+        host: step.host,
+        tab: step.tab,
+        leaf: step.leaf,
+      });
+      return true;
+    case 'orca.layouts':
+      s.remoteLayouts = step.remote;
       return true;
     case 'orca.pane.remove':
       sim.removePane(s, step.pane);
@@ -34,7 +43,7 @@ export function applyOrca(s: SimState, step: Step): boolean {
       if (step.status !== 'absent') s.plugins.push({ pluginKey: step.key, status: step.status });
       return true;
     case 'orca.focus': {
-      const p = s.panes.find((x) => x.leafId === `leaf-${step.pane}`);
+      const p = s.panes.find((x) => x.key === step.pane);
       if (p) sim.focus(s, p.handle);
       return true;
     }

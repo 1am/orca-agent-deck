@@ -53,8 +53,13 @@ export const stepSchema = z.discriminatedUnion('do', [
     agent: z.string().nullable().optional(),
     title: z.string().optional(),
     host: z.string().optional(),
+    /** Tab and leaf ids (default `tab-1`, `leaf-<pane>`): the same on two hosts to test panes that share ids. */
+    tab: z.string().optional(),
+    leaf: z.string().optional(),
   }),
   step('orca.pane.remove', { pane }),
+  /** Whether Orca's layout tree covers a remote host's worktree (default yes); without it only `terminal show` is left, and that is local. */
+  step('orca.layouts', { remote: z.boolean() }),
   step('orca.agent', {
     pane,
     state: agentState,

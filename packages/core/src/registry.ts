@@ -17,14 +17,17 @@ export interface Resolution {
 export class PaneRegistry {
   private panes: PaneInfo[] = [];
   private byKey = new Map<string, PaneInfo>();
+  private byHostKey = new Map<string, PaneInfo>();
 
   update(panes: PaneInfo[]): void {
     this.panes = panes;
     this.byKey = new Map(panes.map((p) => [p.paneKey, p]));
+    this.byHostKey = new Map(panes.map((p) => [`${p.hostId}\0${p.paneKey}`, p]));
   }
 
-  get(paneKey: string): PaneInfo | undefined {
-    return this.byKey.get(paneKey);
+  /** Tab and leaf ids are only unique per host: with `hostId` the pane of that host wins over another with the same key. */
+  get(paneKey: string, hostId?: string | null): PaneInfo | undefined {
+    return (hostId && this.byHostKey.get(`${hostId}\0${paneKey}`)) || this.byKey.get(paneKey);
   }
 
   /** Exact paneKey, then recordedPaneKey on an orphaned terminal, then a heuristic match. */

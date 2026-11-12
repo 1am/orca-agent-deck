@@ -56,6 +56,7 @@ Every bug closes with a scenario that fails when its fix is reverted (the revert
 | Plugin B restarts, A reconnects | `a-b-restart` | no reconnect scheduled (`main.mjs`): no hello after B restarts |
 | Status key says "2 hosts down" while the Setup list names none | `b-hosts-down` | drop the `hostsDown` fact in `doctorFacts` (`status.ts`): key 14 reads "hosts down" with 2 instead of "2 hosts down", and the list has no Remote hosts row |
 | Hold with Orca showing a paired server says "Remote pane: use the picker" | `b-hold-remote` | hint dropped (`deck.ts`): the key says "No pane selected in Orca" |
+| Mapping with a remote pane focused maps the first local pane | `b-hold-remote-same-ids`, `b-hold-remote-no-layout` (+ `b-hold-remote-focused` as the plain case) | pane lookup by tab and leaf ids alone (`deck.ts`, `registry.ts`): key 1 shows the local pane; `terminal show` asked for a remote worktree (`adapter-cli`): key 1 pins the local pane instead of saying "Remote pane: use the picker" |
 | Needs-input reads the same by push and by poll | `b-needs-input-label` | tool name back in `lineTwo`: poll reads "permission" |
 | last-good host list, released panes off auto-fill | none: auto-fill is off in the shipped plugin, and a failing host list needs a paired Orca environment that the simulation does not model (unit tests in `adapter-cli` and `core`) | |
 | agent swapped inside a tmux pane | none: superseded by the owner's decision of one agent per tmux session | |

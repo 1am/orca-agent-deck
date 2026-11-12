@@ -976,3 +976,58 @@ describe('clicks in the Orca panel', () => {
     expect((await d.refresh(['s1'])).get('s1')?.state).toBe('unmapped');
   });
 });
+
+describe('focus on a remote host', () => {
+  const remote = (key: string) => pane(key, { hostId: 'ssh:box', hostName: 'box' });
+  type Focus = { key: string | null; host: string | null };
+  function world(panes: PaneInfo[], focus: { current: Focus }) {
+    const { a } = fake({ panes, statuses: [], omittedHostIds: [] });
+    a.health = async () => ({ orcaRunning: true, version: '1.4.0', fast: true });
+    a.focusedPaneKey = async () => focus.current.key;
+    Object.defineProperty(a, 'focusHostId', { get: () => focus.current.host });
+    return new DeckController(a, new MappingStore(), undefined, { autofill: false });
+  }
+
+  it('hold pins the remote pane when it shares its ids with a local one', async () => {
+    const focus = { current: { key: 't:1', host: 'ssh:box' } };
+    const d = world(
+      [{ ...remote('t:1'), title: 'remote' }, pane('t:1', { title: 'local' })],
+      focus,
+    );
+    const v = await d.refresh(['s1']);
+    expect(v.get('s1')?.state).toBe('unmapped');
+    expect(await d.hold('s1')).toBe('mapped');
+    expect((await d.refresh(['s1'])).get('s1')).toMatchObject({ label: 'remote' });
+    expect(d.slotHost('s1')).toBe('ssh:box');
+  });
+
+  it('the panel marks the focused pane of the focused host only', async () => {
+    const focus = { current: { key: 't:1', host: 'ssh:box' } };
+    const d = world([pane('t:1'), remote('t:1')], focus);
+    await d.refresh([]);
+    const marked = d.panelPanes(() => null).filter((p) => p.focused);
+    expect(marked.map((p) => p.remote)).toEqual([true]);
+  });
+
+  it('a remote host shown with no readable pane drops the last local focus', async () => {
+    const focus = { current: { key: 'a:1' as string | null, host: 'local' as string | null } };
+    const d = world([pane('a:1'), remote('r:1')], focus);
+    await d.refresh([]);
+    expect(d.panelPanes(() => null).find((p) => p.focused)?.paneKey).toBe('a:1');
+    focus.current = { key: null, host: 'ssh:box' };
+    await d.refresh([], { force: true });
+    expect(d.currentFocusKey()).toBeNull();
+    expect(d.panelPanes(() => null).some((p) => p.focused)).toBe(false);
+    // "Use the focused pane" has nothing to fall back on: it must not take the local pane.
+    expect(await d.pairingTarget(null)).toBeNull();
+  });
+
+  it('with no worktree shown (settings open) the last focus is still the one meant', async () => {
+    const focus = { current: { key: 'a:1' as string | null, host: 'local' as string | null } };
+    const d = world([pane('a:1')], focus);
+    await d.refresh([]);
+    focus.current = { key: null, host: null };
+    await d.refresh([], { force: true });
+    expect((await d.pairingTarget(null))?.paneKey).toBe('a:1');
+  });
+});

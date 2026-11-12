@@ -370,3 +370,34 @@ it('matches runtime ids by the URL-encoded environment id', async () => {
   expect(s.omittedHostIds).toEqual([]);
   expect(s.downHostIds).toEqual([]);
 });
+
+const psOn = (hostId: string) =>
+  JSON.stringify({
+    ok: true,
+    result: { worktrees: [{ worktreeId: 'w', hostId, isActive: true, agents: [] }] },
+  });
+
+it('focusedPaneKey reads the layout of a remote host shown and names that host', async () => {
+  const exec: Exec = async (args) =>
+    args[0] === 'worktree' ? psOn('ssh:box') : terms(layout('t2'));
+  const a = new CliAdapter(exec);
+  expect(await a.focusedPaneKey()).toBe('t2:l2');
+  expect(a.focusHostId).toBe('ssh:box');
+});
+
+it('focusedPaneKey does not ask terminal show (local only) while a remote worktree has no layout', async () => {
+  const asked: string[] = [];
+  const exec: Exec = async (args) => {
+    asked.push(args.join(' '));
+    return args[0] === 'worktree'
+      ? psOn('ssh:box')
+      : args[1] === 'list'
+        ? terms()
+        : JSON.stringify({ ok: true, result: { terminal: { tabId: 'local', leafId: 'first' } } });
+  };
+  const a = new CliAdapter(exec);
+  expect(await a.focusedPaneKey()).toBeNull();
+  expect(a.focusHostId).toBe('ssh:box');
+  expect(a.focusNote).toContain('remote-worktree');
+  expect(asked.some((c) => c.startsWith('terminal show'))).toBe(false);
+});

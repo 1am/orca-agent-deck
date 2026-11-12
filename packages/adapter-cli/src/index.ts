@@ -306,6 +306,9 @@ export class CliAdapter implements OrcaAdapter {
   /** Why the last focus read had no answer (counts only), for the plugin log. */
   focusNote = '';
 
+  /** Execution host of the worktree the last focus read found shown, null when none was. */
+  focusHostId: string | null = null;
+
   /**
    * Focus local panes through `terminal.reveal` too. Unlike `terminal.focus`, reveal brings Orca's
    * window to the front, with Orca's own workarounds for the Windows foreground lock. For hosts
@@ -325,6 +328,7 @@ export class CliAdapter implements OrcaAdapter {
         (await this.call(terminalListResponse, ['terminal', 'list', '--include-visual-layouts']));
       const layouts = terms.result.visualLayouts ?? [];
       this.focusNote = `worktrees=${ps.result.worktrees.length} active=${active ? 1 : 0} layouts=${layouts.length}`;
+      this.focusHostId = active ? active.hostId : null;
       if (!active) {
         // Orca marks no worktree active (a paired server may be the one shown). Guessing from the
         // layouts could pin a pane that is not on screen, so the answer stays unknown.
@@ -334,9 +338,16 @@ export class CliAdapter implements OrcaAdapter {
       const fromLayout = activePaneKey(layouts, active.worktreeId);
       if (fromLayout) return fromLayout;
       this.focusNote += ' active-worktree-has-no-layout';
+      if (!isLocalHost(active.hostId)) {
+        // `terminal show` answers for the local runtime only: on a remote host's worktree it would
+        // name a local pane. The answer stays unknown.
+        this.focusNote += ' remote-worktree';
+        return null;
+      }
       const r = await this.call(terminalShowResponse, ['terminal', 'show']);
       return paneKey(r.result.terminal.tabId, r.result.terminal.leafId);
     } catch (e) {
+      this.focusHostId = null;
       this.focusNote = `focus read failed: ${(e as Error).message.slice(0, 80)}`;
       return null;
     }

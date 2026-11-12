@@ -110,6 +110,8 @@ export interface OrcaAdapter {
   focusedPaneKey?(maxAgeMs?: number): Promise<string | null>;
   /** Why the last focus read had no answer (counts only), for the log. */
   readonly focusNote?: string;
+  /** Execution host of the worktree shown in the last focus read (ids repeat across hosts), null when none was. */
+  readonly focusHostId?: string | null;
   /** Clears Orca's unread dot for a worktree (`isUnread`), so reading in the deck clears it in Orca too. */
   markWorktreeRead?(worktreeId: string): Promise<void>;
 }

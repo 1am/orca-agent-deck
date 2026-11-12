@@ -58,12 +58,11 @@ export async function replaySim(sc: Scenario): Promise<SimResult> {
     let views = await d.refresh(slots);
     const pins = Object.entries(sc.header.keys).filter(
       ([k, pane]) =>
-        typeof pane === 'string' &&
-        !pinned.has(k) &&
-        s.panes.some((p) => p.leafId === `leaf-${pane}`),
+        typeof pane === 'string' && !pinned.has(k) && s.panes.some((p) => p.key === pane),
     );
     for (const [k, pane] of pins) {
-      d.configure(slotOf(k), { paneKey: `tab-1:leaf-${String(pane)}` });
+      const p = s.panes.find((x) => x.key === pane);
+      d.configure(slotOf(k), { paneKey: `${p?.tabId}:${p?.leafId}` });
       pinned.add(k);
     }
     if (pins.length) views = await d.refresh(slots);

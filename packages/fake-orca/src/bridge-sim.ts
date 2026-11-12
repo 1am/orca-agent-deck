@@ -68,7 +68,7 @@ export class BridgeSimulator {
 
   /** Sends the current agent state of a pane in the sim (what `agent.status.changed` would carry). */
   sendStatus(s: SimState, key: string): void {
-    const p = s.panes.find((x) => x.leafId === `leaf-${key}`);
+    const p = s.panes.find((x) => x.key === key);
     if (!p?.agent) throw new Error(`pane ${key} has no agent`);
     this.send({
       v: 1,
@@ -84,7 +84,7 @@ export class BridgeSimulator {
 
   /** Re-sends every agent's state, like A does after a reconnect or `requestSnapshot`. */
   replay(s: SimState): void {
-    for (const p of s.panes) if (p.agent) this.sendStatus(s, p.leafId.slice(5));
+    for (const p of s.panes) if (p.agent) this.sendStatus(s, p.key);
   }
 
   pairRequest(
