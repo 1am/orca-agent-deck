@@ -1,5 +1,5 @@
 import type { OrcaAdapter, PaneInfo, PaneStatusEvent, Snapshot } from './adapter.ts';
-import { isLocalHost, LOCAL_HOST, readableHostId } from './host-id.ts';
+import { isLocalHost, LOCAL_HOST, parseHostId, readableHostId } from './host-id.ts';
 import { splitPaneKey } from './pane-key.ts';
 import { MappingStore, type PaneBinding, type SlotPosition } from './mapping.ts';
 import { PaneRegistry } from './registry.ts';
@@ -69,8 +69,13 @@ export interface PickerPane {
 /** One pane in the Orca panel's picker (the `deckState.panes` entry). */
 export interface PanelPane {
   paneKey: string;
+  /** Execution host id: tab and leaf ids repeat across hosts, so a choice names both. */
+  hostId: string;
   label: string;
+  /** Pane title and tab: what tells two panes of one worktree apart. */
   detail: string;
+  /** Host name of a remote pane, else absent. */
+  host?: string;
   agent: string | null;
   state: DeckState;
   remote: boolean;
@@ -225,9 +230,12 @@ export class DeckController {
    * The pane a pairing request is about: the one A named, else the one focused in Orca. Null when
    * neither can be resolved (the request then ends with noFocusedPane).
    */
-  async pairingTarget(paneKey: string | null): Promise<PaneBinding | null> {
+  async pairingTarget(
+    paneKey: string | null,
+    hostId: string | null = null,
+  ): Promise<PaneBinding | null> {
     if (paneKey) {
-      const named = this.registry.get(paneKey);
+      const named = this.registry.get(paneKey, hostId);
       if (named && !named.orphaned) return bindingOf(named);
     }
     const focused = paneKey ? null : await this.focusedPane();
@@ -251,12 +259,13 @@ export class DeckController {
     replace: boolean,
     deckConnected: boolean,
     paneKey: string | null = null,
+    hostId: string | null = null,
   ): Promise<void> {
     if (!slot) return this.onPairingResult?.({ requestId, ok: false, reason: 'noSuchKey' });
     if (!replace && this.store.get(slot)?.pane)
       return this.onPairingResult?.({ requestId, ok: false, reason: 'occupied' });
     // A pane the panel chose must still be there: never fall back to the focused one.
-    const target = await this.pairingTarget(paneKey);
+    const target = await this.pairingTarget(paneKey, hostId);
     if (paneKey && !target)
       return this.onPairingResult?.({ requestId, ok: false, reason: 'noSuchPane' });
     this.pairing.start(requestId, target, deckConnected);
@@ -272,9 +281,10 @@ export class DeckController {
 
   /** Unmaps every slot showing a pane (named, or the focused one); returns how many were cleared. */
   async unmapPane(paneKey: string | null): Promise<number> {
-    const key = paneKey ?? (await this.focusedPane())?.paneKey;
+    const focused = paneKey ? null : await this.focusedPane();
+    const key = paneKey ?? focused?.paneKey;
     if (!key) return 0;
-    const slots = this.store.slotsFor(key);
+    const slots = this.store.slotsFor(key, focused?.hostId);
     for (const s of slots) this.release(s);
     return slots.length;
   }
@@ -558,16 +568,19 @@ export class DeckController {
     return this.listPanes()
       .map((p) => {
         const onKey = this.store
-          .slotsFor(p.paneKey)
+          .slotsFor(p.paneKey, p.hostId)
           .map(keyOf)
           .find((k): k is number => k !== null);
         const where = [p.repo, p.branch].filter(Boolean).join(' / ');
         return {
           paneKey: p.paneKey,
+          hostId: p.hostId,
           label: where || p.title,
-          detail: [p.remote ? p.host : '', p.tab, where ? p.title : '']
-            .filter((s) => s && s !== where)
+          // Title first: a long host name must not push it out of a narrow sidebar.
+          detail: [where ? p.title : '', p.tab]
+            .filter((s, i, all) => s && s !== where && all.indexOf(s) === i)
             .join(' · '),
+          ...(p.remote ? { host: p.host } : {}),
           agent: p.agent,
           state: p.state,
           remote: p.remote,
@@ -606,17 +619,30 @@ export class DeckController {
 
   /**
    * Keeps the last focus for "Map pane" when Orca reports none (the settings view is open). Not when
-   * Orca shows a remote host: the last local pane is not the one meant then.
+   * Orca shows a remote host: the last local pane is not the one meant then. Orca marks no worktree
+   * active both in its settings and while it shows a paired server, so with paired-server panes
+   * around that answer may be a remote pane too.
    */
   private noteFocus(key: string | null): void {
     this.focusedHost = this.adapter.focusHostId ?? null;
     if (key) {
       this.lastFocusedKey = key;
       this.lastFocusedHost = this.focusedHost;
-    } else if (this.focusedHost && !isLocalHost(this.focusedHost)) {
+    } else if (
+      (this.focusedHost && !isLocalHost(this.focusedHost)) ||
+      (!this.focusedHost && this.mayShowPairedServer())
+    ) {
       this.lastFocusedKey = null;
       this.lastFocusedHost = null;
     }
+  }
+
+  /** No worktree is shown and Orca has paired-server panes: one of them may be the one on screen. */
+  private mayShowPairedServer(): boolean {
+    return (
+      (this.adapter.focusNote ?? '').includes('no-active-worktree') &&
+      this.snapshot.panes.some((p) => parseHostId(p.hostId).kind === 'env')
+    );
   }
 
   slotConfig(slot: string): SlotConfig {
@@ -658,7 +684,7 @@ export class DeckController {
     }
     const pane = this.registry.get(c.paneKey, c.hostId);
     if (!pane) return;
-    for (const other of this.store.slotsFor(c.paneKey)) {
+    for (const other of this.store.slotsFor(c.paneKey, pane.hostId)) {
       if (other === slot) continue;
       this.diag?.(`slot ${short(other)} loses ${c.paneKey}: pinned to slot ${short(slot)}`);
       this.store.remove(other);

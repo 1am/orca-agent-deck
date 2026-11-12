@@ -84,7 +84,7 @@ export class Pairing {
       phase: 'waitingForKey',
       requestId,
       pane,
-      existing: this.mapping.slotsFor(pane.paneKey),
+      existing: this.mapping.slotsFor(pane.paneKey, pane.executionHostId),
     };
     this.timer = this.setTimer(
       () => this.finish({ requestId, ok: false, reason: 'timeout' }),

@@ -71,6 +71,8 @@ export const assignKey = base('assignKey').extend({
   key,
   replace: z.boolean(),
   paneKey: z.string().optional(),
+  /** The pane's host (`deckState.panes[].hostId`): tab and leaf ids repeat across hosts. */
+  hostId: z.string().optional(),
 });
 /** Minor 1: empty key `key`. */
 export const unmapKey = base('unmapKey').extend({ requestId: z.string(), key });
@@ -101,10 +103,14 @@ export const deckState = base('deckState').extend({
     .array(
       z.object({
         paneKey: z.string(),
+        /** Execution host id, sent back in `assignKey`; absent from an older B. */
+        hostId: z.string().optional(),
         /** Repo and branch, or the pane's title when it has neither. */
         label: z.string(),
-        /** Host, tab and pane title: what tells two panes of one worktree apart. */
+        /** Pane title and tab: what tells two panes of one worktree apart. */
         detail: z.string(),
+        /** Host name of a remote pane. */
+        host: z.string().optional(),
         agent: z.string().nullable(),
         state: z.string(),
         remote: z.boolean(),

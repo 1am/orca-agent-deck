@@ -1,8 +1,8 @@
 // The Agent Deck sidebar panel: the connected deck as a grid of numbered keys, shaped like the deck. A click on a
 // key marks it and shows its details under the grid (like the key settings in the Stream Deck app): what it shows,
 // Unmap, the focused pane and the panes Orca lists. The details stay open after a choice; Back closes them.
-// Opened from the status bar button or the shortcut it is in map mode: a banner names the pane being mapped and a
-// click on an empty key assigns it at once.
+// Opened from the status bar button or the shortcut it is in map mode: a banner names the pane being mapped (the
+// focused one, or another chosen in the list under the grid) and a click on an empty key assigns it at once.
 // Orca draws this tree with its own controls (ui: "components", no build step). The deck is plugin B's: this
 // panel only asks plugin A (main.mjs) for its state (`deck.get`, and `deck.changed` pushes) and sends choices
 // (`deck.assign`, `deck.unmap`).
@@ -32,9 +32,18 @@ const note = atom('');
 const busy = atom(false);
 /** The panel was opened to map the focused pane (status bar button, shortcut): a click on an empty key assigns it. */
 const mapping = atom(false);
+/** In map mode, the pane chosen in the list instead of the focused one (`{ paneKey, hostId }`), or null. */
+const chosen = atom(null);
+/** `chosen` for the press handlers (atoms are read while drawing). */
+let chosenNow = null;
+const setChosen = (c) => {
+  chosenNow = c;
+  set(chosen, c);
+};
 
 const REASONS = {
-  noFocusedPane: 'No pane is focused in Orca. Click a terminal first.',
+  noFocusedPane:
+    'No pane is focused in Orca. Click a terminal first, or pick the pane in the list (Orca reports no focus on a paired server).',
   noSuchPane: 'That pane is gone. Pick another one.',
   deckOffline: 'The Stream Deck is not connected.',
   noSuchKey: 'That key is not on the deck any more.',
@@ -75,11 +84,24 @@ const TONES = {
   completed: 'success',
 };
 
+/** Map mode: map `p` instead of the focused pane. The deck's Assign-here maps the focused one, so it ends. */
+function choose(p) {
+  if (p.focused && !chosenNow) return;
+  setChosen(pick(p));
+  plugin.request('deck.mapChoose').catch(() => {});
+}
+
+function endMapping() {
+  set(mapping, false);
+  setChosen(null);
+}
+
 async function refresh() {
   try {
     const v = await plugin.request('deck.get');
     set(view, v);
-    set(mapping, v?.mapping === true);
+    if (v?.mapping === true) set(mapping, true);
+    else endMapping();
   } catch (e) {
     set(view, null);
     set(note, failed(e));
@@ -96,7 +118,7 @@ async function act(name, input, key) {
         ? `Key ${key} ${DONE[r.action] ?? 'assigned'}.`
         : (REASONS[r.reason] ?? `Not done (${r.reason}).`),
     );
-    if (r.ok) set(mapping, false);
+    if (r.ok) endMapping();
   } catch (e) {
     set(note, failed(e));
   } finally {
@@ -108,9 +130,13 @@ export function setup(ctx) {
   ctx.subscriptions.push(
     plugin.on('deck.changed', (payload) => {
       set(view, payload);
-      if (typeof payload?.mapping === 'boolean') set(mapping, payload.mapping);
+      if (payload?.mapping === true) set(mapping, true);
+      else if (payload?.mapping === false) endMapping();
     }),
-    plugin.on('map.changed', (payload) => set(mapping, payload?.mapping === true)),
+    plugin.on('map.changed', (payload) => {
+      if (payload?.mapping === true) set(mapping, true);
+      else endMapping();
+    }),
   );
   void refresh();
 }
@@ -130,12 +156,24 @@ function Status({ v }) {
   );
 }
 
-/** The pane Orca has focused: the one a map-mode click assigns. */
-const focusedPane = (deck) => deck.panes?.find((p) => p.focused) ?? null;
+/** Tab and leaf ids repeat across hosts: a pane is its key and its host. */
+const samePane = (a, b) =>
+  !!a && !!b && a.paneKey === b.paneKey && (a.hostId ?? '') === (b.hostId ?? '');
+const pick = (p) => ({ paneKey: p.paneKey, ...(p.hostId ? { hostId: p.hostId } : {}) });
+
+/** The pane a map-mode click assigns: the one chosen in the list, else the one Orca has focused. */
+function mapTarget(deck) {
+  const choice = read(chosen);
+  return (
+    (choice && deck.panes?.find((p) => samePane(p, choice))) ??
+    deck.panes?.find((p) => p.focused) ??
+    null
+  );
+}
 
 /** Names the pane being mapped, so it is clear which one it is even when Orca shows it faintly. */
 function MapBanner({ deck }) {
-  const pane = focusedPane(deck);
+  const pane = mapTarget(deck);
   return (
     <Stack gap="xs">
       <Badge tone="accent">Mapping</Badge>
@@ -145,13 +183,17 @@ function MapBanner({ deck }) {
           {paneLine(pane, 0) || 'Focused terminal pane'}
         </Text>
       ) : null}
-      <Text size="xs">Click an empty key below, or press a key on the deck.</Text>
+      <Text size="xs">
+        {read(chosen)
+          ? 'Click an empty key below.'
+          : 'Click an empty key below, or press a key on the deck.'}
+      </Text>
       <Row>
         <Button
           size="xs"
           variant="ghost"
           onPress={() => {
-            set(mapping, false);
+            endMapping();
             plugin.request('deck.mapEnd').catch(() => {});
           }}
         >
@@ -186,11 +228,11 @@ function Grid({ deck }) {
                   set(note, '');
                   // Map mode: an empty key takes the pane named above at once; a key that shows a pane opens its
                   // details, where replacing it is a choice of its own.
-                  const pane = focusedPane(deck);
+                  const pane = mapTarget(deck);
                   if (mapMode && !k.mapped && pane)
                     return void act(
                       'deck.assign',
-                      { key: k.key, replace: false, paneKey: pane.paneKey },
+                      { key: k.key, replace: false, ...pick(pane) },
                       k.key,
                     );
                   set(picking, open === k.key ? null : k.key);
@@ -206,18 +248,24 @@ function Grid({ deck }) {
   );
 }
 
+/** Title first, then the agent, the marks and the host last: a long host name only cuts itself off. */
 function paneLine(p, key) {
   const bits = [];
+  if (p.detail) bits.push(p.detail);
+  if (p.agent) bits.push(p.agent);
   if (p.focused) bits.push('Focused');
   if (p.onKey && p.onKey !== key) bits.push(`on key ${p.onKey}`);
-  if (p.agent) bits.push(p.agent);
-  if (p.detail) bits.push(p.detail);
+  if (p.host) bits.push(p.host);
   return bits.join(' · ');
 }
 
-/** The pane list, or why there is none: a Stream Deck plugin of an older build sends no list at all. */
-function Panes({ deck, k }) {
+/**
+ * The pane list, or why there is none: a Stream Deck plugin of an older build sends no list at all. For a key
+ * (`k`) a press puts the pane on it; in map mode (no `k`) a press chooses the pane to map, the current one marked.
+ */
+function Panes({ deck, k = null }) {
   const working = read(busy);
+  const target = k ? null : mapTarget(deck);
   if (!deck.panes)
     return (
       <Text size="xs" tone="warning">
@@ -231,16 +279,16 @@ function Panes({ deck, k }) {
       </Text>
     );
   return (
-    <List label="Choose a pane">
+    <List label={k ? 'Choose a pane' : 'Pane to map'}>
       {deck.panes.map((p) => (
         <ListItem
-          key={p.paneKey}
+          key={`${p.hostId ?? ''}\0${p.paneKey}`}
           title={p.label}
-          description={paneLine(p, k.key)}
-          current={p.onKey === k.key}
+          description={paneLine(p, k?.key ?? 0)}
+          current={k ? p.onKey === k.key : samePane(p, target)}
           disabled={working}
           onPress={() =>
-            act('deck.assign', { key: k.key, replace: k.mapped, paneKey: p.paneKey }, k.key)
+            k ? act('deck.assign', { key: k.key, replace: k.mapped, ...pick(p) }, k.key) : choose(p)
           }
         />
       ))}
@@ -304,6 +352,12 @@ export default function Panel() {
       {live && mapMode ? <MapBanner deck={v.deck} /> : null}
       {live ? <Grid deck={v.deck} /> : null}
       {live && k ? <Details deck={v.deck} k={k} /> : null}
+      {live && mapMode && !k ? (
+        <Stack gap="sm">
+          <Separator />
+          <Panes deck={v.deck} />
+        </Stack>
+      ) : null}
       {last ? <Text size="xs">{last}</Text> : null}
       <Button size="sm" variant="ghost" icon="refresh" onPress={() => refresh()}>
         Refresh

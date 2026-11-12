@@ -25,8 +25,10 @@ const deckOf = (cols, rows, extra = {}) => ({
     },
     {
       paneKey: 'p-build',
+      hostId: 'ssh:build-1',
       label: 'orca / dev',
-      detail: 'build-1 · Build',
+      detail: 'Build',
+      host: 'build-1',
       agent: null,
       state: 'idle',
       remote: true,
@@ -76,7 +78,7 @@ test('the grid stays; a click on a key shows its details under it, and the detai
   assert.ok(view.find({ text: '6' }));
   assert.ok(view.find({ label: 'agent-deck / main' }));
   await view.press({ label: 'orca / dev' });
-  assert.deepEqual(calls, [{ key: 2, replace: false, paneKey: 'p-build' }]);
+  assert.deepEqual(calls, [{ key: 2, replace: false, paneKey: 'p-build', hostId: 'ssh:build-1' }]);
   assert.ok(view.find({ text: 'Key 2 assigned.' }));
   assert.ok(view.find({ text: 'Key 2' }), 'the details stay');
   assert.ok(view.find({ text: '6' }));
@@ -132,7 +134,7 @@ test('picking replaces what a mapped key shows and a pane on another key moves',
   const view = await mount(panel, { host });
   await view.press({ text: '1' });
   await view.press({ label: 'orca / dev' });
-  assert.deepEqual(calls, [{ key: 1, replace: true, paneKey: 'p-build' }]);
+  assert.deepEqual(calls, [{ key: 1, replace: true, paneKey: 'p-build', hostId: 'ssh:build-1' }]);
   assert.ok(view.find({ text: 'Key 1 moved here (the pane was on another key).' }));
   await view.unmount();
 });
@@ -247,7 +249,11 @@ test('map mode without a focused pane says so and assigns nothing', async () => 
     },
   });
   const view = await mount(panel, { host });
-  assert.ok(view.find({ text: 'No pane is focused in Orca. Click a terminal first.' }));
+  assert.ok(
+    view.find({
+      text: 'No pane is focused in Orca. Click a terminal first, or pick the pane in the list (Orca reports no focus on a paired server).',
+    }),
+  );
   await view.press({ text: '4' });
   assert.deepEqual(calls, []);
   assert.ok(view.find({ text: 'Key 4' }));
@@ -267,5 +273,52 @@ test('shows a reason when the worker does not answer a click', async () => {
   await view.press({ text: '3' });
   await view.press({ label: 'orca / dev' });
   assert.ok(view.find({ text: 'The Orca plugin did not answer (worker stopped). Try Refresh.' }));
+  await view.unmount();
+});
+
+test('the pane line puts the title first and the host last', async () => {
+  const view = await mount(panel, {
+    host: mockHost({ requests: { 'deck.get': () => ({ status: 'ok', deck }) } }),
+  });
+  await view.press({ text: '2' });
+  const line = (label) => view.find({ label })?.props.description;
+  assert.equal(line('agent-deck / main'), 'Tab 1 · claude · Focused · on key 1');
+  assert.equal(line('orca / dev'), 'Build · build-1');
+  await view.unmount();
+});
+
+test('map mode lists the panes with the focused one chosen; another choice is what an empty key gets', async () => {
+  const calls = [];
+  const requests = [];
+  const host = mockHost({
+    requests: {
+      'deck.get': () => ({ status: 'ok', deck, mapping: true }),
+      'deck.mapChoose': () => (requests.push('deck.mapChoose'), { ok: true }),
+      'deck.assign': (input) => (
+        calls.push(input),
+        { ok: true, slot: { index: input.key }, action: 'mapped' }
+      ),
+    },
+  });
+  const view = await mount(panel, { host });
+  const current = () => view.findAll({ type: 'ListItem' }).filter((e) => e.props.current);
+  assert.deepEqual(
+    current().map((e) => e.label),
+    ['agent-deck / main'],
+    'the list shows without a key chosen, the focused pane marked',
+  );
+  assert.ok(view.find({ text: 'Click an empty key below, or press a key on the deck.' }));
+  await view.press({ label: 'orca / dev' });
+  assert.deepEqual(requests, ['deck.mapChoose'], "the deck's Assign-here ends");
+  assert.ok(view.find({ text: 'Map orca / dev to a key' }));
+  assert.deepEqual(
+    current().map((e) => e.label),
+    ['orca / dev'],
+  );
+  assert.ok(view.find({ text: 'Click an empty key below.' }));
+  await view.press({ text: '4' });
+  assert.deepEqual(calls, [{ key: 4, replace: false, paneKey: 'p-build', hostId: 'ssh:build-1' }]);
+  assert.ok(!view.find({ text: 'Mapping' }));
+  assert.deepEqual(view.errors, []);
   await view.unmount();
 });

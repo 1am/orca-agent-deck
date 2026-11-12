@@ -168,6 +168,7 @@ bridgeServer.on('message', (m) => {
         m.replace,
         deckConnected(),
         m.paneKey ?? null,
+        m.hostId ?? null,
       );
     if (m.type === 'unmapKey') {
       c.unmapSlot(m.requestId, paneSlot.slotOfKey(m.key));

@@ -95,10 +95,14 @@ export class MappingStore {
   /** A pane is on at most one key: where a file has it on several, the most recently assigned keeps it. */
   private dedupe(): DedupedPane[] {
     const by = new Map<string, string[]>();
-    for (const [k, s] of Object.entries(this.slots))
-      if (s.pane) by.set(s.pane.paneKey, [...(by.get(s.pane.paneKey) ?? []), k]);
+    for (const [k, s] of Object.entries(this.slots)) {
+      if (!s.pane) continue;
+      const id = `${s.pane.executionHostId ?? 'local'}\0${s.pane.paneKey}`;
+      by.set(id, [...(by.get(id) ?? []), k]);
+    }
     const out: DedupedPane[] = [];
-    for (const [paneKey, keys] of by) {
+    for (const keys of by.values()) {
+      const paneKey = this.slots[keys[0]!]!.pane!.paneKey;
       if (keys.length < 2) continue;
       // Files from before `assignedAt` order by position in the file, which is assignment order.
       const kept = keys.reduce((a, b) =>
@@ -203,9 +207,14 @@ export class MappingStore {
   }
 
   /** paneKey -> slot contexts (a pane may be shown on several slots). */
-  slotsFor(paneKey: string): string[] {
+  /** Slots showing `paneKey`; with `hostId` only that host's pane (tab and leaf ids repeat across hosts). */
+  slotsFor(paneKey: string, hostId?: string | null): string[] {
     return Object.entries(this.slots)
-      .filter(([, s]) => s.pane?.paneKey === paneKey)
+      .filter(
+        ([, s]) =>
+          s.pane?.paneKey === paneKey &&
+          (!hostId || (s.pane.executionHostId ?? 'local') === hostId),
+      )
       .map(([k]) => k);
   }
 

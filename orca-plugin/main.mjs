@@ -784,13 +784,14 @@ export function createPanelApi(
 
   return {
     get,
-    assign: async ({ key, replace, paneKey }) => {
+    assign: async ({ key, replace, paneKey, hostId }) => {
       if (!Number.isInteger(key) || key < 1) return { ok: false, reason: 'noSuchKey' };
       const r = await click({
         type: 'assignKey',
         key,
         replace: replace === true,
         ...(typeof paneKey === 'string' && paneKey ? { paneKey } : {}),
+        ...(typeof hostId === 'string' && hostId ? { hostId } : {}),
       });
       if (r.ok) setMapping(false);
       return r;
@@ -900,6 +901,11 @@ export default async function activate(orca) {
   orca.panels?.handle?.('deck.get', () => panelApi.get());
   orca.panels?.handle?.('deck.assign', (input) => panelApi.assign(input ?? {}));
   orca.panels?.handle?.('deck.unmap', (input) => panelApi.unmap(input ?? {}));
+  // Another pane chosen in the panel's list: the deck's Assign-here would map the focused one, so it ends.
+  orca.panels?.handle?.('deck.mapChoose', () => {
+    if (pairing.id) bridge.send({ v: PROTOCOL_VERSION, type: 'pairCancel', requestId: pairing.id });
+    return { ok: true };
+  });
   orca.panels?.handle?.('deck.mapEnd', () => {
     panelApi.endMap();
     if (pairing.id) bridge.send({ v: PROTOCOL_VERSION, type: 'pairCancel', requestId: pairing.id });
@@ -947,7 +953,7 @@ export default async function activate(orca) {
     for (let i = 0; i < 16 && pairing.id === requestId; i++)
       await new Promise((r) => setTimeout(r, 50));
     if (pairing.id !== requestId && pairing.reason === 'noFocusedPane')
-      return 'Focus a terminal pane first';
+      return 'Focus a terminal pane first (a paired-server pane: pick it in the Agent Deck panel)';
     if (pairing.id !== requestId && pairing.last && pairing.reason)
       return `Not mapped: ${pairing.last}`.slice(0, 200);
     return PRESS_KEY;

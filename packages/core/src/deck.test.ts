@@ -1030,4 +1030,50 @@ describe('focus on a remote host', () => {
     await d.refresh([], { force: true });
     expect((await d.pairingTarget(null))?.paneKey).toBe('a:1');
   });
+
+  it('with no worktree shown and paired-server panes around, the last local focus is dropped', async () => {
+    const focus = { current: { key: 'a:1' as string | null, host: 'local' as string | null } };
+    const paired = pane('e:1', { hostId: 'env:srv', hostName: 'srv', environment: 'srv' });
+    const d = world([pane('a:1'), paired], focus);
+    await d.refresh([]);
+    focus.current = { key: null, host: null };
+    Object.assign(d['adapter'], { focusNote: 'worktrees=1 active=0 layouts=1 no-active-worktree' });
+    await d.refresh([], { force: true });
+    expect(d.currentFocusKey()).toBeNull();
+    expect(d.panelPanes(() => null).some((p) => p.focused)).toBe(false);
+    expect(await d.pairingTarget(null)).toBeNull();
+  });
+
+  it('a pane the panel names with its host is the one mapped, when ids repeat across hosts', async () => {
+    const focus = { current: { key: null as string | null, host: null as string | null } };
+    const d = world(
+      [pane('t:1', { title: 'local' }), { ...remote('t:1'), title: 'remote' }],
+      focus,
+    );
+    const results: unknown[] = [];
+    d.onPairingResult = (r) => results.push(r);
+    await d.refresh(['s1', 's2']);
+    await d.assignFocusedTo('r1', 's1', false, true, 't:1', 'ssh:box');
+    await d.assignFocusedTo('r2', 's2', false, true, 't:1', 'local');
+    expect(results).toMatchObject([{ ok: true }, { ok: true }]);
+    const v = await d.refresh(['s1', 's2']);
+    expect(v.get('s1')).toMatchObject({ label: 'remote' });
+    expect(d.slotHost('s1')).toBe('ssh:box');
+    expect(v.get('s2')).toMatchObject({ label: 'local' });
+  });
+
+  it('the panel line puts the pane title first and the host apart', async () => {
+    const focus = { current: { key: null as string | null, host: null as string | null } };
+    const d = world(
+      [{ ...remote('t:1'), title: 'build', repo: 'r', branch: 'main', tabTitle: 'Tab 1' }],
+      focus,
+    );
+    await d.refresh([]);
+    expect(d.panelPanes(() => null)[0]).toMatchObject({
+      hostId: 'ssh:box',
+      label: 'r / main',
+      detail: 'build · Tab 1',
+      host: 'box',
+    });
+  });
 });
