@@ -271,10 +271,12 @@ export function statusInfo(o: {
   mode: 'live' | 'degraded' | 'down';
   version: string | null;
   unsupported: boolean;
+  badResponse?: boolean;
   hostsDown: number;
 }): InfoModel {
   if (o.mode === 'down') return { tone: 'offline', value: 'OFF', caption: 'Orca not running' };
   if (o.unsupported) return { tone: 'error', value: '!', caption: `Orca ${o.version} too old` };
+  if (o.badResponse) return { tone: 'error', value: '!', caption: 'unexpected Orca response' };
   if (o.hostsDown > 0) {
     return {
       tone: 'idle',

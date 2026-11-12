@@ -250,3 +250,36 @@ it('a failing host list keeps the last paired servers and marks them down instea
   expect(s.downHostIds).toContain('env:E1');
   expect(s.panes.some((p) => p.hostId === 'env:E1')).toBe(false);
 });
+
+it('snapshots around a terminal with a null title and logs a skipped one once', async () => {
+  const terminals = [
+    { handle: 'term_a', worktreeId: 'w', tabId: 't1', leafId: 'l1', title: null, connected: true },
+    { handle: 'term_b', worktreeId: 'w', tabId: 't2', leafId: 7, connected: true },
+  ];
+  const exec: Exec = async (args) =>
+    args[0] === 'terminal'
+      ? JSON.stringify({ ok: true, result: { terminals } })
+      : JSON.stringify({ ok: true, result: { worktrees: [] } });
+  const a = new CliAdapter(exec);
+  const logs: string[] = [];
+  a.diag = (m) => logs.push(m);
+  const s = await a.snapshot();
+  await a.snapshot();
+  expect(s.panes.map((p) => [p.handle, p.title])).toEqual([['term_a', '']]);
+  expect(logs).toEqual(['orca terminal list: skipped terminals[1] (term_b): leafId invalid_type']);
+});
+
+it('logs skipped items under the call that produced them even when its parse then throws', async () => {
+  const terminals = [
+    { handle: 'term_b', worktreeId: 'w', tabId: 't2', leafId: 7, connected: true },
+  ];
+  const exec: Exec = async (args) =>
+    args[0] === 'terminal'
+      ? JSON.stringify({ ok: true, result: { terminals } })
+      : JSON.stringify({ ok: true, result: { worktrees: 'nope' } });
+  const a = new CliAdapter(exec);
+  const logs: string[] = [];
+  a.diag = (m) => logs.push(m);
+  await expect(a.snapshot()).rejects.toThrow();
+  expect(logs).toEqual(['orca terminal list: skipped terminals[0] (term_b): leafId invalid_type']);
+});

@@ -679,3 +679,51 @@ it('a host alias replaces the host name on the key and in the picker, and clears
   d.hostAliases = { 'ssh:b1': '  ' };
   expect((await d.refresh(['s1'])).get('s1')?.host).toBe('build-server-01');
 });
+
+describe('an Orca reply that does not parse', () => {
+  const snap: Snapshot = { panes: [pane('a:1')], statuses: [], omittedHostIds: [] };
+  const unparsable = (err: Error) => {
+    let fail = false;
+    const a: OrcaAdapter = {
+      ...fake(snap).a,
+      snapshot: async () => {
+        if (fail) throw err;
+        return snap;
+      },
+    };
+    return { a, breakIt: () => (fail = true), fix: () => (fail = false) };
+  };
+  const zodError = () =>
+    Object.assign(new Error('[{"secret":"x"}]'), {
+      name: 'ZodError',
+      issues: [{ path: ['terminals', 0, 'title'], code: 'invalid_type' }],
+    });
+
+  it('is not "down" while health answers: the last good snapshot stays, and the paths are logged once', async () => {
+    const { a, breakIt, fix } = unparsable(zodError());
+    const d = new DeckController(a, new MappingStore());
+    const logs: string[] = [];
+    d.diag = (m) => logs.push(m);
+    expect((await d.refresh(['s1'])).get('s1')?.state).toBe('idle');
+    breakIt();
+    const v = await d.refresh(['s1']);
+    await d.refresh(['s1']);
+    expect(v.get('s1')?.state).toBe('idle');
+    expect(d.overview()).toMatchObject({ mode: 'degraded', badResponse: true });
+    expect(logs.filter((m) => m.includes('did not parse'))).toEqual([
+      'orca answered, but the response did not parse: terminals.0.title invalid_type',
+    ]);
+    fix();
+    await d.refresh(['s1']);
+    expect(d.overview().badResponse).toBe(false);
+  });
+
+  it('still reports "down" when the snapshot fails for another reason', async () => {
+    const { a, breakIt } = unparsable(new Error('timeout'));
+    const d = new DeckController(a, new MappingStore());
+    await d.refresh(['s1']);
+    breakIt();
+    await d.refresh(['s1']);
+    expect(d.overview()).toMatchObject({ mode: 'down', badResponse: false });
+  });
+});
