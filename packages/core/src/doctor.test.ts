@@ -27,6 +27,14 @@ describe('runChecks', () => {
     });
   });
 
+  it('fails with "unexpected Orca response" when Orca is up but its listing did not parse', () => {
+    expect(worstCheck(runChecks({ ...good, orcaResponseBad: true }))).toMatchObject({
+      id: 'orca-response',
+      result: 'fail',
+      caption: 'unexpected Orca response',
+    });
+  });
+
   it('fails on an unsupported Orca version', () => {
     const w = worstCheck(runChecks({ ...good, orcaVersion: '1.0.0', orcaUnsupported: true }));
     expect(w).toMatchObject({ id: 'orca-version', result: 'fail', caption: 'Orca 1.0.0 too old' });

@@ -2,6 +2,14 @@
 
 All notable changes to this project are documented here. Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), versioning: [SemVer](https://semver.org/).
 
+## [0.2.2] - Unreleased
+
+### Fixed
+
+- **adapter-cli:** a terminal Orca lists with `"title": null` (a plain shell tab after an Orca restart) no longer fails the whole listing, which made the Status key say "Orca not running" and the pane keys stay empty. A field Orca leaves out or sends as null (terminal title and execution host, an agent's `interrupted`, a worktree's host and agents, the host scope lists) now reads as its default, and one terminal, worktree or agent entry that does not match is skipped instead of failing the rest. Each skipped entry is logged once with the schema path and handle (never its content).
+- **streamdeck:** when Orca answers the health check but a listing does not parse, the Status key says "unexpected Orca response" (a failed Setup check, with the schema path in the plugin log) instead of "Orca not running", and the keys keep the last good read.
+- **adapter-cli:** a host is counted down only when no listing covered it. `omittedHostIds` is per-listing coverage, not health, so an SSH host with worktrees but no terminals (it appears only in the terminal listing's gaps) no longer shows as "host down". Mapped keys, released entries and remote panes hold their last known state for any omitted host, and the Setup count uses the new `downHostIds`. A known environment's runtime id is still removed, so a failed host list cannot hide a paired runtime that is down.
+
 ## [0.2.1] - 2026-11-11
 
 Renamed to Agent Deck for Orca.

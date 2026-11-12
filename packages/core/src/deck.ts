@@ -25,6 +25,19 @@ export interface SlotView {
 
 const short = (id: string) => id.slice(0, 6);
 
+/**
+ * What a failed read says when Orca did answer but not in a shape the adapter knows (a zod issue list or
+ * bad JSON): the schema paths and codes, never a value. Null for any other failure (Orca did not answer).
+ */
+function unreadableResponse(e: unknown): string | null {
+  if (!(e instanceof Error)) return null;
+  const issues = (e as { issues?: { path?: unknown[]; code?: string }[] }).issues;
+  if (e.name === 'ZodError' && Array.isArray(issues)) {
+    return issues.map((i) => `${(i.path ?? []).join('.') || '<root>'} ${i.code}`).join('; ');
+  }
+  return e instanceof SyntaxError ? 'not JSON' : null;
+}
+
 /** How old the snapshot's pane reads may be for the per-refresh focus check. */
 const FOCUS_FROM_SNAPSHOT_MS = 300;
 
@@ -35,6 +48,8 @@ export interface Overview {
   mode: HealthMode;
   version: string | null;
   unsupported: boolean;
+  /** Orca answered the health check, but its latest listing did not parse: the panes are the last good read. */
+  badResponse: boolean;
   /** Hosts whose panes are currently missing. */
   hostsDown: number;
   /** Number of panes that need the user (needs_input, awaiting_reply, error). */
@@ -131,6 +146,8 @@ export class DeckController {
   private pressedKey: string | null = null;
   private snapshot: Snapshot = { panes: [], statuses: [], omittedHostIds: [] };
   private orcaRunning = false;
+  /** Why the last snapshot could not be read while Orca was up (paths and codes only), else null. */
+  private readFailure: string | null = null;
   private health: { version: string | null; live: boolean; unsupported: boolean; fast: boolean } = {
     version: null,
     live: false,
@@ -259,9 +276,16 @@ export class DeckController {
           fast: h.fast ?? false,
         };
         if (this.orcaRunning) this.snapshot = await this.adapter.snapshot();
+        this.readFailure = null;
         phase.snapshot = Date.now() - started - phase.health;
-      } catch {
-        this.orcaRunning = false;
+      } catch (e) {
+        const bad = this.orcaRunning ? unreadableResponse(e) : null;
+        // Orca answered but its reply did not parse: it is not down, and the last good snapshot stays.
+        if (bad === null) this.orcaRunning = false;
+        if (bad !== this.readFailure) {
+          if (bad !== null) this.diag?.(`orca answered, but the response did not parse: ${bad}`);
+          this.readFailure = bad;
+        }
       }
     }
     if (this.orcaRunning) this.applyShellActivity();
@@ -591,6 +615,7 @@ export class DeckController {
       mode: !this.orcaRunning ? 'down' : this.health.live ? 'live' : 'degraded',
       version: this.health.version,
       unsupported: this.health.unsupported,
+      badResponse: this.orcaRunning && this.readFailure !== null,
       // Omitted hosts keep their keys' last known state; only hosts no listing reached are down.
       hostsDown: (this.snapshot.downHostIds ?? this.snapshot.omittedHostIds).length,
       urgent: urgent.length,

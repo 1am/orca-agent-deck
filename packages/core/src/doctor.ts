@@ -5,6 +5,7 @@ export type CheckResult = 'ok' | 'warn' | 'fail';
 export type CheckId =
   | 'orca-running'
   | 'orca-version'
+  | 'orca-response'
   | 'orca-bin'
   | 'live-link'
   | 'slots'
@@ -41,6 +42,8 @@ export interface DoctorFacts {
   orcaRunning: boolean;
   orcaVersion: string | null;
   orcaUnsupported: boolean;
+  /** Orca is up but its latest listing did not parse (see the plugin log for the field). */
+  orcaResponseBad?: boolean;
   /** How the `orca` binary was found; `path` means nothing was found and PATH is the last resort. */
   binSource: 'env' | 'app-bundle' | 'fallback' | 'path' | null;
   binReason?: string;
@@ -131,6 +134,18 @@ export function runChecks(f: DoctorFacts): Check[] {
             caption: '',
           },
     );
+  }
+
+  if (f.orcaRunning && f.orcaResponseBad) {
+    checks.push({
+      id: 'orca-response',
+      label: 'Orca response',
+      result: 'fail',
+      reason:
+        'Orca answered, but a listing did not match what Agent Deck for Orca expects; the keys show the last good read (the plugin log names the field)',
+      caption: 'unexpected Orca response',
+      hint: 'Update Agent Deck for Orca, or report the plugin log line',
+    });
   }
 
   if (f.binSource === 'path') {
