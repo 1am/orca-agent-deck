@@ -31,8 +31,6 @@ All notable changes to this project are documented here. Format: [Keep a Changel
 
 ### Fixed
 
-- **orca-plugin:** a click in the panel that gets no answer from the Orca plugin (it stopped, or the call failed) shows why instead of an empty result line.
-- **streamdeck:** a failed deck push or key refresh is logged (without terminal text) instead of ending the plugin with an unhandled rejection, and the push that follows a pairing result now waits for the key refresh that is running, so the panel gets the keys as they are now and not the old ones.
 - **streamdeck:** on Windows, an Orca launcher found on `PATH` as `orca.cmd` is run through `cmd.exe` (recent Node refuses to start a `.cmd` directly), and only with arguments that contain no shell characters.
 - **streamdeck:** an agent whose process crashed or exited with an error shows as an error on its key (it read "offline") and counts on the Attention key, which stayed calm.
 - **streamdeck:** a pane is on one key only. Mapping a pane that already sits on a key (from the "Map pane to key" command, by holding a key, or from the picker) moves it instead of showing it on two keys, and a mappings file that has a pane on several keys is cleaned on load. Run from the plugin settings, "Map pane to key" uses the last pane Orca reported focused, and says "Focus a terminal pane first" when there is none.
