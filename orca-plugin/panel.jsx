@@ -1,6 +1,8 @@
 // The Agent Deck sidebar panel: the connected deck as a grid of numbered keys, shaped like the deck. A click on a
 // key marks it and shows its details under the grid (like the key settings in the Stream Deck app): what it shows,
 // Unmap, the focused pane and the panes Orca lists. The details stay open after a choice; Back closes them.
+// Opened from the status bar button or the shortcut it is in map mode: a banner names the pane being mapped and a
+// click on an empty key assigns it at once.
 // Orca draws this tree with its own controls (ui: "components", no build step). The deck is plugin B's: this
 // panel only asks plugin A (main.mjs) for its state (`deck.get`, and `deck.changed` pushes) and sends choices
 // (`deck.assign`, `deck.unmap`).
@@ -28,6 +30,8 @@ const picking = atom(null);
 /** The last result of a click, in words (also the last pairing result). */
 const note = atom('');
 const busy = atom(false);
+/** The panel was opened to map the focused pane (status bar button, shortcut): a click on an empty key assigns it. */
+const mapping = atom(false);
 
 const REASONS = {
   noFocusedPane: 'No pane is focused in Orca. Click a terminal first.',
@@ -40,6 +44,9 @@ const REASONS = {
   offline: 'The Stream Deck plugin is not running.',
   update: 'Update the Stream Deck plugin: it is older than this one.',
 };
+/** A request that never got a result: the Orca plugin did not answer, or it failed. */
+const failed = (e) =>
+  `The Orca plugin did not answer (${String(e?.message ?? e).slice(0, 80) || 'no reason given'}). Try Refresh.`;
 const DONE = {
   mapped: 'assigned',
   moved: 'moved here (the pane was on another key)',
@@ -69,7 +76,14 @@ const TONES = {
 };
 
 async function refresh() {
-  set(view, await plugin.request('deck.get'));
+  try {
+    const v = await plugin.request('deck.get');
+    set(view, v);
+    set(mapping, v?.mapping === true);
+  } catch (e) {
+    set(view, null);
+    set(note, failed(e));
+  }
 }
 
 async function act(name, input, key) {
@@ -82,13 +96,22 @@ async function act(name, input, key) {
         ? `Key ${key} ${DONE[r.action] ?? 'assigned'}.`
         : (REASONS[r.reason] ?? `Not done (${r.reason}).`),
     );
+    if (r.ok) set(mapping, false);
+  } catch (e) {
+    set(note, failed(e));
   } finally {
     set(busy, false);
   }
 }
 
 export function setup(ctx) {
-  ctx.subscriptions.push(plugin.on('deck.changed', (payload) => set(view, payload)));
+  ctx.subscriptions.push(
+    plugin.on('deck.changed', (payload) => {
+      set(view, payload);
+      if (typeof payload?.mapping === 'boolean') set(mapping, payload.mapping);
+    }),
+    plugin.on('map.changed', (payload) => set(mapping, payload?.mapping === true)),
+  );
   void refresh();
 }
 
@@ -107,10 +130,43 @@ function Status({ v }) {
   );
 }
 
+/** The pane Orca has focused: the one a map-mode click assigns. */
+const focusedPane = (deck) => deck.panes?.find((p) => p.focused) ?? null;
+
+/** Names the pane being mapped, so it is clear which one it is even when Orca shows it faintly. */
+function MapBanner({ deck }) {
+  const pane = focusedPane(deck);
+  return (
+    <Stack gap="xs">
+      <Badge tone="accent">Mapping</Badge>
+      <Heading level={3}>{pane ? `Map ${pane.label} to a key` : REASONS.noFocusedPane}</Heading>
+      {pane ? (
+        <Text size="xs" muted>
+          {paneLine(pane, 0) || 'Focused terminal pane'}
+        </Text>
+      ) : null}
+      <Text size="xs">Click an empty key below, or press a key on the deck.</Text>
+      <Row>
+        <Button
+          size="xs"
+          variant="ghost"
+          onPress={() => {
+            set(mapping, false);
+            plugin.request('deck.mapEnd').catch(() => {});
+          }}
+        >
+          Cancel
+        </Button>
+      </Row>
+    </Stack>
+  );
+}
+
 /** Numbers only, one small button per key, rows x columns as on the deck. A wide deck wraps instead of clipping. */
 function Grid({ deck }) {
   const working = read(busy);
   const open = read(picking);
+  const mapMode = read(mapping);
   const rows = [];
   for (let r = 0; r < deck.rows; r++)
     rows.push(deck.keys.filter((k) => Math.ceil(k.key / deck.cols) === r + 1));
@@ -128,6 +184,15 @@ function Grid({ deck }) {
                 tooltip={k.mapped ? `Key ${k.key}: ${k.label} (${k.state})` : `Key ${k.key}: empty`}
                 onPress={() => {
                   set(note, '');
+                  // Map mode: an empty key takes the pane named above at once; a key that shows a pane opens its
+                  // details, where replacing it is a choice of its own.
+                  const pane = focusedPane(deck);
+                  if (mapMode && !k.mapped && pane)
+                    return void act(
+                      'deck.assign',
+                      { key: k.key, replace: false, paneKey: pane.paneKey },
+                      k.key,
+                    );
                   set(picking, open === k.key ? null : k.key);
                 }}
               >
@@ -229,12 +294,14 @@ export default function Panel() {
   const v = read(view);
   const last = read(note);
   const open = read(picking);
+  const mapMode = read(mapping);
   const live = v && v.status === 'ok' && v.deck.connected;
   const k = live && open !== null ? v.deck.keys.find((x) => x.key === open) : null;
   return (
     <Stack gap="md">
       <Heading>Agent Deck</Heading>
       <Status v={v} />
+      {live && mapMode ? <MapBanner deck={v.deck} /> : null}
       {live ? <Grid deck={v.deck} /> : null}
       {live && k ? <Details deck={v.deck} k={k} /> : null}
       {last ? <Text size="xs">{last}</Text> : null}

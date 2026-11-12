@@ -24,14 +24,14 @@ Checked: 2026-11-11.
 
 ## Orca plugin shortcuts
 
-Checked: 2026-11-11 (Orca 1.4.251, not reported upstream).
+Checked: 2026-11-12 (Orca 1.4.251, not reported upstream). Verified on macOS; not yet on Windows or Linux.
 
-### Plugin shortcuts do not fire while a terminal, editor or text field has the keyboard
+### A plugin shortcut also reaches the program running in the terminal
 
-- **What.** Orca's window key handler drops a plugin's `contributes.keybindings` when the key press comes from an editable target (an input, the Monaco editor, a contenteditable) and does not offer them to a terminal (xterm's input) either. Any chord is affected, not only Cmd+Alt+K. Orca's own shortcuts are not. Remapping the chord in Orca's Settings > Keyboard changes the keys but not this check, so it does not help.
-- **Deck impact.** "Map pane to key" (Cmd+Alt+K, Ctrl+Alt+K) and "Unmap pane" (with Shift) do nothing while you type in a terminal pane, which is where you are when you want to map it, and in an editor or text field. They fire only where nothing like that has the keyboard, for example the plugin settings view.
-- **Workaround.** Click "Map pane" in Orca's status bar, click a key in the Agent Deck panel in the right sidebar, or run "Agent Deck: Map pane to key" from the command palette. All three take the terminal pane you focused last.
-- **Upstream.** Needs Orca to offer plugin shortcuts in terminals too (as it does for its own, under the terminal shortcut policy), for example a keybinding context for terminals or a `when` clause that allows terminal focus. The shortcut stays in the plugin for when Orca does.
+- **What.** Orca runs a plugin's `contributes.keybindings` from a handler on the window, which sees a key press after the terminal (xterm) has already taken it (read from the app's code, the effect seen on macOS). Orca's own shortcuts are claimed under its terminal shortcut policy, so the program in the pane does not get them; a plugin shortcut is not, so Orca runs the command and the same keys also go to the program. Any plugin chord is affected, not only Cmd+Alt+K, and remapping it in Orca's Settings > Keyboard changes the keys but not this.
+- **Deck impact.** "Map pane to key" (Cmd+Alt+K, Ctrl+Alt+K on Windows and Linux) and "Unmap pane" (with Shift) work in a terminal pane as well as outside it, but in a terminal the chord also reaches the program there: Claude Code, for one, closed its prompt on Cmd+Alt+K.
+- **Workaround.** Click "Agent Deck" in Orca's status bar (it opens the panel and does not type anything into the pane) or run "Agent Deck: Map pane to key" from the command palette, and use the shortcut when you are not in a program that reacts to it. Both take the terminal pane you focused last.
+- **Upstream.** Needs Orca to claim a plugin shortcut for the app when it fires in a terminal (as it does for its own, under the terminal shortcut policy).
 
 ## Paired Orca servers
 

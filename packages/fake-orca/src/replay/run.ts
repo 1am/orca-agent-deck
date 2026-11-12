@@ -106,7 +106,11 @@ export async function replaySim(sc: Scenario): Promise<SimResult> {
               `t=${step.at} key ${step.key} ${f}: expected ${JSON.stringify(want)}, got ${JSON.stringify(v?.[f])}`,
             );
         }
-      } else if (step.do === 'expect.focus' || step.do === 'expect.reveal') {
+      } else if (
+        step.do === 'expect.focus' ||
+        step.do === 'expect.reveal' ||
+        step.do === 'expect.runtime'
+      ) {
         throw new Error(
           `t=${step.at}: the sim runner cannot evaluate ${step.do}; target side a or b`,
         );

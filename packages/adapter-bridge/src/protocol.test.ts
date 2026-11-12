@@ -24,11 +24,14 @@ const fromA = [
   { v: 1, type: 'assignKey', requestId: 'r4', key: 3, replace: false },
   { v: 1, type: 'assignKey', requestId: 'r6', key: 2, replace: true, paneKey: 'a:1' },
   { v: 1, type: 'unmapKey', requestId: 'r5', key: 3 },
+  { v: 1, type: 'openPanel', requestId: 'r7', panelId: 'deck' },
 ];
 
 const fromB = [
   { v: 1, type: 'helloAck', deck: { connected: true, devices: [{ model: 'mobile', keys: 6 }] } },
   { v: 1, type: 'requestSnapshot' },
+  { v: 1, type: 'openPanelResult', requestId: 'r7', ok: true },
+  { v: 1, type: 'openPanelResult', requestId: 'r7', ok: false, reason: 'refused' },
   {
     v: 1,
     type: 'pairState',

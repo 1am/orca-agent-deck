@@ -96,6 +96,14 @@ class FakeB {
       if (m.type === 'pairRequest') this.lastRequestId = m.requestId;
       this.frames.push({ ...m });
       if (m.type === 'pairRequest' && this.autoReply) this.send(this.autoReply);
+      // This B has no runtime to open the panel with: A falls back to the deck-only mapping at once.
+      if (m.type === 'openPanel')
+        this.send({
+          type: 'openPanelResult',
+          requestId: m.requestId,
+          ok: false,
+          reason: 'unavailable',
+        });
     });
     this.disc = await server.start();
     this.server = server;

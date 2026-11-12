@@ -2,4 +2,4 @@
 {"at":0,"do":"orca.activate"}
 {"at":0,"do":"bridge.frame","from":"a","frame":{"type":"hello"}}
 {"at":100,"do":"orca.command","id":"deck.map","result":"Stream Deck not connected"}
-
+{"at":100,"do":"bridge.frame","from":"a","frame":{"type":"openPanel","panelId":"deck"}}

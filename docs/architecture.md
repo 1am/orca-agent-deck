@@ -67,6 +67,7 @@ Layering inside B: `packages/core` is pure logic (no `@elgato/*`), every Orca ca
 Plugin A cannot be the only path between Orca and B:
 
 - **A's host API has no pane calls.** A trusted worker gets events plus `notifications`, `storage`, `terminal.sendText` and `workspace.*` host calls. Orca exposes no host call to list panes, read the focused pane or focus one. Those exist only on the runtime socket, so A would have to open the same socket and proxy it: one more hop, same dependency.
+- **A cannot show its own panel.** Orca has no host call for it either. The "Agent Deck" status bar button and the shortcut therefore send B an `openPanel` frame, and B calls the runtime's `plugins.open` (`{ pluginKey, panelId }`, what `orca plugin open` does; the local runtime token is the owner's, so it needs no extra grant). B tries `1am.agent-deck`, then `local.agent-deck`, because the install decides the key. If that fails A keeps the deck-side mapping.
 - **A is not always running.** Orca starts the worker on an event and stops it after about 10 minutes without events. Nothing outside Orca can start it, so a key press or the 2 s poll after a quiet period would have nobody to answer. B must work while A sleeps; A only makes status changes arrive sooner.
 - **A is optional.** With A missing or disabled the deck still works from polling (the Status key's "slow updates").
 

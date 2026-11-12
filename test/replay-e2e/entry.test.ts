@@ -21,6 +21,7 @@ function pluginA(): PluginA {
   let worker: {
     emit(e: string, p: unknown): Promise<void>;
     request(name: string, input?: unknown): Promise<unknown>;
+    command(id: string, args?: unknown): Promise<unknown>;
     deactivate(): Promise<void>;
   } | null = null;
   const saved = { HOME: process.env['HOME'], APPDATA: process.env['APPDATA'] };
@@ -38,6 +39,7 @@ function pluginA(): PluginA {
     },
     emit: (name, payload) => worker!.emit(name, payload),
     request: (name, input) => worker!.request(name, input),
+    command: (id, args) => worker!.command(id, args),
     async stop() {
       await worker?.deactivate();
       worker = null;

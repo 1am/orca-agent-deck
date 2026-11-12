@@ -49,7 +49,6 @@ export class PaneSlot extends SingletonAction {
   private ctl: DeckController | undefined;
   private readonly create: () => Promise<DeckController>;
   private ready: Promise<DeckController> | undefined;
-  private busy = false;
   /** Last image sent per key; keys are only updated on change (Mobile runs over Wi-Fi). */
   private readonly sent = new Map<string, string>();
   private readonly views = new Map<string, SlotView>();
@@ -277,23 +276,28 @@ export class PaneSlot extends SingletonAction {
     return this.refresh();
   }
 
-  private async refresh(): Promise<void> {
-    if (this.keys.size === 0) return;
-    if (this.busy) {
+  /** Resolves when the refresh that is running, including the one it was asked to repeat, is done. */
+  private running: Promise<void> | null = null;
+
+  private refresh(): Promise<void> {
+    if (this.keys.size === 0) return Promise.resolve();
+    if (this.running) {
       this.again = true;
-      return;
+      return this.running;
     }
-    this.busy = true;
-    try {
-      do {
-        this.again = false;
-        const views = await (await this.controller()).refresh([...this.keys.keys()]);
-        for (const [id, v] of views) this.views.set(id, v);
-        await this.repaint();
-      } while (this.again);
-    } finally {
-      this.busy = false;
-    }
+    this.running = (async () => {
+      try {
+        do {
+          this.again = false;
+          const views = await (await this.controller()).refresh([...this.keys.keys()]);
+          for (const [id, v] of views) this.views.set(id, v);
+          await this.repaint();
+        } while (this.again);
+      } finally {
+        this.running = null;
+      }
+    })();
+    return this.running;
   }
 
   private async repaint(): Promise<void> {

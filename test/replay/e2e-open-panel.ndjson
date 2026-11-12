@@ -1,0 +1,15 @@
+{"v":2,"name":"e2e-open-panel","description":"The status bar button and the shortcut run Map pane through both shipped plugins: A starts pairing on the deck and asks B to show the panel, B calls Orca's plugins.open and answers, and the panel is in map mode (deck.get says so) until a key is chosen. When Orca refuses to open the panel, the deck-only flow stays. Revert check: drop the openPanel send in the deck.map command (main.mjs): the toast is the deck-only one and Orca is never asked.","sides":["e2e"],"keys":{}}
+{"at":0,"do":"orca.pane.add","pane":"a"}
+{"at":0,"do":"orca.focus","pane":"a"}
+{"at":0,"do":"deck.appear","key":1}
+{"at":0,"do":"deck.appear","key":2}
+{"at":100,"do":"expect.panel","request":"deck.get","result":{"status":"ok","deck":{"connected":true}}}
+{"at":200,"do":"orca.command","id":"deck.map","result":"Pick a key in the Agent Deck panel, or press one on the deck"}
+{"at":200,"do":"expect.runtime","method":"plugins.open","params":{"pluginKey":"1am.agent-deck","panelId":"deck"}}
+{"at":200,"do":"expect.key","key":1,"state":"unmapped","label":"Assign here: Claude Code"}
+{"at":300,"do":"expect.panel","request":"deck.get","result":{"status":"ok","mapping":true}}
+{"at":400,"do":"expect.panel","request":"deck.assign","input":{"key":2,"replace":false},"result":{"ok":true,"action":"mapped"}}
+{"at":400,"do":"expect.key","key":2,"state":"completed","label":"Claude Code"}
+{"at":500,"do":"expect.panel","request":"deck.get","result":{"status":"ok","mapping":false}}
+{"at":600,"do":"orca.plugin","key":"1am.agent-deck","status":"absent"}
+{"at":700,"do":"orca.command","id":"deck.map","result":"Press a key on the deck to map this pane"}

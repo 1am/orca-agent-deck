@@ -73,8 +73,8 @@
       {
         "id": "deck",
         "icon": "link",
-        "text": "Map pane",
-        "tooltip": "Agent Deck: map the last focused terminal pane to a Stream Deck key",
+        "text": "Agent Deck",
+        "tooltip": "Agent Deck: open the panel to map the last focused terminal pane to a Stream Deck key",
         "command": "deck.map"
       }
     ],

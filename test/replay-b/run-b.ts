@@ -115,6 +115,8 @@ export interface PluginA {
   emit(name: string, payload: unknown): Promise<void>;
   /** What the sidebar panel's `plugin.request` gets from the worker. */
   request(name: string, input?: unknown): Promise<unknown>;
+  /** Runs a command of the worker as the palette, the status bar or a shortcut does; resolves to its toast. */
+  command(id: string, args?: unknown): Promise<unknown>;
   stop(): Promise<void>;
 }
 
@@ -449,6 +451,19 @@ process.exit(r.status ?? 1);`,
       case 'orca.event':
         if (a) await a.emit(st.name, st.payload);
         return;
+      case 'orca.command': {
+        if (!a) return;
+        const toast = String(await a.command(st.id, st.args));
+        if (st.result !== undefined && toast !== st.result)
+          throw new Error(
+            `t=${st.at}: command ${st.id} answered "${toast}", wanted "${st.result}"`,
+          );
+        if (st.resultContains !== undefined && !toast.includes(st.resultContains))
+          throw new Error(
+            `t=${st.at}: command ${st.id} answered "${toast}", wanted it to contain "${st.resultContains}"`,
+          );
+        return;
+      }
       case 'bridge.frame':
         if (st.from === 'a') {
           if (a) return;
@@ -509,6 +524,17 @@ process.exit(r.status ?? 1);`,
         throw new Error(
           `t=${st.at}: messages to key ${st.key}'s inspector differ\n  expected:\n${lines(st.messages)}\n  actual:\n${lines(got())}`,
         );
+    } else if (st.do === 'expect.runtime') {
+      if (!runtime) throw new Error(`t=${st.at}: expect.runtime needs the runtime socket`);
+      const calls = () =>
+        runtime!.requests.filter(
+          (r) => r.method === st.method && (st.params === undefined || subset(st.params, r.params)),
+        );
+      await until(
+        () => calls().length > 0,
+        `Orca's runtime to be asked ${st.method} at t=${st.at}`,
+        () => `  runtime requests: ${JSON.stringify(runtime!.requests.map((r) => r.method))}`,
+      );
     } else if (st.do === 'expect.focus') {
       const handle = handleOf(st.pane);
       // Through the runtime socket the fake records the request; on the CLI path the shim saves what it focused.

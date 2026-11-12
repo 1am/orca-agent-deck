@@ -150,6 +150,17 @@ export class FakeRuntime {
           });
         return { terminal: { tabId: p.tabId, leafId: p.leafId } };
       }
+      case 'plugins.open': {
+        const key = params['pluginKey'];
+        // Without `orca.plugin` steps Agent Deck is installed from the catalog.
+        const known = s.plugins
+          ? s.plugins.filter((x) => x.status === 'enabled').map((x) => x.pluginKey)
+          : ['1am.agent-deck'];
+        if (typeof key !== 'string' || !known.includes(key))
+          throw Object.assign(new Error('plugin not found'), { code: 'plugin_not_found' });
+        const panelId = typeof params['panelId'] === 'string' ? params['panelId'] : 'deck';
+        return { kind: 'panel', title: 'Agent Deck', pluginKey: key, panelId };
+      }
       default:
         throw Object.assign(new Error(`Unknown method: ${method}`), { code: 'method_not_found' });
     }

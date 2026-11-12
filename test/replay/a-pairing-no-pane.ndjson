@@ -5,3 +5,4 @@
 {"at":100,"do":"bridge.reply","frame":{"v":1,"type":"pairResult","requestId":"$requestId","ok":false,"reason":"noFocusedPane"}}
 {"at":200,"do":"orca.command","id":"deck.map","result":"Focus a terminal pane first"}
 {"at":200,"do":"bridge.frame","from":"a","frame":{"type":"pairRequest"}}
+{"at":200,"do":"bridge.frame","from":"a","frame":{"type":"openPanel","panelId":"deck"}}

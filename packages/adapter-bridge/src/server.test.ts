@@ -234,7 +234,7 @@ describe('server handshake', () => {
       v: 1,
       type: 'helloAck',
       deck: { connected: true, devices: [{ model: 'Mobile', keys: 15 }] },
-      minor: 1,
+      minor: 2,
     });
     // A hello without a minor is a v0.2.x A: minor 0.
     const info = { orcaVersion: '1.4.245', pluginVersion: '0.1.0', minor: 0 };
@@ -623,7 +623,7 @@ describe('plugin A client against the real server', () => {
     expect(server.connection).toEqual({
       orcaVersion: '1.4.245',
       pluginVersion: plugin.PLUGIN_VERSION,
-      minor: 1,
+      minor: 2,
     });
     expect(onAck).toHaveBeenCalledOnce();
     expect(a.status().deck).toEqual({ connected: true, devices: [{ model: 'Mobile', keys: 15 }] });
@@ -731,8 +731,12 @@ describe('plugin A activate() and the Show status command', () => {
   });
 
   it.each([
-    [false, 'Stream Deck not connected', []],
-    [true, 'Press a key on the deck to map this pane', ['pairRequest']],
+    [false, 'Stream Deck not connected', ['openPanel']],
+    [
+      true,
+      'Pick a key in the Agent Deck panel, or press one on the deck',
+      ['pairRequest', 'openPanel'],
+    ],
   ])('Map pane with the deck connected=%s', async (deckUp, toast, sent) => {
     const connected = { value: deckUp };
     server = new BridgeServer({
@@ -742,7 +746,12 @@ describe('plugin A activate() and the Show status command', () => {
     });
     await server.start();
     const received: { type: string; pane?: unknown }[] = [];
-    server.on('message', (m) => received.push(m));
+    // B opens the panel in Orca and says so.
+    server.on('message', (m) => {
+      received.push(m);
+      if (m.type === 'openPanel')
+        server.send({ v: 1, type: 'openPanelResult', requestId: m.requestId, ok: true });
+    });
     const commands = new Map<string, () => Promise<string | void>>();
     const orca = {
       version: '1.4.245',
@@ -767,17 +776,51 @@ describe('plugin A activate() and the Show status command', () => {
       expect(received[0]).toMatchObject({ pane: null });
       expect(await commands.get('deck.unmap')!()).toBe('Unmapping this pane');
       await new Promise((r) => setTimeout(r, 100));
-      expect(received.map((m) => m.type)).toEqual(['pairRequest', 'unmapRequest']);
+      expect(received.map((m) => m.type)).toEqual(['pairRequest', 'openPanel', 'unmapRequest']);
     }
   });
 });
 
+describe('Map pane when B cannot open the panel', () => {
+  it.each(['refused', 'unavailable'] as const)(
+    'falls back to the deck-only mapping when B says %s',
+    async (reason) => {
+      server = new BridgeServer({
+        discoveryPath,
+        ports: [0],
+        deck: () => ({ connected: true, devices: [] }),
+      });
+      await server.start();
+      server.on('message', (m) => {
+        if (m.type === 'openPanel')
+          server.send({ v: 1, type: 'openPanelResult', requestId: m.requestId, ok: false, reason });
+      });
+      const commands = new Map<string, () => Promise<string | void>>();
+      fakeUserDirs();
+      const { writeDiscovery, defaultDiscoveryPath } = await import('./discovery.ts');
+      const d = await readDiscovery(discoveryPath);
+      await writeDiscovery(defaultDiscoveryPath(), d!);
+      vi.resetModules();
+      const fresh = (await import(`${pluginPath.href}?fresh=${Date.now()}`)) as typeof plugin;
+      await fresh.default({
+        version: '1.4.245',
+        log: () => {},
+        commands: {
+          register: (id: string, fn: () => Promise<string | void>) => commands.set(id, fn),
+        },
+        events: { on: () => {} },
+      });
+      expect(await commands.get('deck.map')!()).toBe('Press a key on the deck to map this pane');
+    },
+  );
+});
+
 describe('status bar button', () => {
   it.each([
-    [{ state: 'connected', deck: { connected: true } }, 'Map pane'],
+    [{ state: 'connected', deck: { connected: true } }, 'Agent Deck'],
     [{ state: 'connected', deck: { connected: false } }, 'No Stream Deck'],
     // The last deckState of this connection wins over what helloAck said.
-    [{ state: 'connected', deck: { connected: false }, deckConnected: true }, 'Map pane'],
+    [{ state: 'connected', deck: { connected: false }, deckConnected: true }, 'Agent Deck'],
     [{ state: 'b-not-running', deck: null }, 'Deck offline'],
     [{ state: 'disconnected', deck: null }, 'Deck offline'],
     [{ state: 'disconnected', deck: null, versionNote: 'B speaks bridge 2' }, 'Update Agent Deck'],
@@ -814,7 +857,7 @@ describe('status bar button', () => {
       },
     });
     await new Promise((r) => setTimeout(r, 200));
-    expect(updates.at(-1)).toMatchObject({ id: 'deck', text: 'Map pane', tone: 'neutral' });
+    expect(updates.at(-1)).toMatchObject({ id: 'deck', text: 'Agent Deck', tone: 'neutral' });
     expect(new Set(updates.map((u) => u.text)).size).toBe(updates.length);
     // Orca before 1.4.248: no host call at all.
     const calls: string[] = [];

@@ -138,6 +138,8 @@ export const stepSchema = z.discriminatedUnion('do', [
    * `result` (a subset). A read such as `deck.get` is asked again until it matches; a click is asked once.
    */
   step('expect.panel', { request: z.string(), input: json.optional(), result: json }),
+  /** Orca's runtime was asked `method` (once or more) with these `params` (a subset), through the socket: the B and end-to-end suites. */
+  step('expect.runtime', { method: z.string(), params: json.optional() }),
   step('expect.focus', { pane }),
   step('expect.reveal', { pane }),
 ]);

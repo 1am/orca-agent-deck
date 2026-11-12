@@ -1,7 +1,12 @@
 import streamDeck from '@elgato/streamdeck';
 import { MappingStore, DeckController, type SlotSettings } from '@orca-agent-deck/core';
 import { makeExec } from '@orca-agent-deck/adapter-cli';
-import { createRuntimeAdapter } from '@orca-agent-deck/adapter-runtime';
+import {
+  RuntimeClient,
+  RuntimeUnavailableError,
+  createRuntimeAdapter,
+  openPluginPanel,
+} from '@orca-agent-deck/adapter-runtime';
 import { makeRaiser } from '@orca-agent-deck/window-raiser';
 import { currentHost } from './host.ts';
 import { FileSlotStorage, defaultMappingsPath } from './mapping-file.ts';
@@ -18,6 +23,12 @@ const slotAddress = (slot: string) => paneSlot.address(slot);
 
 // Never log terminal content or the Orca runtime authToken.
 streamDeck.logger.setLevel('info');
+
+/** Only a message: an error here may carry runtime text, and a failed push must never take the plugin down. */
+const logFailure = (what: string) => (e: unknown) =>
+  streamDeck.logger.warn(`${what} failed: ${e instanceof Error ? e.name : 'error'}`);
+
+const runtime = new RuntimeClient();
 
 // Slot mappings live in the plugin's global settings so they survive restarts of the app and Orca.
 // Settings can only be read once connected (awaiting them before connect never settles: exit 13),
@@ -55,6 +66,7 @@ async function createController(): Promise<DeckController> {
   };
   // Steady state reads the runtime socket (no process spawns); the CLI is the degraded fallback.
   const orca = createRuntimeAdapter({
+    client: runtime,
     fallback: makeExec(),
     onFallback: (r) => streamDeck.logger.warn(`runtime socket unusable, using CLI: ${r}`),
     onRecover: () => streamDeck.logger.info('runtime socket back, CLI fallback off'),
@@ -91,7 +103,10 @@ async function createController(): Promise<DeckController> {
         : { ok: false as const, reason: r.reason }),
     });
     // The Orca panel shows the result: tell it the keys as they are now, not a second later.
-    void paneSlot.nudge().then(() => pushDeck(true));
+    void paneSlot
+      .nudge()
+      .then(() => pushDeck(true))
+      .catch(logFailure('deck push after a pairing result'));
   };
   // Short host names for the badge: global setting `hostAliases` = { "ssh:build-1": "build" }.
   deck.hostAliases = globals.hostAliases ?? {};
@@ -117,10 +132,24 @@ async function pushDeck(force = false): Promise<void> {
   if (!force && sig === lastDeck) return;
   if (bridgeServer.send({ v: 1, type: 'deckState', ...state })) lastDeck = sig;
 }
-setInterval(() => void pushDeck(), 1000);
-bridgeServer.on('hello', () => void pushDeck(true));
+setInterval(() => void pushDeck().catch(logFailure('deck push')), 1000);
+bridgeServer.on('hello', () => void pushDeck(true).catch(logFailure('deck push')));
 bridgeServer.on('message', (m) => {
-  if (m.type === 'requestDeck') return void pushDeck(true);
+  if (m.type === 'requestDeck') return void pushDeck(true).catch(logFailure('deck push'));
+  if (m.type === 'openPanel') {
+    const { requestId } = m;
+    // Never terminal text: the runtime's error is reduced to who could not answer.
+    void openPluginPanel(runtime, m.panelId)
+      .then(() => ({ ok: true as const }))
+      .catch((e: unknown) => {
+        const reason: 'unavailable' | 'refused' =
+          e instanceof RuntimeUnavailableError ? 'unavailable' : 'refused';
+        streamDeck.logger.warn(`open panel: ${reason}`);
+        return { ok: false as const, reason };
+      })
+      .then((r) => bridgeServer.send({ v: 1, type: 'openPanelResult', requestId, ...r }));
+    return;
+  }
   if (
     m.type !== 'pairRequest' &&
     m.type !== 'unmapRequest' &&
@@ -152,9 +181,9 @@ bridgeServer.on('message', (m) => {
     }
     const target = await c.pairingTarget(m.pane?.paneKey ?? null);
     c.pairing.start(m.requestId, target, deckConnected());
-  })();
+  })().catch(logFailure('bridge request'));
 });
-statusFeed.onChange(() => paneSlot.nudge());
+statusFeed.onChange(() => void paneSlot.nudge().catch(logFailure('key refresh')));
 streamDeck.actions.registerAction(new StatusKey(controller));
 streamDeck.actions.registerAction(new AttentionKey(controller));
 await streamDeck.connect();

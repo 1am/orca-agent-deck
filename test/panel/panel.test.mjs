@@ -189,3 +189,83 @@ test('shows the reason of a refused pick', async () => {
   assert.ok(view.find({ text: 'That pane is gone. Pick another one.' }));
   await view.unmount();
 });
+
+test('opened to map: names the focused pane, an empty key assigns it at once, a mapped key opens its details', async () => {
+  const calls = [];
+  const host = mockHost({
+    requests: {
+      'deck.get': () => ({ status: 'ok', deck, mapping: true }),
+      'deck.assign': (input) => (
+        calls.push(input),
+        { ok: true, slot: { index: input.key }, action: 'mapped' }
+      ),
+    },
+  });
+  const view = await mount(panel, { host });
+  assert.ok(view.find({ text: 'Mapping' }));
+  assert.ok(view.find({ text: 'Map agent-deck / main to a key' }));
+  assert.ok(view.find({ text: 'Click an empty key below, or press a key on the deck.' }));
+  await view.press({ text: '1' });
+  assert.deepEqual(calls, [], 'a key that shows a pane only opens its details');
+  assert.ok(view.find({ text: 'Key 1' }));
+  await view.press({ text: 'Back' });
+  await view.press({ text: '4' });
+  assert.deepEqual(calls, [{ key: 4, replace: false, paneKey: 'p-focus' }]);
+  assert.ok(view.find({ text: 'Key 4 assigned.' }));
+  assert.ok(!view.find({ text: 'Mapping' }), 'map mode ends with the assignment');
+  await view.press({ text: '5' });
+  assert.ok(view.find({ text: 'Key 5' }), 'a click now only picks the key');
+  assert.deepEqual(view.errors, []);
+  await view.unmount();
+});
+
+test('map mode starts from a push of the worker and ends with Cancel', async () => {
+  const requests = [];
+  const host = mockHost({
+    requests: {
+      'deck.get': () => ({ status: 'ok', deck }),
+      'deck.mapEnd': () => (requests.push('deck.mapEnd'), { ok: true }),
+    },
+  });
+  const view = await mount(panel, { host });
+  assert.ok(!view.find({ text: 'Mapping' }));
+  await view.post('map.changed', { mapping: true });
+  assert.ok(view.find({ text: 'Map agent-deck / main to a key' }));
+  await view.press({ text: 'Cancel' });
+  assert.ok(!view.find({ text: 'Mapping' }));
+  assert.deepEqual(requests, ['deck.mapEnd']);
+  await view.unmount();
+});
+
+test('map mode without a focused pane says so and assigns nothing', async () => {
+  const calls = [];
+  const none = { ...deck, panes: deck.panes.map((p) => ({ ...p, focused: false })) };
+  const host = mockHost({
+    requests: {
+      'deck.get': () => ({ status: 'ok', deck: none, mapping: true }),
+      'deck.assign': (input) => (calls.push(input), { ok: true, slot: { index: 1 } }),
+    },
+  });
+  const view = await mount(panel, { host });
+  assert.ok(view.find({ text: 'No pane is focused in Orca. Click a terminal first.' }));
+  await view.press({ text: '4' });
+  assert.deepEqual(calls, []);
+  assert.ok(view.find({ text: 'Key 4' }));
+  await view.unmount();
+});
+
+test('shows a reason when the worker does not answer a click', async () => {
+  const host = mockHost({
+    requests: {
+      'deck.get': () => ({ status: 'ok', deck }),
+      'deck.assign': () => {
+        throw new Error('worker stopped');
+      },
+    },
+  });
+  const view = await mount(panel, { host });
+  await view.press({ text: '3' });
+  await view.press({ label: 'orca / dev' });
+  assert.ok(view.find({ text: 'The Orca plugin did not answer (worker stopped). Try Refresh.' }));
+  await view.unmount();
+});

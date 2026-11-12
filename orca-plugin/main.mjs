@@ -9,8 +9,8 @@ import { homedir } from 'node:os';
 import { dirname, join, posix, win32 } from 'node:path';
 
 export const PROTOCOL_VERSION = 1;
-/** Additive features of this major: 1 = the deck grid for the sidebar panel (see docs/bridge-protocol.md). */
-export const PROTOCOL_MINOR = 1;
+/** Additive features of this major: 1 = the deck grid for the sidebar panel, 2 = B opens that panel for us (see docs/bridge-protocol.md). */
+export const PROTOCOL_MINOR = 2;
 export const PLUGIN_VERSION = '0.2.1';
 const GUID = '258EAFA5-E914-47DA-95CA-C5AB0DC85B11';
 
@@ -522,6 +522,8 @@ export const RECORD_FRAME_FIELDS = {
   },
   assignKey: { v: 1, type: 1, requestId: 1, key: 1, replace: 1, paneKey: 1 },
   unmapKey: { v: 1, type: 1, requestId: 1, key: 1 },
+  openPanel: { v: 1, type: 1, requestId: 1, panelId: 1 },
+  openPanelResult: { v: 1, type: 1, requestId: 1, ok: 1, reason: 1 },
   // No labels: they are pane names.
   deckState: { v: 1, type: 1, connected: 1, cols: 1, rows: 1 },
 };
@@ -670,12 +672,14 @@ export function statusSummary({ state, deck, seen, tracked, ago, versionNote = n
 }
 
 const STATUS_ITEM = 'deck';
+const PRESS_KEY = 'Press a key on the deck to map this pane';
+const PANEL_ID = 'deck';
 const MAP_TIP =
-  'Agent Deck: map the last focused terminal pane to a Stream Deck key (the shortcut does not fire while a terminal has the keyboard)';
+  'Agent Deck: open the panel to map the last focused terminal pane to a Stream Deck key (shortcut: Cmd+Option+K, Ctrl+Alt+K on Windows and Linux)';
 
 /**
- * The status bar button (`contributes.statusBarItems`, id `deck`): it always runs Map pane, and its
- * text says when that cannot work. Null while connecting, so a reconnect does not flicker.
+ * The status bar button (`contributes.statusBarItems`, id `deck`): it always runs Map pane (which opens the
+ * Agent Deck panel), and its text says when that cannot work. Null while connecting, so a reconnect does not flicker.
  * `deckConnected` is the last `deckState` of this connection, else what `helloAck` said.
  */
 export function statusBarItem({ state, deck, versionNote = null, deckConnected = null }) {
@@ -699,12 +703,14 @@ export function statusBarItem({ state, deck, versionNote = null, deckConnected =
       tone: 'warning',
       tooltip: 'Agent Deck: the Stream Deck app shows no device with Agent Deck keys',
     };
-  return { text: 'Map pane', tone: 'neutral', tooltip: MAP_TIP };
+  return { text: 'Agent Deck', tone: 'neutral', tooltip: MAP_TIP };
 }
 
 /** How long the panel waits for the deck's state, and for the result of a click. */
 const DECK_WAIT_MS = 2000;
 const RESULT_WAIT_MS = 10_000;
+/** B answers `openPanel` once Orca did, or failed to. */
+const OPEN_WAIT_MS = 3000;
 
 /**
  * What the Agent Deck sidebar panel asks the worker (`plugin.request` in the panel, `orca.panels.handle`
@@ -713,8 +719,21 @@ const RESULT_WAIT_MS = 10_000;
  */
 export function createPanelApi(
   bridge,
-  { onDeck = () => {}, deckWaitMs = DECK_WAIT_MS, resultWaitMs = RESULT_WAIT_MS } = {},
+  {
+    onDeck = () => {},
+    onMap = () => {},
+    deckWaitMs = DECK_WAIT_MS,
+    resultWaitMs = RESULT_WAIT_MS,
+    openWaitMs = OPEN_WAIT_MS,
+  } = {},
 ) {
+  // The panel was opened to map the focused pane: its keys assign at a click until a key is chosen or Cancel.
+  let mapping = false;
+  const setMapping = (on) => {
+    if (mapping === on) return;
+    mapping = on;
+    onMap(on);
+  };
   let deckNow = null;
   let deckSession = -1;
   const pending = new Map();
@@ -744,16 +763,18 @@ export function createPanelApi(
       while (!current() && Date.now() < end) await sleep(50);
     }
     // A Stream Deck plugin of this minor answers at once: silence means it is not the one we know.
-    return current() ? { status: 'ok', deck: current() } : { status: 'update' };
+    return current() ? { status: 'ok', deck: current(), mapping } : { status: 'update' };
   }
 
-  async function click(frame) {
+  async function click(frame, waitMs = resultWaitMs, minMinor = 1) {
     const status = await link();
     if (status !== 'ok') return { ok: false, reason: status };
+    // A B without the frame ignores it: do not wait for an answer that cannot come.
+    if (bridge.status().minor < minMinor) return { ok: false, reason: 'update' };
     const requestId = idOf();
     const answer = new Promise((resolve) => {
       pending.set(requestId, resolve);
-      setTimeout(() => resolve({ ok: false, reason: 'timeout' }), resultWaitMs).unref?.();
+      setTimeout(() => resolve({ ok: false, reason: 'timeout' }), waitMs).unref?.();
     });
     bridge.send({ v: PROTOCOL_VERSION, requestId, ...frame });
     const r = await answer;
@@ -763,15 +784,24 @@ export function createPanelApi(
 
   return {
     get,
-    assign: ({ key, replace, paneKey }) =>
-      Number.isInteger(key) && key >= 1
-        ? click({
-            type: 'assignKey',
-            key,
-            replace: replace === true,
-            ...(typeof paneKey === 'string' && paneKey ? { paneKey } : {}),
-          })
-        : { ok: false, reason: 'noSuchKey' },
+    assign: async ({ key, replace, paneKey }) => {
+      if (!Number.isInteger(key) || key < 1) return { ok: false, reason: 'noSuchKey' };
+      const r = await click({
+        type: 'assignKey',
+        key,
+        replace: replace === true,
+        ...(typeof paneKey === 'string' && paneKey ? { paneKey } : {}),
+      });
+      if (r.ok) setMapping(false);
+      return r;
+    },
+    /** Asks B to show the panel in Orca's sidebar (minor 2). */
+    open: (panelId) => click({ type: 'openPanel', panelId }, openWaitMs, 2),
+    startMap: () => setMapping(true),
+    endMap: () => setMapping(false),
+    get mapping() {
+      return mapping;
+    },
     unmap: ({ key }) =>
       Number.isInteger(key) && key >= 1
         ? click({ type: 'unmapKey', key })
@@ -782,7 +812,10 @@ export function createPanelApi(
         deckNow = state;
         deckSession = bridge.status().session;
         onDeck(state);
-      } else if (msg.type === 'pairResult' && pending.has(msg.requestId)) {
+      } else if (
+        (msg.type === 'pairResult' || msg.type === 'openPanelResult') &&
+        pending.has(msg.requestId)
+      ) {
         pending.get(msg.requestId)(omit(msg, ['type', 'v', 'requestId']));
       }
     },
@@ -843,6 +876,7 @@ export default async function activate(orca) {
         // No page: the Stream Deck SDK does not tell which profile page shows, so it is always 1.
         pairing.last = msg.ok ? `mapped to key ${msg.slot?.index}` : msg.reason;
         pairing.reason = msg.ok ? null : msg.reason;
+        if (msg.ok) panelApi.endMap();
         log(`pairing: ${msg.ok ? pairing.last : `not mapped (${msg.reason})`}`);
       }
     },
@@ -855,11 +889,22 @@ export default async function activate(orca) {
   };
   forwarder = createForwarder(bridge);
   panelApi = createPanelApi(bridge, {
-    onDeck: (state) => orca.panels?.post?.('deck.changed', { status: 'ok', deck: state }),
+    onDeck: (state) =>
+      orca.panels?.post?.('deck.changed', {
+        status: 'ok',
+        deck: state,
+        mapping: panelApi.mapping,
+      }),
+    onMap: (mapping) => orca.panels?.post?.('map.changed', { mapping }),
   });
   orca.panels?.handle?.('deck.get', () => panelApi.get());
   orca.panels?.handle?.('deck.assign', (input) => panelApi.assign(input ?? {}));
   orca.panels?.handle?.('deck.unmap', (input) => panelApi.unmap(input ?? {}));
+  orca.panels?.handle?.('deck.mapEnd', () => {
+    panelApi.endMap();
+    if (pairing.id) bridge.send({ v: PROTOCOL_VERSION, type: 'pairCancel', requestId: pairing.id });
+    return { ok: true };
+  });
   const seen = { status: 0, forwarded: 0, workspace: 0, lastAt: 0, wokeAt: Date.now() };
   log(`worker started: plugin ${PLUGIN_VERSION}, ${bridge.status().state}`);
   // The event that woke a lazy worker arrives right after activate(); keep it even if B is down.
@@ -905,9 +950,22 @@ export default async function activate(orca) {
       return 'Focus a terminal pane first';
     if (pairing.id !== requestId && pairing.last && pairing.reason)
       return `Not mapped: ${pairing.last}`.slice(0, 200);
-    return 'Press a key on the deck to map this pane';
+    return PRESS_KEY;
   };
-  orca.commands.register('deck.map', sendPairing('pairRequest'));
+  // The status bar button and the shortcut: pairing mode on the deck (press a key there) and the panel beside it
+  // (click a key there). B opens the panel; where it cannot (an older B, no runtime), the deck alone keeps working.
+  orca.commands.register('deck.map', async () => {
+    const text = await sendPairing('pairRequest')();
+    const opened = await panelApi.open(PANEL_ID);
+    if (!opened.ok) {
+      log(`pairing: panel not opened (${opened.reason}), deck only`);
+      return text;
+    }
+    panelApi.startMap();
+    return text === PRESS_KEY
+      ? 'Pick a key in the Agent Deck panel, or press one on the deck'
+      : text;
+  });
   orca.commands.register('deck.unmap', sendPairing('unmapRequest'));
   // Orca's plugin API has no confirm dialog (and notifications stay off), so Uninstall asks twice: the first run only arms.
   let armedAt = 0;

@@ -7,8 +7,9 @@ export const PROTOCOL_VERSION = 1;
  * Minor version: additive features of the same major (new frames, optional fields). Each side
  * advertises its own in `hello` / `helloAck`; a peer that sends none speaks minor 0 (v0.2.x).
  * 1: the Orca panel's deck grid (`requestDeck`, `deckState`, `assignKey`, `unmapKey`).
+ * 2: B opens the Orca panel on A's request (`openPanel`, `openPanelResult`).
  */
-export const PROTOCOL_MINOR = 1;
+export const PROTOCOL_MINOR = 2;
 
 /** Thrown for a message whose major `v` we do not speak; B shows "update Agent Deck for Orca plugin". */
 export class UnsupportedVersionError extends Error {
@@ -73,6 +74,8 @@ export const assignKey = base('assignKey').extend({
 });
 /** Minor 1: empty key `key`. */
 export const unmapKey = base('unmapKey').extend({ requestId: z.string(), key });
+/** Minor 2: A asks B to show its sidebar panel `panelId` (B calls Orca's `plugins.open`; A has no call for it). */
+export const openPanel = base('openPanel').extend({ requestId: z.string(), panelId: z.string() });
 
 // B -> A
 /** First message on every connection: B's nonce. A answers with `auth`, B proves itself with `proof`. */
@@ -112,6 +115,15 @@ export const deckState = base('deckState').extend({
     )
     .optional(),
 });
+/** Minor 2: the answer to `openPanel`. `unavailable`: Orca's runtime cannot be reached; `refused`: it did not open the panel. */
+export const openPanelResult = base('openPanelResult')
+  .extend({ requestId: z.string() })
+  .and(
+    z.union([
+      z.object({ ok: z.literal(true) }),
+      z.object({ ok: z.literal(false), reason: z.enum(['unavailable', 'refused']) }),
+    ]),
+  );
 export const requestSnapshot = base('requestSnapshot');
 export const pairState = base('pairState').extend({
   requestId: z.string(),
@@ -155,6 +167,7 @@ export const messageFromA = z.union([
   requestDeck,
   assignKey,
   unmapKey,
+  openPanel,
 ]);
 export const messageFromB = z.union([
   challenge,
@@ -164,6 +177,7 @@ export const messageFromB = z.union([
   pairState,
   pairResult,
   deckState,
+  openPanelResult,
 ]);
 
 export type MessageFromA = z.infer<typeof messageFromA>;
