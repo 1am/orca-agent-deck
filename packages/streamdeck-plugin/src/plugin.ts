@@ -73,6 +73,7 @@ async function createController(): Promise<DeckController> {
   });
   // Windows does not let the plugin raise Orca; Orca's reveal raises its own window.
   orca.revealLocal = process.platform === 'win32';
+  orca.diag = (m) => streamDeck.logger.info(m);
   const deck = new DeckController(
     new BridgedAdapter(orca, statusFeed),
     store,

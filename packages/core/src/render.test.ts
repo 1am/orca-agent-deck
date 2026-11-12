@@ -258,3 +258,16 @@ describe('Orca agent icons', () => {
     expect(renderKey({ ...m, agent: 'zzz-unknown' })).toContain('>Z</text>');
   });
 });
+
+it('statusInfo says the Orca response was unexpected, not that Orca is down', async () => {
+  const { statusInfo } = await import('./render.ts');
+  expect(
+    statusInfo({
+      mode: 'degraded',
+      version: '1.4.256',
+      unsupported: false,
+      badResponse: true,
+      hostsDown: 0,
+    }),
+  ).toEqual({ tone: 'error', value: '!', caption: 'unexpected Orca response' });
+});

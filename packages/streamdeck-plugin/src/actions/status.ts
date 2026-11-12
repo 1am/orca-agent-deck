@@ -63,6 +63,7 @@ function doctorFacts(c: DeckController): DoctorFacts {
     orcaRunning: o.mode !== 'down',
     orcaVersion: o.version,
     orcaUnsupported: o.unsupported,
+    orcaResponseBad: o.badResponse,
     binSource: bin?.source ?? null,
     binReason: bin?.reason,
     liveLink: o.mode === 'down' ? null : o.fast ? 'socket' : 'cli',

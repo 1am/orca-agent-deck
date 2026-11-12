@@ -21,7 +21,7 @@ All notable changes to this project are documented here. Format: [Keep a Changel
 
 ### Changed
 
-- **orca-plugin:** needs Orca 1.4.248 or newer (for the status bar button). The manifest no longer declares `publisher`, which Orca deprecated and now takes from the repository owner. On older Orca, the catalog keeps offering v0.2.1.
+- **orca-plugin:** needs Orca 1.4.248 or newer (for the status bar button). The manifest no longer declares `publisher`, which Orca deprecated and now takes from the repository owner. On older Orca, the catalog keeps offering v0.2.2.
 - **streamdeck:** "hosts down" counts only hosts that showed something in Orca (a worktree, a terminal or an agent) the last time they answered, or that a key is mapped to. A configured SSH host or paired server you do not use no longer counts.
 - **streamdeck:** on Windows a key press brings Orca to the front: the plugin asks Orca to reveal the pane, and Orca raises its own window.
 - **streamdeck:** while mapping a pane, free keys show their number and "Assign here" (the pane name, cut to 14 characters, said little).
@@ -39,6 +39,14 @@ All notable changes to this project are documented here. Format: [Keep a Changel
 - **streamdeck:** the Orca plugin installed from a local folder is detected, so the Status key does not call it missing.
 - **streamdeck:** the Setup tab no longer scrolls sideways in the inspector, and its result marks are drawn, not font glyphs.
 - **streamdeck:** mapping a pane while Orca shows a remote host (SSH or paired server) no longer maps the first local pane. The focus read does not ask `terminal show` (the local runtime's pane) for a remote worktree, says which host the focus is on, and the deck matches the pane by host as well as tab and leaf ids, so a remote pane that shares ids with a local one is the one mapped. "Use the focused pane" and the Focused mark in the panel no longer fall back to the last local pane while a remote one is shown. While Orca shows a paired server (it marks no worktree active, as in its settings) and paired-server panes exist, "Map pane to key" no longer falls back to the last local pane. A pane chosen in the panel is matched by host too, and a pane is on one key per host, so mapping a local pane no longer empties the key of a remote pane with the same ids.
+
+## [0.2.2] - 2026-11-12
+
+### Fixed
+
+- **adapter-cli:** a terminal Orca lists with `"title": null` (a plain shell tab after an Orca restart) no longer fails the whole listing, which made the Status key say "Orca not running" and the pane keys stay empty. A field Orca leaves out or sends as null (terminal title and execution host, an agent's `interrupted`, a worktree's host and agents, the host scope lists) now reads as its default, and one terminal, worktree or agent entry that does not match is skipped instead of failing the rest. Each skipped entry is logged once with the schema path and handle (never its content).
+- **streamdeck:** when Orca answers the health check but a listing does not parse, the Status key says "unexpected Orca response" (a failed Setup check, with the schema path in the plugin log) instead of "Orca not running", and the keys keep the last good read.
+- **adapter-cli:** a host is counted down only when no listing covered it. `omittedHostIds` is per-listing coverage, not health, so an SSH host with worktrees but no terminals (it appears only in the terminal listing's gaps) no longer shows as "host down". Mapped keys, released entries and remote panes hold their last known state for any omitted host, and the Setup count uses the new `downHostIds`. A known environment's runtime id is still removed, so a failed host list cannot hide a paired runtime that is down.
 
 ## [0.2.1] - 2026-11-11
 

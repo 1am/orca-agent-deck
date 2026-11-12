@@ -39,6 +39,7 @@ import {
   terminalListResponse,
   worktreePsResponse,
   agentEntry,
+  takeSchemaIssues,
 } from './schemas.ts';
 
 export * from './schemas.ts';
@@ -117,6 +118,9 @@ export class CliAdapter implements OrcaAdapter {
    * 1 call per second.
    */
   readonly minReadIntervalMs = 4000;
+  /** Where skipped items are reported (the plugin log), once per distinct issue. */
+  diag?: (message: string) => void;
+  private readonly loggedIssues = new Set<string>();
   private readonly exec: Exec;
   private readonly now: () => number;
   private unsupported = false;
@@ -135,7 +139,17 @@ export class CliAdapter implements OrcaAdapter {
 
   private async call<T extends z.ZodTypeAny>(schema: T, args: string[]): Promise<z.infer<T>> {
     const out = await this.exec([...args, '--json']);
-    return schema.parse(JSON.parse(out));
+    try {
+      return schema.parse(JSON.parse(out));
+    } finally {
+      // Also when the parse throws: skipped items found before it belong to this call, not the next.
+      for (const issue of takeSchemaIssues()) {
+        if (this.loggedIssues.has(issue)) continue;
+        if (this.loggedIssues.size > 200) this.loggedIssues.clear();
+        this.loggedIssues.add(issue);
+        this.diag?.(`orca ${args.slice(0, 2).join(' ')}: skipped ${issue}`);
+      }
+    }
   }
 
   async health(): Promise<AdapterHealth> {
