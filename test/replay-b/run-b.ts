@@ -355,6 +355,9 @@ process.exit(r.status ?? 1);`,
       for (const st of group) {
         await apply(st, wantFrames);
       }
+      // Bridge frames and Stream Deck events use separate WebSockets. Let the plugin consume a bridge state change
+      // (for example panelSelect: false) before the next replay timestamp sends a key event.
+      if (group.some((st) => st.do === 'bridge.frame')) await wait(SETTLE_MS);
       for (const st of group) await check(st, marks);
       if (wantFrames.length) {
         const own = (m: Frame) =>
