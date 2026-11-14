@@ -8,7 +8,7 @@ Features:
 - Works with local panes and panes on SSH hosts, including tmux (one agent per tmux session)
 
 Requirements:
-- Orca 1.4.245 or newer, with the orca shell command registered
+- Orca 1.4.246 or newer, with the orca shell command registered
 - Stream Deck app 7.1 or newer
 - macOS 13 or newer, Windows 10 or newer, or Linux (tested on Ubuntu 22.04); pane raising on press works on macOS, and on Linux under X11 with xdotool or wmctrl installed. On Linux, install the release package in OpenDeck.
 - The companion Orca plugin, installed separately (setup steps in the plugin's Readme)

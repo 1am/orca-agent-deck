@@ -29,7 +29,7 @@ Versions and platforms that have been tested: [compatibility](compatibility.md).
 
 ## You need
 
-- Orca 1.4.245 or newer, with the `orca` shell command registered (Orca: Settings, register CLI).
+- Orca 1.4.246 or newer, with the `orca` shell command registered (Orca: Settings, register CLI).
 - The Elgato Stream Deck app 7.1 or newer (macOS, Windows) or [OpenDeck](https://github.com/nekename/opendeck) (Linux), and a Stream Deck.
 - Linux only, to raise the Orca window on press: `xdotool` or `wmctrl` (`sudo apt install xdotool`), under an X11 session. Not available on Wayland.
 - macOS 13 or newer, Windows 10 or newer, or Linux (tested on Ubuntu 22.04). Pane raising on press works on macOS, and on Linux under X11 with `xdotool` or `wmctrl` installed.
@@ -40,9 +40,18 @@ Versions and platforms that have been tested: [compatibility](compatibility.md).
 - `orca-agent-deck-<version>.streamDeckPlugin` - the Stream Deck plugin
 - `orca-agent-deck-orca-plugin-<version>.zip` - the Orca plugin, for the offline install only
 - `collect-diagnostics.mjs` - for bug reports (see Logs); needs Node 18 or newer
-- `SHA256SUMS` - check with `shasum -a 256 -c SHA256SUMS` (`sha256sum -c SHA256SUMS` on Linux)
+- `SHA256SUMS` - check with `shasum -a 256 -c SHA256SUMS` (`sha256sum -c SHA256SUMS` on Linux; see Verify the download)
 
-The packages are unsigned, so macOS may warn when you open them.
+The packages are not notarized by Apple (no native code), so macOS may warn when you open them; see Verify the download for who built them.
+
+## Verify the download
+
+Every release file is signed by GitHub as built from this repository's release workflow (build attestation).
+
+1. With the [GitHub CLI](https://cli.github.com): `gh attestation verify <file> --repo 1am/orca-agent-deck`. It must say the verification succeeded.
+2. Without it: `shasum -a 256 -c SHA256SUMS` in the folder with the downloads (this checks the files against the list, not who made the list).
+
+A changed file fails both checks. The Orca plugin installed from the catalog needs neither: Orca pins the commit.
 
 ## Offline install of the Orca plugin
 
