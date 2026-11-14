@@ -11,7 +11,8 @@ https://github.com/user-attachments/assets/1dfea071-0276-4011-b159-7916241eb2ca
 ## Features
 
 - Pane key shows each pane's state (working, needs input, awaiting reply, done, error, offline).
-- Press a pane key to focus that pane in Orca; hold to assign the current pane.
+- Press a pane key to focus that pane in Orca; hold a key to open the Agent Deck panel at that key (mapping is done there, never from the deck), or click "Agent Deck" in Orca's status bar: it opens the Agent Deck panel (with the key of the pane you focused, if it is on one). Cmd+Alt+K (Ctrl+Alt+K on Windows and Linux) and the command "Agent Deck: Open panel" do the same, and with the panel in view they hide the right sidebar again. They work in a terminal too, but there the keys also reach the program running in it (see `docs/known-issues.md`).
+- The Agent Deck panel in Orca's right sidebar shows the connected deck as a grid of numbered keys, laid out like your deck. Click a key to mark it and see its details under the grid: what it shows, Unmap, "Use the focused pane" and the panes Orca lists (the focused one first). Picking a pane puts it on that key and the details stay open; a pane that is already on another key moves, so a pane is on one key only. Back (or a click on the same key) closes the details. A search field above the pane list narrows it by title, tab, agent or host. While the panel is in view with a key's details open, a tap on a deck key opens that key in the panel instead of focusing its pane. It needs the Stream Deck plugin and the Orca plugin from the same release.
 - Status key displays setup checks.
 - Attention key counts panes that need you.
 - Works locally and over SSH.
@@ -25,7 +26,7 @@ https://github.com/user-attachments/assets/1dfea071-0276-4011-b159-7916241eb2ca
 ## Requirements
 
 - macOS 13 or newer, Windows 10 or newer, or Linux (tested on Ubuntu 22.04). Pane raising on press works on macOS, and on Linux under X11 with `xdotool` or `wmctrl` installed.
-- Orca 1.4.246 or newer, with the `orca` shell command registered (Orca: Settings, register CLI).
+- Orca 1.4.248 or newer, with the `orca` shell command registered (Orca: Settings, register CLI).
 - The Elgato Stream Deck app 7.1 or newer (macOS, Windows) or [OpenDeck](https://github.com/nekename/opendeck) (Linux), and a Stream Deck (hardware or Stream Deck Mobile).
 
 Agent Deck for Orca has two parts and needs both: a **Stream Deck plugin** (draws the keys, talks to Orca) and a small **Orca plugin** (pushes agent status to the deck as it changes).
@@ -51,7 +52,7 @@ Then install `dist/orca-agent-deck-<version>.streamDeckPlugin` (double-click) an
 - Pressing a key raises the Orca window on macOS, and on Linux under X11 when `xdotool` or `wmctrl` is installed. On Windows and on Wayland it only focuses the pane.
 - Packages are not signed.
 - The two plugins are installed separately.
-- Panes on a paired Orca server update more slowly, and hold-to-assign does not work for them (use the picker).
+- Panes on a paired Orca server update more slowly. Orca reports no focus for them, so map one by choosing it in the Agent Deck panel's pane list.
 - Agents inside tmux need one agent per tmux session: see [docs/working-with-tmux.md](docs/working-with-tmux.md).
 
 The full list, with the upstream Orca issues behind each one, is in [docs/known-issues.md](docs/known-issues.md).

@@ -29,6 +29,50 @@ it('focus returns ok', async () => {
   ).toEqual({ ok: true });
 });
 
+it('revealLocal focuses a local pane through terminal reveal, without an execution host', async () => {
+  const calls: string[][] = [];
+  const exec: Exec = async (args) => {
+    calls.push(args);
+    return JSON.stringify({ ok: true, result: { reveal: { navigated: true } } });
+  };
+  const a = new CliAdapter(exec);
+  a.revealLocal = true;
+  const pane = { paneKey: 't1:l1', hostId: 'local', handle: 'h', worktreeId: 'w1' };
+  expect(await a.focus(pane)).toEqual({ ok: true });
+  expect(calls).toEqual([
+    ['terminal', 'reveal', '--worktree', 'w1', '--tab', 't1', '--leaf', 'l1', '--json'],
+  ]);
+});
+
+it('revealLocal falls back to terminal switch when reveal is not available', async () => {
+  const calls: string[] = [];
+  const exec: Exec = async (args) => {
+    calls.push(args.slice(0, 2).join(' '));
+    if (args[1] === 'reveal') throw new Error('reveal needs the runtime socket');
+    return fixtureExec(args);
+  };
+  const a = new CliAdapter(exec);
+  a.revealLocal = true;
+  const pane = { paneKey: 't1:l1', hostId: 'local', handle: 'h', worktreeId: 'w1' };
+  expect(await a.focus(pane)).toEqual({ ok: true });
+  expect(calls).toEqual(['terminal reveal', 'terminal switch']);
+});
+
+it('focus of a local pane uses terminal switch unless revealLocal is set', async () => {
+  const calls: string[] = [];
+  const exec: Exec = async (args) => {
+    calls.push(args.slice(0, 2).join(' '));
+    return fixtureExec(args);
+  };
+  await new CliAdapter(exec).focus({
+    paneKey: 't1:l1',
+    hostId: 'local',
+    handle: 'h',
+    worktreeId: 'w1',
+  });
+  expect(calls).toEqual(['terminal switch']);
+});
+
 it('focus reports errors instead of throwing', async () => {
   const bad: Exec = async () => {
     throw new Error('boom');
@@ -179,6 +223,46 @@ it('queries paired environments with --environment and focuses with it', async (
   expect(calls.at(-1)).toContain('E1');
 });
 
+it('names a paired server after the SSH connection it runs on, keeping the address', async () => {
+  const exec: Exec = async (args) => {
+    const k = args.slice(0, 2).join(' ');
+    if (k === 'host list')
+      return JSON.stringify({
+        ok: true,
+        result: {
+          hosts: [
+            { id: 'ssh-1', kind: 'ssh', name: 'RemoteLaptop', connected: true },
+            { id: 'E1', kind: 'environment', name: '192.168.1.12' },
+          ],
+        },
+      });
+    if (k === 'environment list')
+      return JSON.stringify({
+        ok: true,
+        result: {
+          environments: [
+            { id: 'E1', name: '192.168.1.12', orcadDeployment: { sshTargetId: 'ssh-1' } },
+          ],
+        },
+      });
+    if (k === 'terminal list') {
+      const o = JSON.parse(await fixtureExec(args));
+      if (args.includes('--environment')) o.result.terminals = o.result.terminals.slice(0, 1);
+      o.result.hostScope = { hostIds: ['local'], omittedHostIds: [] };
+      return JSON.stringify(o);
+    }
+    return fixtureExec(args);
+  };
+  const a = new CliAdapter(exec);
+  const hosts = await a.listHosts();
+  expect(hosts.find((h) => h.id === 'E1')).toMatchObject({
+    name: '192.168.1.12',
+    label: 'RemoteLaptop',
+  });
+  const remote = (await a.snapshot()).panes.filter((p) => p.environment === 'E1');
+  expect(remote[0]).toMatchObject({ hostName: 'RemoteLaptop', hostAddress: '192.168.1.12' });
+});
+
 it('takes agentType from hook status when the pane has no agent identity', async () => {
   const s = await new CliAdapter(async (args) => {
     const o = JSON.parse(await fixtureExec(args));
@@ -272,39 +356,6 @@ it('a failing host list keeps the last paired servers and marks them down instea
   expect(s.panes.some((p) => p.hostId === 'env:E1')).toBe(false);
 });
 
-it('snapshots around a terminal with a null title and logs a skipped one once', async () => {
-  const terminals = [
-    { handle: 'term_a', worktreeId: 'w', tabId: 't1', leafId: 'l1', title: null, connected: true },
-    { handle: 'term_b', worktreeId: 'w', tabId: 't2', leafId: 7, connected: true },
-  ];
-  const exec: Exec = async (args) =>
-    args[0] === 'terminal'
-      ? JSON.stringify({ ok: true, result: { terminals } })
-      : JSON.stringify({ ok: true, result: { worktrees: [] } });
-  const a = new CliAdapter(exec);
-  const logs: string[] = [];
-  a.diag = (m) => logs.push(m);
-  const s = await a.snapshot();
-  await a.snapshot();
-  expect(s.panes.map((p) => [p.handle, p.title])).toEqual([['term_a', '']]);
-  expect(logs).toEqual(['orca terminal list: skipped terminals[1] (term_b): leafId invalid_type']);
-});
-
-it('logs skipped items under the call that produced them even when its parse then throws', async () => {
-  const terminals = [
-    { handle: 'term_b', worktreeId: 'w', tabId: 't2', leafId: 7, connected: true },
-  ];
-  const exec: Exec = async (args) =>
-    args[0] === 'terminal'
-      ? JSON.stringify({ ok: true, result: { terminals } })
-      : JSON.stringify({ ok: true, result: { worktrees: 'nope' } });
-  const a = new CliAdapter(exec);
-  const logs: string[] = [];
-  a.diag = (m) => logs.push(m);
-  await expect(a.snapshot()).rejects.toThrow();
-  expect(logs).toEqual(['orca terminal list: skipped terminals[0] (term_b): leafId invalid_type']);
-});
-
 /** Snapshot with one paired environment; each listing says which hosts it left out. */
 async function pairedSnapshot(o: {
   envId: string;
@@ -358,4 +409,68 @@ it('matches runtime ids by the URL-encoded environment id', async () => {
   const s = await pairedSnapshot({ envId: 'env 1', local: ['runtime:env%201'], paired: [] });
   expect(s.omittedHostIds).toEqual([]);
   expect(s.downHostIds).toEqual([]);
+});
+
+const psOn = (hostId: string) =>
+  JSON.stringify({
+    ok: true,
+    result: { worktrees: [{ worktreeId: 'w', hostId, isActive: true, agents: [] }] },
+  });
+
+it('focusedPaneKey reads the layout of a remote host shown and names that host', async () => {
+  const exec: Exec = async (args) =>
+    args[0] === 'worktree' ? psOn('ssh:box') : terms(layout('t2'));
+  const a = new CliAdapter(exec);
+  expect(await a.focusedPaneKey()).toBe('t2:l2');
+  expect(a.focusHostId).toBe('ssh:box');
+});
+
+it('focusedPaneKey does not ask terminal show (local only) while a remote worktree has no layout', async () => {
+  const asked: string[] = [];
+  const exec: Exec = async (args) => {
+    asked.push(args.join(' '));
+    return args[0] === 'worktree'
+      ? psOn('ssh:box')
+      : args[1] === 'list'
+        ? terms()
+        : JSON.stringify({ ok: true, result: { terminal: { tabId: 'local', leafId: 'first' } } });
+  };
+  const a = new CliAdapter(exec);
+  expect(await a.focusedPaneKey()).toBeNull();
+  expect(a.focusHostId).toBe('ssh:box');
+  expect(a.focusNote).toContain('remote-worktree');
+  expect(asked.some((c) => c.startsWith('terminal show'))).toBe(false);
+});
+
+it('snapshots around a terminal with a null title and logs a skipped one once', async () => {
+  const terminals = [
+    { handle: 'term_a', worktreeId: 'w', tabId: 't1', leafId: 'l1', title: null, connected: true },
+    { handle: 'term_b', worktreeId: 'w', tabId: 't2', leafId: 7, connected: true },
+  ];
+  const exec: Exec = async (args) =>
+    args[0] === 'terminal'
+      ? JSON.stringify({ ok: true, result: { terminals } })
+      : JSON.stringify({ ok: true, result: { worktrees: [] } });
+  const a = new CliAdapter(exec);
+  const logs: string[] = [];
+  a.diag = (m) => logs.push(m);
+  const s = await a.snapshot();
+  await a.snapshot();
+  expect(s.panes.map((p) => [p.handle, p.title])).toEqual([['term_a', '']]);
+  expect(logs).toEqual(['orca terminal list: skipped terminals[1] (term_b): leafId invalid_type']);
+});
+
+it('logs skipped items under the call that produced them even when its parse then throws', async () => {
+  const terminals = [
+    { handle: 'term_b', worktreeId: 'w', tabId: 't2', leafId: 7, connected: true },
+  ];
+  const exec: Exec = async (args) =>
+    args[0] === 'terminal'
+      ? JSON.stringify({ ok: true, result: { terminals } })
+      : JSON.stringify({ ok: true, result: { worktrees: 'nope' } });
+  const a = new CliAdapter(exec);
+  const logs: string[] = [];
+  a.diag = (m) => logs.push(m);
+  await expect(a.snapshot()).rejects.toThrow();
+  expect(logs).toEqual(['orca terminal list: skipped terminals[0] (term_b): leafId invalid_type']);
 });

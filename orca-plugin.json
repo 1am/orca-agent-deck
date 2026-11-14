@@ -18,7 +18,7 @@
     }
   ],
   "engines": {
-    "orca": ">=1.4.246"
+    "orca": ">=1.4.248"
   },
   "main": "orca-plugin/main.mjs",
   "capabilities": [
@@ -26,22 +26,14 @@
       "kind": "agent:read"
     },
     {
-      "kind": "workspace:read"
-    },
-    {
-      "kind": "storage:own"
+      "kind": "workspace:write"
     }
   ],
   "contributes": {
     "commands": [
       {
         "id": "deck.map",
-        "title": "Agent Deck: Map pane to key",
-        "when": "global"
-      },
-      {
-        "id": "deck.unmap",
-        "title": "Agent Deck: Unmap pane",
+        "title": "Agent Deck: Open panel",
         "when": "global"
       },
       {
@@ -50,15 +42,24 @@
         "when": "global"
       }
     ],
+    "statusBarItems": [
+      {
+        "id": "deck",
+        "icon": "link",
+        "text": "Agent Deck",
+        "tooltip": "Open Agent Deck: the panel to map terminal panes to Stream Deck keys",
+        "command": "deck.map"
+      }
+    ],
+    "keybindings": [
+      {
+        "command": "deck.map",
+        "key": "Mod+Alt+K"
+      }
+    ],
     "events": [
       {
         "on": "agent.status.changed"
-      },
-      {
-        "on": "workspace.created"
-      },
-      {
-        "on": "workspace.removed"
       }
     ]
   }

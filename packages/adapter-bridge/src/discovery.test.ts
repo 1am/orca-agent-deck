@@ -1,5 +1,5 @@
-import { describe, expect, it } from 'vitest';
-import { portsFromEnv } from './discovery.ts';
+import { describe, expect, it, vi } from 'vitest';
+import { deckDataDir, portsFromEnv } from './discovery.ts';
 
 describe('portsFromEnv', () => {
   it('is empty when the variable is unset or empty', () => {
@@ -16,6 +16,54 @@ describe('portsFromEnv', () => {
       expect(portsFromEnv(value)).toEqual({ bad: value });
     },
   );
+});
+
+const plugin = '../../../orca-plugin/main.mjs'; // plain JS, no types
+
+describe('plugin A and plugin B agree on the discovery file', () => {
+  // B writes bridge.json where deckDataDir() says and A reads it where main.mjs's deckDataDir says: on Windows both
+  // are %APPDATA%\\orca-deck (home\\AppData\\Roaming\\orca-deck without APPDATA), elsewhere ~/.orca-deck.
+  const slashes = (p: string) => p.replaceAll('\\', '/');
+  const asPlatform = (platform: NodeJS.Platform, run: () => void) => {
+    const real = Object.getOwnPropertyDescriptor(process, 'platform')!;
+    Object.defineProperty(process, 'platform', { value: platform });
+    try {
+      run();
+    } finally {
+      Object.defineProperty(process, 'platform', real);
+    }
+  };
+
+  it.each([
+    {
+      name: 'win32 with APPDATA',
+      platform: 'win32',
+      env: { APPDATA: 'C:\\Users\\Ann\\AppData\\Roaming' },
+    },
+    { name: 'win32 without APPDATA', platform: 'win32', env: {} },
+    { name: 'darwin', platform: 'darwin', env: {} },
+    { name: 'linux', platform: 'linux', env: { APPDATA: 'ignored' } },
+  ] as const)('$name', async ({ platform, env }) => {
+    const a = (await import(/* @vite-ignore */ plugin)) as {
+      deckDataDir: (h: {
+        platform: string;
+        env: Record<string, string>;
+        homedir: string;
+      }) => string;
+    };
+    const { homedir } = await import('node:os');
+    vi.stubEnv('APPDATA', (env as { APPDATA?: string }).APPDATA ?? '');
+    asPlatform(platform, () => {
+      const fromB = deckDataDir();
+      const fromA = a.deckDataDir({
+        platform,
+        env: { ...(env as Record<string, string>) },
+        homedir: homedir(),
+      });
+      expect(slashes(fromB)).toBe(slashes(fromA));
+    });
+    vi.unstubAllEnvs();
+  });
 });
 
 describe('plugin A data dir', () => {

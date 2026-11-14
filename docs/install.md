@@ -13,7 +13,7 @@ About 5 minutes. You need Orca, the Elgato Stream Deck app (or OpenDeck on Linux
    open 'orca://plugins/1am.agent-deck?catalog=https://github.com/1am/orca-agent-deck.git'
    ```
 
-   On Linux use `xdg-open` instead of `open`. Orca opens the plugin page. Read and accept the access consent: the plugin runs its own code, reads agent status and workspaces, and stores its own data. Orca updates it from the same catalog.
+   On Linux use `xdg-open` instead of `open`. Orca opens the plugin page. Read and accept the access consent: the plugin runs its own code, and reads agent status. It asks for nothing else. Orca updates it from the same catalog.
 
    Without the terminal: in Orca go to Settings, Plugins, Install from Git, and paste `https://github.com/1am/orca-agent-deck`. Orca installs the newest release tag.
 3. In Orca open the command palette and run "Agent Deck: Show status".
@@ -29,7 +29,7 @@ Versions and platforms that have been tested: [compatibility](compatibility.md).
 
 ## You need
 
-- Orca 1.4.246 or newer, with the `orca` shell command registered (Orca: Settings, register CLI).
+- Orca 1.4.248 or newer, with the `orca` shell command registered (Orca: Settings, register CLI).
 - The Elgato Stream Deck app 7.1 or newer (macOS, Windows) or [OpenDeck](https://github.com/nekename/opendeck) (Linux), and a Stream Deck.
 - Linux only, to raise the Orca window on press: `xdotool` or `wmctrl` (`sudo apt install xdotool`), under an X11 session. Not available on Wayland.
 - macOS 13 or newer, Windows 10 or newer, or Linux (tested on Ubuntu 22.04). Pane raising on press works on macOS, and on Linux under X11 with `xdotool` or `wmctrl` installed.
@@ -67,7 +67,7 @@ If your agents run inside tmux, read `docs/working-with-tmux.md` first. The refe
 
 ## Logs
 
-- Orca plugin: `~/.orca-deck/plugin-a.log` (on Windows `%APPDATA%\orca-deck\plugin-a.log`), or `orca plugin logs 1am.agent-deck`. "Agent Deck for Orca: Show status" shows a one-line summary as a toast and writes the details to the log. Orca's Logs pane in the plugin settings is read once when opened and does not refresh.
+- Orca plugin: `~/.orca-deck/plugin-a.log` (on Windows `%APPDATA%\orca-deck\plugin-a.log`), or `orca plugin logs 1am.agent-deck`. "Agent Deck: Show status" shows a one-line summary as a toast and writes the details to the log. Orca's Logs pane in the plugin settings is read once when opened and does not refresh.
 - Stream Deck plugin: `~/Library/Application Support/com.elgato.StreamDeck/Plugins/pl.1am.orca-agent-deck.sdPlugin/logs/` (`pl.1am.orca-agent-deck.0.log` is the newest). `~/Library/Logs/ElgatoStreamDeck/` holds only the Elgato app's own log. On Windows the Elgato app's plugins are in `%APPDATA%\Elgato\StreamDeck\Plugins\`. OpenDeck writes the plugin's log to `<its log dir>/plugins/pl.1am.orca-agent-deck.sdPlugin.log` (macOS `~/Library/Logs/opendeck`, Windows `%LOCALAPPDATA%\opendeck\logs`, Linux `~/.local/share/opendeck/logs`).
 - When reporting a problem, run `node collect-diagnostics.mjs` (from the release files; in a clone `pnpm diagnostics`) and attach the file it writes. It collects versions and both plugin logs with tokens, home paths and e-mail addresses removed.
 

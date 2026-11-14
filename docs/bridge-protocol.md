@@ -4,7 +4,7 @@ Reference for the messages exchanged between **A** (the Orca plugin, a trusted w
 
 ## Model
 
-- **A pushes, B owns state and acts.** A forwards events only it receives (agent status, workspace changes, pairing commands). B holds the status model, the mapping store and the deck, and answers with acks, pairing feedback and snapshot requests.
+- **A pushes, B owns state and acts.** A forwards events only it receives (agent status, pairing commands). B holds the status model, the mapping store and the deck, and answers with acks, pairing feedback and snapshot requests.
 - B is the server (long-lived), A is the client and may come and go: Orca stops an idle worker and restarts it on the next event, so a disconnect is normal and B keeps the last known state.
 - Every message is a UTF-8 JSON object with `v` (protocol major, number) and `type` (string). One connection carries one A at a time; a newer authenticated connection replaces the old one (close code 4003).
 - The transport only has to deliver whole messages in order. See [Transport binding](#transport-binding).
@@ -45,13 +45,16 @@ Fields marked `?` are optional, `null` marks nullable. All carry `v` and `type`.
 
 | type | Fields | Meaning |
 | --- | --- | --- |
-| `hello` | `orcaVersion: string`, `pluginVersion: string` | First message after proof. B answers `helloAck`. |
+| `hello` | `orcaVersion: string`, `pluginVersion: string`, `minor?: int` | First message after proof. B answers `helloAck`. `minor` is A's protocol minor (absent = 0). |
 | `auth` | `nonce: string` (32 hex), `mac: string` | Answer to `challenge`, see Handshake. |
 | `agentStatus` | `paneKey: string`, `workspaceId: string`, `state: string`, `outcome?: string \| null`, `stateStartedAt: number` (ms epoch), `receivedAt: number` (ms epoch), `agentType?: string \| null` | An agent in a pane changed state. `agentType` is the harness id (claude, codex, pi) when Orca's event has it. |
-| `workspace` | `event: "created" \| "removed"`, `workspaceId: string`, `path: string` | A workspace (worktree) appeared or went away. `path` is `""` when Orca gave none. |
-| `pairRequest` | `requestId: string`, `pane: { paneKey: string, worktreeId: string } \| null` | User asked to map a pane to a key. `null` means B resolves the focused pane. |
-| `unmapRequest` | `requestId: string`, `pane: { paneKey, worktreeId } \| null` | Same shape, remove the mapping. |
-| `pairCancel` | `requestId: string` | Cancel a pending `pairRequest`. |
+| `workspace` | `event: "created" \| "removed"`, `workspaceId: string`, `path: string` | No longer sent: A dropped the `workspace:read` capability. Still parsed and ignored, so an older A build stays compatible. |
+| `requestDeck` | none | Minor 1. Asks B to send `deckState` now (the Orca panel opened). |
+| `assignKey` | `requestId: string`, `key: int >= 1`, `replace: boolean`, `paneKey?: string`, `hostId?: string` | Minor 1. A choice in the key picker of the Orca panel: B puts the pane `paneKey` names (one of `deckState.panes`, on host `hostId` when given: tab and leaf ids repeat across hosts) on that key, or the focused pane when there is none, and answers `pairResult` (`noSuchPane` when `paneKey` is not a pane Orca lists any more). A key that shows a pane needs `replace: true`, else `pairResult` says `occupied`. B checks that the key exists on the deck it shows (`noSuchKey`), never A. |
+| `unmapKey` | `requestId: string`, `key: int >= 1` | Minor 1. Empties a key; B answers `pairResult` with `action: "unmapped"`. |
+| `openPanel` | `requestId: string`, `panelId: string` | Minor 2. Asks B to show the Orca panel `panelId` (`deck`) in the sidebar: B calls the runtime's `plugins.open` (host-admin, what `orca plugin open` does), which a worker cannot. B answers `openPanelResult`. |
+| `panelSelect` | `on: boolean` | Minor 3. The Orca panel is in view and open for mapping (a key's details open), or no longer. While it is on, B sends `keyPicked` for a tap on a Pane key instead of focusing its pane. B drops it when A disconnects or says `hello` again. |
+| `holdResult` | `requestId: string`, `action: "hidden" \| "show"` | Minor 5. The answer to `holdKey`. `hidden`: the Agent Deck panel was in view and A hid the right sidebar (B does nothing more); `show`: B shows the panel at that key as before. |
 
 ## Messages B -> A
 
@@ -59,23 +62,27 @@ Fields marked `?` are optional, `null` marks nullable. All carry `v` and `type`.
 | --- | --- | --- |
 | `challenge` | `nonce: string` (32 hex) | First message on every connection. |
 | `proof` | `mac: string` | B proves it knows the token, see Handshake. |
-| `helloAck` | `deck: { connected: boolean, devices: { model: string, keys: number }[] }` | Handshake done; reports whether the Stream Deck app is connected and which devices it sees. |
+| `helloAck` | `deck: { connected: boolean, devices: { model: string, keys: number }[] }`, `minor?: int` | Handshake done; reports whether the Stream Deck app is connected and which devices it sees. `minor` is B's protocol minor (absent = 0). |
 | `requestSnapshot` | none | A should replay its last `agentStatus` per pane. |
-| `pairState` | `requestId: string`, `state: string`, `pane?: { label: string }` | Pairing progress for the on-Orca feedback (for example `waitingForKey`). `state` is an open string. |
-| `pairResult` | `requestId: string`, then either `ok: true, slot: { page: int >= 1, index: int >= 1 }` or `ok: false, reason: "timeout" \| "cancelled" \| "noFocusedPane" \| "deckOffline"` | Final outcome. `slot` is 1-based, row-major. |
+| `pairResult` | `requestId: string`, then either `ok: true, slot: { page: int >= 1, index: int >= 1 }, action?: "mapped" \| "moved" \| "unmapped"` or `ok: false, reason: "timeout" \| "cancelled" \| "noFocusedPane" \| "deckOffline" \| "noSuchKey" \| "occupied" \| "noSuchPane"` | Final outcome. `slot` is 1-based, row-major. `action` and the last three reasons are minor 1. |
+| `deckState` | `connected: boolean`, `model: string \| null`, `cols: int`, `rows: int`, `keys: { key: int >= 1, label: string, state: string, mapped: boolean }[]` | Minor 1. The deck the Orca panel draws: sent after `hello` to an A of minor 1 or more, on every change (checked once a second) and on `requestDeck`. `key` is 1-based, row-major, the number the key shows. `label` is the pane's name on the key, `""` when empty. `layout?` lists every position of the deck (`cols * rows` entries sorted by `key`, 1-based row-major like `keys`): `{ key: int >= 1, kind: "pane" \| "status" \| "attention" \| "other" }`. `pane` is one of our Pane keys (its details are in `keys`), `status` and `attention` are our info keys, `other` is empty or another plugin's action (the Stream Deck SDK shows a plugin only its own, so the two are not told apart); an older B sends none and the panel draws from `keys`. `cols` and `rows` are the device's key grid (MK.2 5x3, XL 8x4, Mini 3x2, Neo 4x2, + 4x2, Mobile as the app reports). `panes?` lists what the key picker offers, at most 200, the focused pane first: `{ paneKey, hostId?, label, detail, host?, repo?: string, branch?: string, tab?: string, name?: string, agent: string \| null, state, remote: boolean, focused: boolean, onKey?: int }` (`repo`, `branch` and `tab` are the parts of `label` and `detail` for a grouped list, `name` is the pane's name: its title, else its tab's, with "pane N" (its position in the tab) when another pane of the tab has the same name; `label` is repo and branch or the pane title, `detail` the pane title and tab, `host` the host name of a remote pane, `onKey` the key the pane is on; `hostId` goes back in `assignKey`). An older B sends none. |
+| `openPanelResult` | `requestId: string`, `ok: boolean`, `reason?: "unavailable" \| "refused"` | Minor 2. `ok: true`: Orca shows the panel. `unavailable`: Orca's runtime cannot be reached; `refused`: it did not open the panel (A then falls back to the deck-only mapping). |
+| `keyPicked` | `key: int >= 1` | Minor 3. A Pane key tapped on the deck while `panelSelect` is on, or (minor 4) held, which B sends once `plugins.open` showed the panel (1-based, row-major, as in `deckState`); A tells the panel, which opens that key's details. A should keep the latest one until the panel has mounted. |
+| `holdKey` | `requestId: string`, `key: int >= 1` | Minor 5. A held Pane key: B asks A first, only an A of minor 5 or more, and waits at most 1.5 s for `holdResult` (then it shows the panel, as for an older A). |
 
 ## Semantics
 
 - **State source.** A derives `state` from `mainAgent.state` of Orca's `agent.status.changed` event and falls back to the top-level `state` (which can be stale; Pi reports only the top level). `outcome`, `stateStartedAt` and `agentType` come from `mainAgent` as well; `stateStartedAt` falls back to `receivedAt`.
 - **Dedup.** Orca delivers one transition two or three times. A drops an event whose `(paneKey, state, stateStartedAt)` equals the last one it forwarded for that pane.
 - **Replay.** After `helloAck` and on `requestSnapshot` A re-sends its last `agentStatus` per pane (at most 500 panes, least recently updated dropped first). B treats a replay as ordinary input: it never moves a pane backwards and never revives an expired status.
-- **Ordering and loss.** Messages are ordered within a connection. A message sent while not connected is dropped (`send` returns false); the replay on the next connection covers status, not `workspace` or pairing messages.
+- **Ordering and loss.** Messages are ordered within a connection. A message sent while not connected is dropped (`send` returns false); the replay on the next connection covers status, not pairing messages.
 - **Unknown types.** After auth, B ignores a message that fails validation (logged as "malformed", no content) and A hands unknown B types to its handler, which ignores them. Before auth, any invalid message closes the connection.
 
 ## Versioning
 
 - `PROTOCOL_VERSION` (`v`) is the major version, currently 1. A message with another `v` throws `UnsupportedVersionError`; B closes the connection with **4002** and logs the received version. The Stream Deck plugin and the Orca plugin are released together; a breaking change bumps `v` and both sides ship in the same release (the Property Inspector shows "Update Agent Deck for Orca" when they disagree).
 - **Adding an optional field needs no bump.** zod objects strip unknown keys, so an old receiver ignores a field it does not know; a new receiver treats the field as optional. Precedent: `agentType` on `agentStatus`. Removing or renaming a field, changing a meaning, or adding a required field is breaking.
+- **Minor version.** `PROTOCOL_MINOR` (currently 5) counts additive features within a major. Each side tells its minor in `hello` / `helloAck`; a peer that sends none speaks minor 0 (v0.2.x). Minor 1 adds `requestDeck`, `assignKey`, `unmapKey`, `deckState` and the extra `pairResult` fields. Minor 2 adds `openPanel` and `openPanelResult`: A sends `openPanel` only to a B of minor 2 or more, an older B keeps the deck-only mapping. Minor 3 adds `panelSelect` and `keyPicked`: A sends `panelSelect` only to a B of minor 3 or more, B sends `keyPicked` only to an A of minor 3 or more. Minor 4 removes the deck's own map mode: `pairRequest`, `unmapRequest`, `pairCancel` and `pairState` are no longer sent or read (an A that still sends one is ignored with "malformed message ignored"), and a hold on a Pane key opens the panel at that key (B calls `plugins.open`, then sends `keyPicked`). Minor 5 adds `holdKey` and `holdResult`: B asks an A of minor 5 or more before it opens the panel, and A hides the right sidebar instead while the panel is in view (an older A is never asked). A sender only uses a feature the peer's minor has: B sends `deckState` only to an A of minor 1 or more, and the Orca panel says "Update the Stream Deck plugin" when B's `helloAck` has no minor 1 or `deckState` does not arrive within 2 s of `hello`. A v0.2.1 peer ignores the new frames (B: "malformed message ignored" after auth, A: unknown types go to a handler that ignores them), so the old pair keeps working. New frames are accepted only from a proven peer, like all others.
 - Changing the handshake is breaking; changing only the transport binding is not.
 
 ## Limits
