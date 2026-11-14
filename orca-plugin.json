@@ -47,6 +47,15 @@
         "when": "global"
       }
     ],
+    "panels": [
+      {
+        "id": "deck",
+        "title": "Agent Deck",
+        "icon": "agent",
+        "entry": "orca-plugin/panel.jsx",
+        "ui": "components"
+      }
+    ],
     "statusBarItems": [
       {
         "id": "deck",
