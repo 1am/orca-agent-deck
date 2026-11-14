@@ -99,6 +99,13 @@ export type HoldResult = 'mapped' | 'replaced' | 'released' | 'failed';
 /** The pane's process crashed or exited non-zero: Orca lists it with no agent, but it needs a look. */
 const endedBadly = (p: PaneInfo): boolean => p.exitCause === 'crash' || p.exitCause === 'nonzero';
 
+/** A focus that failed because Orca no longer knows the handle (it restarted, or the pane closed). */
+function isStaleHandle(r: { error?: string; code?: string }): boolean {
+  const known = ['terminal_handle_stale', 'terminal_not_found'];
+  // The runtime socket gives a code; the CLI path only has the text of its error.
+  return r.code !== undefined ? known.includes(r.code) : known.some((c) => r.error?.includes(c));
+}
+
 function bindingOf(p: PaneInfo): PaneBinding {
   const { tabId, leafId } = splitPaneKey(p.paneKey);
   const lastKnown: PaneBinding['lastKnown'] = {};
@@ -254,8 +261,9 @@ export class DeckController {
    * each paid the full Orca round trip and raced on the snapshot, so they are queued, and an info
    * refresh (no slots) rides on one that is running or just ran.
    */
-  async refresh(slots: string[]): Promise<Map<string, SlotView>> {
-    if (slots.length === 0) {
+  async refresh(slots: string[], opts: { force?: boolean } = {}): Promise<Map<string, SlotView>> {
+    if (opts.force) this.polledAt = 0;
+    if (slots.length === 0 && !opts.force) {
       if (this.pending > 0) {
         await this.queue;
         return new Map();
@@ -724,16 +732,23 @@ export class DeckController {
     const before = this.pressedKey;
     this.pressedKey = pane.paneKey;
     // Switch the pane and raise the window concurrently: both are slow subprocess calls.
-    const [r] = await Promise.all([
+    const focusPane = (p: PaneInfo) =>
       this.adapter.focus({
-        paneKey: pane.paneKey,
-        hostId: pane.hostId,
-        handle: pane.handle,
-        environment: pane.environment ?? null,
-        worktreeId: pane.worktreeId,
-      }),
-      this.raise?.(),
-    ]);
+        paneKey: p.paneKey,
+        hostId: p.hostId,
+        handle: p.handle,
+        environment: p.environment ?? null,
+        worktreeId: p.worktreeId,
+      });
+    const [first] = await Promise.all([focusPane(pane), this.raise?.()]);
+    let r = first;
+    if (!r.ok && isStaleHandle(r)) {
+      // Orca restarted since the last read and its terminal handles rotated: read the panes again, through the
+      // same queue as every refresh, and retry once, only when the pane now has another handle (no loop).
+      await this.refresh([], { force: true }).catch(() => {});
+      const fresh = this.registry.get(pane.paneKey);
+      if (fresh && fresh.handle !== pane.handle) r = await focusPane(fresh);
+    }
     if (!r.ok && this.pressedKey === pane.paneKey) this.pressedKey = before;
     return r.ok ? 'focused' : 'failed';
   }
