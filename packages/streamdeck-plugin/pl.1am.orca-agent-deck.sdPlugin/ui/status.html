@@ -4,6 +4,11 @@
     <meta charset="utf-8" />
     <title>Setup</title>
     <style>
+      *,
+      *::before,
+      *::after {
+        box-sizing: border-box;
+      }
       body {
         margin: 0;
         padding: 8px;
@@ -26,6 +31,22 @@
         gap: 6px;
         font-weight: 600;
       }
+      .mark {
+        flex: none;
+        width: 12px;
+        height: 16px;
+        display: flex;
+        align-items: center;
+      }
+      .mark svg {
+        width: 12px;
+        height: 12px;
+        fill: none;
+        stroke: currentColor;
+        stroke-width: 1.4;
+        stroke-linecap: round;
+        stroke-linejoin: round;
+      }
       .ok .mark {
         color: #5fbf6a;
       }
@@ -39,6 +60,17 @@
       .hint {
         margin: 2px 0 0 18px;
         color: #9a9a9a;
+      }
+      #checks.busy {
+        opacity: 0.5;
+      }
+      #stamp {
+        margin-top: 8px;
+        color: #9a9a9a;
+      }
+      button:disabled {
+        opacity: 0.6;
+        cursor: default;
       }
       button {
         margin-top: 10px;
@@ -55,14 +87,29 @@
   </head>
   <body>
     <h1>Setup</h1>
-    <div id="checks">Checking...</div>
+    <div id="checks" data-placeholder="1">Checking...</div>
+    <div id="stamp" role="status"></div>
     <button id="recheck">Check again</button>
+    <script src="pi.js"></script>
     <script>
-      let ws, uuid;
-      const MARK = { ok: 'v', warn: '!', fail: 'x' };
-      const send = (msg) =>
-        ws.send(JSON.stringify({ event: 'sendToPlugin', context: uuid, payload: msg }));
-
+      // Drawn, not typed: a font glyph reads as the letter "v" on some hosts.
+      const MARK = {
+        ok: { label: 'OK', path: 'M2.5 6.5l3 3 5-6' },
+        warn: { label: 'Warning', path: 'M6 1.2l5.3 9.3H.7zM6 4.6v2.8M6 8.9h.01' },
+        fail: { label: 'Failed', path: 'M2.5 2.5l7 7M9.5 2.5l-7 7' },
+      };
+      const SVG = 'http://www.w3.org/2000/svg';
+      function markEl(result) {
+        const m = MARK[result] || MARK.fail;
+        const svg = document.createElementNS(SVG, 'svg');
+        svg.setAttribute('viewBox', '0 0 12 12');
+        svg.setAttribute('role', 'img');
+        svg.setAttribute('aria-label', m.label);
+        const p = document.createElementNS(SVG, 'path');
+        p.setAttribute('d', m.path);
+        svg.appendChild(p);
+        return svg;
+      }
       function render(checks) {
         const root = document.getElementById('checks');
         root.textContent = '';
@@ -77,29 +124,61 @@
             return d;
           };
           const head = add('head', '');
-          add('mark', MARK[c.result], head).style.width = '12px';
+          add('mark', '', head).appendChild(markEl(c.result));
           add('', c.label, head);
           add('reason', c.reason);
           if (c.result !== 'ok' && c.hint) add('hint', 'Fix: ' + c.hint);
+          if (c.result !== 'ok' && c.fix && c.fix.url) {
+            const b = document.createElement('button');
+            b.textContent = c.fix.label;
+            b.onclick = () => send.openUrl(c.fix.url);
+            el.appendChild(b);
+          }
           root.appendChild(el);
         }
       }
 
-      document.getElementById('recheck').onclick = () => send({ type: 'load' });
+      const recheck = document.getElementById('recheck');
+      const stamp = document.getElementById('stamp');
+      let waiting = null;
+      // Reading Orca through the CLI takes seconds per refresh: wait longer before giving up.
+      let slow = false;
 
-      window.connectElgatoStreamDeckSocket = (port, id, registerEvent) => {
-        uuid = id;
-        ws = new WebSocket('ws://127.0.0.1:' + port);
-        ws.onopen = () => {
-          ws.send(JSON.stringify({ event: registerEvent, uuid }));
-          send({ type: 'load' });
-        };
-        ws.onmessage = (e) => {
-          const m = JSON.parse(e.data);
-          if (m.event === 'sendToPropertyInspector' && m.payload.type === 'checks')
-            render(m.payload.checks);
-        };
+      function settle(text) {
+        clearTimeout(waiting);
+        waiting = null;
+        recheck.disabled = false;
+        recheck.textContent = 'Check again';
+        const root = document.getElementById('checks');
+        root.classList.remove('busy');
+        // One state at a time: the first-load "Checking..." must not stay next to a "no answer" message.
+        if (root.dataset.placeholder) {
+          root.textContent = '';
+          delete root.dataset.placeholder;
+        }
+        stamp.textContent = text;
+      }
+
+      // A re-check that changes nothing must still be visibly done.
+      recheck.onclick = () => {
+        recheck.disabled = true;
+        recheck.textContent = 'Checking...';
+        document.getElementById('checks').classList.add('busy');
+        stamp.textContent = '';
+        clearTimeout(waiting);
+        waiting = setTimeout(
+          () => settle('No answer from the plugin. If it was restarted, select the key again.'),
+          slow ? 10000 : 5000,
+        );
+        send({ type: 'load' });
       };
+
+      const send = connectPi('checks', (m) => {
+        slow = m.slow === true;
+        // A reply that comes after the "no answer" message is still shown, and the message goes.
+        render(m.checks);
+        settle('Checked at ' + new Date().toLocaleTimeString());
+      });
     </script>
   </body>
 </html>

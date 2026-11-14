@@ -12,7 +12,7 @@ Find the symptom, check the cause, apply the fix. Status key captions come from 
 
 ### "Orca x.y.z too old"
 
-- **Cause.** Orca is older than 1.4.245.
+- **Cause.** Orca is older than 1.4.245. The Orca plugin itself needs Orca 1.4.246 or newer.
 - **Fix.** Update Orca.
 
 ### "orca CLI not found"
@@ -30,19 +30,19 @@ Find the symptom, check the cause, apply the fix. Status key captions come from 
 ### "slow updates" (grey OK)
 
 - **Cause.** The Orca plugin is not connected, so status is polled instead of pushed.
-- **Check.** Look for a second check, "Orca plugin missing" or "Orca plugin outdated". Orca stops the plugin worker after about 10 minutes without agent events; that is normal and not shown as a fault, and the worker reconnects on the next event.
+- **Check.** Look for a second check, "Install the Orca plugin" or "Update Agent Deck for Orca". Orca stops the plugin worker after about 10 minutes without agent events; that is normal and not shown as a fault, and the worker reconnects on the next event.
 - **Fix.** See the next two entries.
 
-### "Orca plugin missing"
+### "Install the Orca plugin"
 
-- **Cause.** The Orca plugin has not connected since the Stream Deck plugin started: not installed, disabled, or Orca has not sent it an event yet.
-- **Check.** In Orca run "Agent Deck: Show status", then read `~/.orca-deck/plugin-a.log`. Check Orca Settings, Plugins.
-- **Fix.** Install it (Quick start step 2 in [install.md](install.md)) and enable it. Start or finish a turn in an agent so Orca wakes it. If the Elgato app was restarted after Orca, the plugin reconnects with a backoff of up to 30 s.
+- **Cause.** Orca reports the Orca plugin as not installed or disabled (it has not connected since the Stream Deck plugin started). A plugin that is installed but has not woken yet is not shown as missing.
+- **Check.** In Orca run "Agent Deck for Orca: Show status", then read `~/.orca-deck/plugin-a.log` (Windows: `%APPDATA%\orca-deck\plugin-a.log`). Check Orca Settings, Plugins.
+- **Fix.** Press the Status key, open the Setup tab and click "Install the Orca plugin" (it opens `orca://plugins/1am.agent-deck?catalog=https://github.com/1am/orca-agent-deck.git`), or follow Quick start step 2 in [install.md](install.md), and enable it. Start or finish a turn in an agent so Orca wakes it. If the Elgato app was restarted after Orca, the plugin reconnects with a backoff of up to 30 s.
 
-### "Orca plugin outdated"
+### "Update Agent Deck for Orca"
 
-- **Cause.** The installed Orca plugin is older than the Stream Deck plugin and cannot connect.
-- **Fix.** Update the Orca plugin. Both plugins must come from the same release.
+- **Cause.** The Orca plugin and the Stream Deck plugin speak different bridge versions (one is older than the other, or an Orca plugin from before the handshake), so they cannot connect. The Orca plugin logs "update Agent Deck for Orca" and the Show status toast starts with it.
+- **Fix.** Update the older one. Both plugins must come from the same release.
 
 ### "tmux env missing"
 

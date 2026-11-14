@@ -250,6 +250,27 @@ describe('server handshake', () => {
     expect(server.outdatedPeerAt).not.toBeNull();
   });
 
+  it('does not call A outdated for a bridge version sent without the token', async () => {
+    const { port } = await server.start();
+    const c = rawClient(port);
+    await c.open();
+    c.ws.send(JSON.stringify({ v: 9, type: 'auth', nonce: NA, mac: 'f'.repeat(64) }));
+    await until(() => c.code() !== 0);
+    expect(server.outdatedPeerAt).toBeNull();
+  });
+
+  it('calls A outdated for another bridge version once it proved the token', async () => {
+    const { port, token } = await server.start();
+    const c = rawClient(port);
+    await c.open();
+    await until(() => c.nonce() !== '');
+    c.ws.send(
+      JSON.stringify({ v: 9, type: 'auth', nonce: NA, mac: authMac(token, c.nonce(), NA) }),
+    );
+    await until(() => c.code() !== 0);
+    expect(server.outdatedPeerAt).not.toBeNull();
+  });
+
   it('refuses a browser upgrade (Origin header) before any token is tried', async () => {
     const { port } = await server.start();
     const ws = new WebSocket(`ws://127.0.0.1:${port}`, { origin: 'https://example.com' });
@@ -542,6 +563,19 @@ describe('plugin A against a hostile peer on the bridge port', () => {
     const { a, logs } = await connectTo(srv, 100);
     await until(() => closed);
     expect(logs.join('\n')).toContain('no challenge on the bridge port');
+    a.stop();
+    srv.close();
+  });
+
+  it('ignores another bridge version from a peer that has not proven the token', async () => {
+    const text = Buffer.from(JSON.stringify({ v: 9, type: 'challenge', nonce: 'x' }));
+    const srv = upgraded((sock) =>
+      sock.write(Buffer.concat([Buffer.from([0x81, text.length]), text])),
+    );
+    const { a, logs } = await connectTo(srv);
+    await new Promise((r) => setTimeout(r, 150));
+    expect(logs.join('\n')).not.toContain('update Agent Deck');
+    expect((a.status() as { versionNote?: string | null }).versionNote ?? null).toBeNull();
     a.stop();
     srv.close();
   });

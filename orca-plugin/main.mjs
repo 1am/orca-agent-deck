@@ -6,21 +6,22 @@ import net from 'node:net';
 import { createHash, createHmac, randomBytes, timingSafeEqual } from 'node:crypto';
 import { appendFile, lstat, mkdir, readFile } from 'node:fs/promises';
 import { homedir } from 'node:os';
-import { join } from 'node:path';
+import { dirname, join, posix, win32 } from 'node:path';
 
 export const PROTOCOL_VERSION = 1;
 export const PLUGIN_VERSION = '0.2.2';
 const GUID = '258EAFA5-E914-47DA-95CA-C5AB0DC85B11';
 
-export const defaultDiscoveryPath = () => {
-  if (process.platform !== 'win32') return join(homedir(), '.orca-deck', 'bridge.json');
-  // Orca's worker can start without APPDATA in its environment: use the same per-user folder.
-  return join(
-    process.env.APPDATA || join(homedir(), 'AppData', 'Roaming'),
-    'orca-deck',
-    'bridge.json',
-  );
-};
+const here = () => ({ platform: process.platform, env: process.env, homedir: homedir() });
+
+/** Per-user folder of bridge.json and plugin-a.log. Mirrors `deckDataDir` in adapter-bridge. */
+export const deckDataDir = ({ platform, env, homedir: home } = here()) =>
+  platform === 'win32'
+    ? // Orca's worker can start without APPDATA in its environment: use the same per-user folder.
+      win32.join(env.APPDATA || win32.join(home, 'AppData', 'Roaming'), 'orca-deck')
+    : posix.join(home, '.orca-deck');
+
+export const defaultDiscoveryPath = () => join(deckDataDir(), 'bridge.json');
 
 /**
  * Regular file (no symlink) of the current user, not readable by group or other. Mirrors B's check.
@@ -177,6 +178,8 @@ export function createBridge({
   let state = 'disconnected';
   let timer = null;
   let deck = null;
+  /** Set while B speaks another bridge major: A must not use its messages and says so. */
+  let versionNote = null;
   let stopped = false;
   let delay = retryMs;
 
@@ -222,6 +225,15 @@ export function createBridge({
         } catch {
           return;
         }
+        // Every message of B carries its bridge major; another one means one of the two plugins is outdated. Only
+        // after B proved it knows the token: anything else on the port can say anything, and is ignored below.
+        if (proven && msg && typeof msg === 'object' && msg.v !== PROTOCOL_VERSION) {
+          versionNote = `B speaks bridge ${String(msg.v)}, this plugin ${PROTOCOL_VERSION}`;
+          log(
+            `bridge: ${versionNote}: update Agent Deck for Orca (both plugins from the same release)`,
+          );
+          return socket.close();
+        }
         if (msg?.type === 'challenge' && !challenge && NONCE.test(String(msg.nonce))) {
           challenge = msg.nonce;
           socket.send(
@@ -253,6 +265,7 @@ export function createBridge({
           return;
         } else if (msg?.type === 'helloAck') {
           setState('connected');
+          versionNote = null;
           delay = retryMs;
           deck = msg.deck ?? null;
           log('connected to Agent Deck for Orca');
@@ -293,7 +306,7 @@ export function createBridge({
       ws.send(JSON.stringify(msg));
       return true;
     },
-    status: () => ({ state, deck }),
+    status: () => ({ state, deck, versionNote }),
     /** Where the discovery file is read from, for the status report. */
     discoveryPath,
     stop() {
@@ -372,10 +385,10 @@ export function createForwarder(bridge, { maxPanes = 500 } = {}) {
   };
 }
 
-const logFile = join(homedir(), '.orca-deck', 'plugin-a.log');
+const logPath = () => join(deckDataDir(here()), 'plugin-a.log');
 const fileLog = (msg) =>
-  mkdir(join(homedir(), '.orca-deck'), { recursive: true })
-    .then(() => appendFile(logFile, `${new Date().toISOString()} ${msg}\n`))
+  mkdir(dirname(logPath()), { recursive: true })
+    .then(() => appendFile(logPath(), `${new Date().toISOString()} ${msg}\n`))
     .catch(() => {});
 
 const label = {
@@ -386,12 +399,13 @@ const label = {
 };
 
 /** One-line status for the command toast, within Orca's 200 character limit; ends with the log file. */
-export function statusSummary({ state, deck, seen, tracked, ago }) {
+export function statusSummary({ state, deck, seen, tracked, ago, versionNote = null }) {
   const link = !deck
     ? 'no Stream Deck plugin link'
     : `Stream Deck app ${deck.connected ? 'connected' : 'not connected'}, ${deck.devices.length} device(s)`;
   const tail = ' Log: ~/.orca-deck/plugin-a.log';
-  const body = `${label[state] ?? state}. ${link}. Events ${seen.status} (${seen.forwarded} fwd), last ${ago(seen.lastAt)}; ${tracked} pane(s).`;
+  const update = versionNote ? 'Update Agent Deck for Orca. ' : '';
+  const body = `${update}${label[state] ?? state}. ${link}. Events ${seen.status} (${seen.forwarded} fwd), last ${ago(seen.lastAt)}; ${tracked} pane(s).`;
   return body.slice(0, 200 - tail.length) + tail;
 }
 
@@ -462,7 +476,8 @@ export default async function activate(orca) {
   orca.commands.register('deck.status', async () => {
     await bridge.ensure();
     await new Promise((r) => setTimeout(r, 300));
-    const { state, deck } = bridge.status();
+    const { state, deck, versionNote } = bridge.status();
+    if (versionNote) log(`status: update Agent Deck for Orca: ${versionNote}`);
     // Never a toast or OS notification: the deck is the attention surface and notifications may be off.
     // Counts and ages only, never pane titles, terminal content or the bridge token.
     const ago = (t) => (t ? `${Math.round((Date.now() - t) / 1000)}s ago` : 'none yet');
@@ -478,9 +493,9 @@ export default async function activate(orca) {
     log(
       `status: agent events ${seen.status} (${seen.forwarded} forwarded), last ${ago(seen.lastAt)}; ${forwarder.size()} pane(s) tracked; workspace events ${seen.workspace}`,
     );
-    log(`status: log file ${logFile}; also: orca plugin logs 1am.agent-deck`);
+    log(`status: log file ${logPath()}; also: orca plugin logs 1am.agent-deck`);
     // Orca's Logs pane never shows orca.log output, but it shows a returned string (max 200 chars)
     // as the toast description of the palette command. This is the visible result.
-    return statusSummary({ state, deck, seen, tracked: forwarder.size(), ago });
+    return statusSummary({ state, deck, seen, tracked: forwarder.size(), ago, versionNote });
   });
 }
