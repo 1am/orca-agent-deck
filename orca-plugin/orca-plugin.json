@@ -48,11 +48,6 @@
         "id": "deck.status",
         "title": "Agent Deck: Show status",
         "when": "global"
-      },
-      {
-        "id": "deck.uninstall",
-        "title": "Agent Deck for Orca: Uninstall",
-        "when": "global"
       }
     ],
     "events": [

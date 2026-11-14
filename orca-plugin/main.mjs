@@ -4,7 +4,7 @@
 // Never log tokens or terminal content.
 import net from 'node:net';
 import { createHash, createHmac, randomBytes, timingSafeEqual } from 'node:crypto';
-import { appendFile, lstat, mkdir, readFile, rm } from 'node:fs/promises';
+import { appendFile, lstat, mkdir, readFile } from 'node:fs/promises';
 import { homedir } from 'node:os';
 import { dirname, join, posix, win32 } from 'node:path';
 
@@ -386,43 +386,10 @@ export function createForwarder(bridge, { maxPanes = 500 } = {}) {
 }
 
 const logPath = () => join(deckDataDir(here()), 'plugin-a.log');
-// After "Uninstall" nothing may write the data dir again.
-let uninstalled = false;
 const fileLog = (msg) =>
-  uninstalled
-    ? Promise.resolve()
-    : mkdir(dirname(logPath()), { recursive: true })
-        .then(() => appendFile(logPath(), `${new Date().toISOString()} ${msg}\n`))
-        .catch(() => {});
-
-/**
- * Removes the Agent Deck for Orca data dir (bridge.json, mappings.json, this plugin's log) and nothing else: the target must be
- * exactly what `deckDataDir` says and end in `orca-deck` or `.orca-deck`, never the home dir or a root.
- */
-export async function removeDeckData(target, h = here(), remove = rm) {
-  const want = deckDataDir(h);
-  const p = h.platform === 'win32' ? win32 : posix;
-  const name = p.basename(want);
-  if (
-    target !== want ||
-    (name !== 'orca-deck' && name !== '.orca-deck') ||
-    want === h.homedir ||
-    p.dirname(want) === want
-  )
-    throw new Error(`refusing to remove ${String(target)}`);
-  await remove(want, { recursive: true, force: true });
-  return want;
-}
-
-/** The second "Uninstall" run must come within this long after the first. */
-export const UNINSTALL_CONFIRM_MS = 10_000;
-
-/** What the "Uninstall" toast says (max 200 characters): the data is gone, the two plugins are removed by hand. */
-export const uninstallText = (dir) =>
-  `Removed ${dir}. Remove the Stream Deck plugin too, or it recreates your mappings (Elgato app: Preferences, Plugins; OpenDeck: Plugins), then this plugin in Orca Settings.`.slice(
-    0,
-    200,
-  );
+  mkdir(dirname(logPath()), { recursive: true })
+    .then(() => appendFile(logPath(), `${new Date().toISOString()} ${msg}\n`))
+    .catch(() => {});
 
 const label = {
   connected: 'Orca plugin connected',
@@ -443,7 +410,6 @@ export function statusSummary({ state, deck, seen, tracked, ago, versionNote = n
 }
 
 export default async function activate(orca) {
-  uninstalled = false;
   const log = (m) => {
     orca.log?.(m);
     void fileLog(m);
@@ -507,26 +473,6 @@ export default async function activate(orca) {
   };
   orca.commands.register('deck.map', sendPairing('pairRequest'));
   orca.commands.register('deck.unmap', sendPairing('unmapRequest'));
-  // Orca's plugin API has no confirm dialog (and notifications stay off), so Uninstall asks twice: the first run only arms.
-  let armedAt = 0;
-  orca.commands.register('deck.uninstall', async () => {
-    const dir = deckDataDir(here());
-    if (Date.now() - armedAt > UNINSTALL_CONFIRM_MS) {
-      armedAt = Date.now();
-      return `Run Agent Deck for Orca: Uninstall again within ${UNINSTALL_CONFIRM_MS / 1000} s to remove ${dir} (bridge file, key mappings, this plugin's log).`.slice(
-        0,
-        200,
-      );
-    }
-    armedAt = 0;
-    bridge.stop();
-    uninstalled = true;
-    await removeDeckData(dir);
-    orca.log?.(
-      `uninstall: removed ${dir}; remove the Stream Deck plugin in the Elgato app or OpenDeck, then this plugin in Orca`,
-    );
-    return uninstallText(dir);
-  });
   orca.commands.register('deck.status', async () => {
     await bridge.ensure();
     await new Promise((r) => setTimeout(r, 300));
