@@ -1,0 +1,7 @@
+{"v":2,"name":"b-pane-names","description":"Two panes of one tab with the same name get their position in the tab, in the key settings list and on the keys; a pane with a title of its own keeps it. Revert check: make paneName return the bare title or tab.","sides":["b"],"keys":{}}
+{"at":0,"do":"orca.pane.add","pane":"a","title":"shell"}
+{"at":0,"do":"orca.pane.add","pane":"b","title":"shell"}
+{"at":0,"do":"orca.pane.add","pane":"c","title":"logs"}
+{"at":0,"do":"deck.appear","key":1}
+{"at":500,"do":"deck.pi.open","key":1}
+{"at":500,"do":"expect.pi","key":1,"messages":[{"type":"state","panes":[{"paneKey":"tab-1:leaf-a","title":"shell · pane 1"},{"paneKey":"tab-1:leaf-b","title":"shell · pane 2"},{"paneKey":"tab-1:leaf-c","title":"logs"}]}]}

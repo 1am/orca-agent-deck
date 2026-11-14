@@ -10,7 +10,7 @@
 {"at":200,"do":"deck.pi.send","key":2,"message":{"type":"configure","paneKey":"tab-1:leaf-c"}}
 {"at":200,"do":"expect.key","key":2,"state":"completed","label":"Codex"}
 {"at":200,"do":"expect.key","key":1,"state":"completed","label":"Claude Code"}
-{"at":200,"do":"expect.pi","key":1,"messages":[]}
+{"at":200,"do":"expect.pi","key":1,"messages":[{"type":"state","config":{"paneKey":"tab-1:leaf-a"}}]}
 {"at":200,"do":"expect.pi","key":2,"messages":[]}
 {"at":300,"do":"deck.pi.open","key":2}
 {"at":300,"do":"expect.pi","key":2,"messages":[{"type":"state","config":{"paneKey":"tab-1:leaf-c"}}]}

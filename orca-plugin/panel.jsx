@@ -8,7 +8,6 @@
 // (`deck.assign`, `deck.unmap`, `deck.panelSelect`).
 import {
   atom,
-  Badge,
   Box,
   Button,
   Heading,
@@ -66,10 +65,13 @@ const MODELS = {
 };
 const modelName = (m) => MODELS[m] ?? (m && Number.isNaN(Number(m)) ? m : 'Stream Deck');
 
-/** Height of the pane list's own scroll area. */
-const PANE_LIST_MAX_PX = 480;
-/** Orca draws a scrollbar only on hover: past this many panes the list says it scrolls. */
-const PANE_LIST_SCROLL_HINT = 6;
+/** The panel fits the sidebar and only the pane list scrolls: it takes the free height, down to this floor. */
+const PANE_LIST_MIN_PX = 120;
+/** A two-line row's height, and the list height a sidebar usually leaves: the box height itself is not readable. */
+const PANE_ROW_PX = 48;
+const PANE_LIST_TYPICAL_PX = 400;
+/** Orca draws a scrollbar only on hover: past this many panes the list likely overflows and says it scrolls. */
+const PANE_LIST_SCROLL_HINT = Math.floor(PANE_LIST_TYPICAL_PX / PANE_ROW_PX);
 
 /** Key tone from the state the deck shows. */
 const TONES = {
@@ -80,10 +82,13 @@ const TONES = {
   completed: 'success',
 };
 
-/** Opens a key's details (null closes them); a search typed for another key would hide its panes. */
+/** Opens a key's details (null closes them); the last result line and a search typed for another key go. */
 function openKey(key) {
+  set(note, '');
   set(query, '');
   set(picking, key);
+  // Tell the worker now (Back, no key open): the redraw would send it too, a moment later.
+  reportSelecting(wantSelecting());
 }
 
 async function refresh() {
@@ -105,7 +110,6 @@ async function showFocusedKey() {
   // A key B asked for (a hold) wins over the focused pane's key.
   const key = Number.isInteger(v.picked) ? v.picked : v.deck.panes?.find((p) => p.focused)?.onKey;
   if (key) {
-    set(note, '');
     openKey(key);
   }
 }
@@ -139,8 +143,30 @@ function wantSelecting() {
   return !!live && (visible ? read(visible) : true) && read(picking) !== null;
 }
 
+/** The panel is drawn on screen (not hidden, not behind another sidebar tab); true where Orca gives no signal. */
+function inView() {
+  return visible ? !!read(visible) : true;
+}
+
+/** What the worker was last told about the panel being in view, so a redraw sends only a change. */
+let viewSent = null;
+
+/**
+ * Tells the worker whether the panel is in view, so the status bar button and the shortcut can hide the right
+ * sidebar instead of showing the panel again. The worker treats silence as not in view, so `renew` repeats an on.
+ */
+function reportView(on, renew = false) {
+  if (on === viewSent && !(renew && on)) return;
+  viewSent = on;
+  void Promise.resolve()
+    .then(() => plugin.request('deck.panelView', { on }))
+    .catch(() => (viewSent = null));
+}
+
 /** B drops a `panelSelect` that is not renewed within this long (a hidden panel may not draw or run again). */
-const SELECT_HEARTBEAT_MS = 2000;
+const SELECT_HEARTBEAT_MS = 1000;
+/** `visible` is polled this often (Orca offers no way to be told of a hide), so a hide releases deck taps within it. */
+const VISIBLE_POLL_MS = 500;
 
 /**
  * Deck taps open keys here only while the panel is in view with a key's details open. Called while drawing, which
@@ -157,17 +183,21 @@ function reportSelecting(on, renew = false) {
 
 export function setup(ctx) {
   visible = ctx.visible ?? null;
+  let ticks = 0;
   const heartbeat = setInterval(() => {
-    reportSelecting(wantSelecting(), true);
-  }, SELECT_HEARTBEAT_MS);
+    // Every tick sends a change at once; every second tick also renews an on.
+    const renew = ++ticks % (SELECT_HEARTBEAT_MS / VISIBLE_POLL_MS) === 0;
+    reportSelecting(wantSelecting(), renew);
+    reportView(inView(), renew);
+  }, VISIBLE_POLL_MS);
   heartbeat.unref?.();
   ctx.signal?.addEventListener('abort', () => clearInterval(heartbeat));
   ctx.subscriptions.push(
     { dispose: () => clearInterval(heartbeat) },
     { dispose: () => void plugin.request('deck.panelSelect', { on: false }).catch(() => {}) },
+    { dispose: () => void plugin.request('deck.panelView', { on: false }).catch(() => {}) },
     plugin.on('deck.keyPicked', (payload) => {
       if (!Number.isInteger(payload?.key)) return;
-      set(note, '');
       openKey(payload.key);
     }),
     plugin.on('deck.changed', (payload) => {
@@ -185,12 +215,9 @@ function Status({ v }) {
   const { deck } = v;
   if (!deck.connected) return <Text tone="warning">{REASONS.deckOffline}</Text>;
   return (
-    <Row gap="xs" align="center" wrap>
-      <Badge tone="success">Connected</Badge>
-      <Text muted size="xs">
-        {`${modelName(deck.model)}, ${deck.cols} x ${deck.rows} keys`}
-      </Text>
-    </Row>
+    <Text muted size="xs" truncate>
+      {modelName(deck.model)}
+    </Text>
   );
 }
 
@@ -248,7 +275,6 @@ function Grid({ deck }) {
                       : `Key ${key}: ${OTHER_KINDS[kind] ?? OTHER_KINDS.other}`
                   }
                   onPress={() => {
-                    set(note, '');
                     openKey(open === key ? null : key);
                   }}
                 >
@@ -263,23 +289,32 @@ function Grid({ deck }) {
   );
 }
 
-/** Title first, then the agent, the marks and the host last: a long host name only cuts itself off. */
-function paneLine(p, key) {
+/** The group a pane sits under, as the key settings list writes it: host > repo > branch (an older plugin: its label). */
+function groupOf(p) {
+  const host = p.remote ? `Remote: ${p.host ?? 'unknown host'}` : 'This machine';
+  const where = p.name === undefined ? [p.label] : [p.repo, p.branch];
+  return [host, ...where].filter(Boolean).join(' > ');
+}
+
+/** What the row says under its name: the agent and the marks; the host is in the group header, the key in the badge. */
+function paneLine(p) {
   const bits = [];
-  if (p.detail) bits.push(p.detail);
+  // An older plugin has no name: its detail (title and tab) is the best the row can say.
+  if (p.name === undefined && p.detail) bits.push(p.detail);
   if (p.agent) bits.push(p.agent);
   if (p.focused) bits.push('Focused');
   if (p.lastPressed) bits.push('Last opened from the deck');
-  if (p.onKey && p.onKey !== key) bits.push(`on key ${p.onKey}`);
-  if (p.host) bits.push(p.host);
   return bits.join(' · ');
 }
 
-/** Every word of `q` appears in the pane's line as drawn: title, tab, agent, marks, host name and address (any case). */
+/** Every word of `q` appears in the pane's row as drawn: group, name, tab, agent, marks, key, host name and address (any case). */
 function matches(p, q) {
   const text = [
     p.label,
     p.detail,
+    groupOf(p),
+    p.tab,
+    p.name,
     p.agent,
     p.focused && 'Focused',
     p.lastPressed && 'Last opened from the deck',
@@ -299,6 +334,39 @@ function matches(p, q) {
       .every((w) =>
         /^\d+$/.test(w) ? new RegExp(`(^|\\D)${w}(\\D|$)`).test(text) : text.includes(w),
       )
+  );
+}
+
+/** One pane: a small badge at the left (its key, or an empty square when it is on none), then the row to press. */
+function PaneRow({ p, k, working }) {
+  const here = p.onKey === k.key;
+  return (
+    <Box direction="row" gap="xs" align="start">
+      {/* A small copy of a grid key: filled in its state's colour when the pane is on a key (ringed when it is the
+          key being edited), an empty square when it is on none. */}
+      <Box width={36} shrink={false} align="stretch">
+        {p.onKey ? (
+          <Box align="stretch" border={here ? 'accent' : false} radius="md">
+            <Button size="xs" variant="solid" tone={TONES[p.state] ?? 'neutral'}>
+              {p.onKey}
+            </Button>
+          </Box>
+        ) : (
+          <Box height={28} border radius="md" />
+        )}
+      </Box>
+      <Box grow width={0} minWidth={0}>
+        <List label={`Choose ${p.name || p.label}`}>
+          <ListItem
+            title={p.name || p.label}
+            description={paneLine(p)}
+            current={here}
+            disabled={working}
+            onPress={() => act('deck.assign', { key: k.key, replace: k.mapped, ...pick(p) }, k.key)}
+          />
+        </List>
+      </Box>
+    </Box>
   );
 }
 
@@ -323,8 +391,16 @@ function Panes({ deck, k }) {
   const q = read(query);
   const found = q.trim() ? deck.panes.filter((p) => matches(p, q)) : deck.panes;
   const shown = [...found.filter((p) => p.focused), ...found.filter((p) => !p.focused)];
+  // Groups in order of their first pane, so the focused pane's group is first and groups stay whole.
+  const groups = new Map();
+  for (const p of shown) {
+    const g = groupOf(p);
+    if (!groups.has(g)) groups.set(g, []);
+    groups.get(g).push(p);
+  }
   return (
-    <Stack gap="xs">
+    // Grows into the sidebar's free height: the list below is what takes it.
+    <Box grow minHeight={0} gap="sm" align="stretch">
       <Input
         type="search"
         label="Search panes"
@@ -338,29 +414,28 @@ function Panes({ deck, k }) {
           {`No pane matches "${q.trim()}".`}
         </Text>
       )}
-      {/* Its own scroll area, so the grid and the banner stay in view; a window lower than this scrolls the panel. */}
+      {/* The hint only while the rows overflow the minimum box: a taller sidebar may still show them all. */}
       {shown.length > PANE_LIST_SCROLL_HINT ? (
         <Text size="xs" muted>
           {`${shown.length} panes: scroll the list for more`}
         </Text>
       ) : null}
-      <Box scroll="y" maxHeight={PANE_LIST_MAX_PX}>
-        <List label="Choose a pane">
-          {shown.map((p) => (
-            <ListItem
-              key={`${p.hostId ?? ''}\0${p.paneKey}`}
-              title={p.label}
-              description={paneLine(p, k.key)}
-              current={p.onKey === k.key}
-              disabled={working}
-              onPress={() =>
-                act('deck.assign', { key: k.key, replace: k.mapped, ...pick(p) }, k.key)
-              }
-            />
+      {/* Its own scroll area, so the grid and the banner stay in view; it fills the sidebar, at least PANE_LIST_MIN_PX. */}
+      <Box grow scroll="y" minHeight={PANE_LIST_MIN_PX}>
+        <Stack gap="md">
+          {[...groups].map(([group, list]) => (
+            <Stack key={group} gap="xs">
+              <Text size="xs" weight="semibold" muted truncate>
+                {group}
+              </Text>
+              {list.map((p) => (
+                <PaneRow key={`${p.hostId ?? ''}\0${p.paneKey}`} p={p} k={k} working={working} />
+              ))}
+            </Stack>
           ))}
-        </List>
+        </Stack>
       </Box>
-    </Stack>
+    </Box>
   );
 }
 
@@ -370,8 +445,7 @@ function Details({ deck, k }) {
   // A Stream Deck plugin that sends no pane list cannot say: let the press try.
   const noFocus = !!deck.panes && !deck.panes.some((p) => p.focused);
   return (
-    <Stack gap="sm">
-      <Separator />
+    <Box grow minHeight={0} gap="sm" align="stretch">
       {/* One line: the key, what it shows (cut off with an ellipsis) and Back at the right. */}
       <Box direction="row" gap="sm" align="center">
         <Text weight="semibold">Key {k.key}</Text>
@@ -410,7 +484,7 @@ function Details({ deck, k }) {
         </Text>
       ) : null}
       <Panes deck={deck} k={k} />
-    </Stack>
+    </Box>
   );
 }
 
@@ -421,17 +495,24 @@ export default function Panel() {
   const live = v && v.status === 'ok' && v.deck.connected;
   const k = live && open !== null ? v.deck.keys.find((x) => x.key === open) : null;
   reportSelecting(wantSelecting());
+  reportView(inView());
   return (
-    // One box, one padding: every block (heading, status, grid, details, search, list) shares the same edges.
-    <Box padding="md" gap="md" align="stretch">
+    // One box, one padding: every block (heading, status, grid, details, search, list) shares the same edges. `md`
+    // between blocks, `sm` inside one; the full height lets the pane list fill what is left of the sidebar.
+    <Box padding="md" gap="md" align="stretch" height="100%">
       <Heading>Agent Deck</Heading>
-      <Status v={v} />
+      <Box direction="row" gap="sm" align="center">
+        <Box minWidth={0}>
+          <Status v={v} />
+        </Box>
+        <Button size="xs" variant="ghost" icon="refresh" onPress={() => refresh()}>
+          Refresh
+        </Button>
+      </Box>
       {live ? <Grid deck={v.deck} /> : null}
-      {live && k ? <Details deck={v.deck} k={k} /> : null}
       {last ? <Text size="xs">{last}</Text> : null}
-      <Button size="sm" variant="ghost" icon="refresh" onPress={() => refresh()}>
-        Refresh
-      </Button>
+      {live && k ? <Separator /> : null}
+      {live && k ? <Details deck={v.deck} k={k} /> : null}
     </Box>
   );
 }

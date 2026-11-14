@@ -12,8 +12,9 @@ export const PROTOCOL_VERSION = 1;
  * 4: holding a key opens the panel at that key (`keyPicked` after `openPanel`); the deck's own map mode is gone, so
  *    `pairRequest`, `pairCancel`, `unmapRequest` and `pairState` are no longer sent or read (an A that still sends one is ignored).
  *    `deckState.layout` (what sits at every position of the deck) is an additive optional field of the same minor.
+ * 5: a hold asks A first (`holdKey`, `holdResult`): with the panel in view A hides the right sidebar instead.
  */
-export const PROTOCOL_MINOR = 4;
+export const PROTOCOL_MINOR = 5;
 
 /** Thrown for a message whose major `v` we do not speak; B shows "update Agent Deck for Orca plugin". */
 export class UnsupportedVersionError extends Error {
@@ -111,6 +112,12 @@ export const deckState = base('deckState').extend({
         label: z.string(),
         /** Pane title and tab: what tells two panes of one worktree apart. */
         detail: z.string(),
+        /** Structured parts for a grouped list; absent from an older B (`label` and `detail` then carry them). */
+        repo: z.string().optional(),
+        branch: z.string().optional(),
+        tab: z.string().optional(),
+        /** The pane's name, unique inside its tab: its title, else the tab's, plus "pane N" for same-named panes. */
+        name: z.string().optional(),
         /** Host name of a remote pane. */
         host: z.string().optional(),
         /** The address behind a connection label, searchable; absent when the host is shown by its address. */
@@ -138,6 +145,13 @@ export const openPanelResult = base('openPanelResult')
   );
 /** Minor 3: a key tapped on the deck while `panelSelect` is on, or (minor 4) held, after `openPanel`: the panel opens its details. */
 export const keyPicked = base('keyPicked').extend({ key });
+/** Minor 5: B asks A what a hold on a key should do (B sends it only to an A of minor 5 or more). */
+export const holdKey = base('holdKey').extend({ requestId: z.string(), key });
+/** Minor 5: the answer to `holdKey`. `hidden`: the Agent Deck panel was in view and A hid the right sidebar; `show`: B shows the panel at that key. */
+export const holdResult = base('holdResult').extend({
+  requestId: z.string(),
+  action: z.enum(['hidden', 'show']),
+});
 export const requestSnapshot = base('requestSnapshot');
 const slot = z.object({ page: z.number().int().min(1), index: z.number().int().min(1) });
 export const pairResult = base('pairResult')
@@ -175,6 +189,7 @@ export const messageFromA = z.union([
   unmapKey,
   openPanel,
   panelSelect,
+  holdResult,
 ]);
 export const messageFromB = z.union([
   challenge,
@@ -185,6 +200,7 @@ export const messageFromB = z.union([
   deckState,
   openPanelResult,
   keyPicked,
+  holdKey,
 ]);
 
 export type MessageFromA = z.infer<typeof messageFromA>;

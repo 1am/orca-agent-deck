@@ -914,6 +914,18 @@ describe('clicks in the Orca panel', () => {
     ]);
   });
 
+  it('the key settings picker carries the key a pane is on when it can tell', async () => {
+    const { d } = world();
+    await d.refresh(['s1', 's2']);
+    await d.assignFocusedTo('r1', 's2', false, true, 'a:1');
+    const keyOf = (slot: string) => (slot === 's2' ? 2 : null);
+    expect(d.listPanes(keyOf).map((p) => [p.paneKey, p.onKey])).toEqual([
+      ['a:1', 2],
+      ['b:1', undefined],
+    ]);
+    expect(d.listPanes().every((p) => p.onKey === undefined)).toBe(true);
+  });
+
   it('unmap empties the key and keeps its pane off auto-fill', async () => {
     const { d, results } = world();
     await d.refresh(['s1']);
@@ -1079,5 +1091,48 @@ describe('an Orca reply that does not parse', () => {
     breakIt();
     await d.refresh(['s1']);
     expect(d.overview()).toMatchObject({ mode: 'down', badResponse: false });
+  });
+});
+
+describe('pane names', () => {
+  const split = (key: string, over: Partial<PaneInfo> = {}) =>
+    pane(key, { title: '', tabTitle: 'Terminal', repo: 'repo', branch: 'main', ...over });
+  async function names(panes: PaneInfo[], slots: string[] = []) {
+    const { a } = fake({ panes, statuses: [], omittedHostIds: [] });
+    const d = new DeckController(a, new MappingStore(), undefined, { autofill: true });
+    const views = await d.refresh(slots);
+    return { list: d.listPanes(), panel: d.panelPanes(() => null), views };
+  }
+
+  it('two untitled panes of one tab get their position in the tab, everywhere', async () => {
+    const { list, panel, views } = await names([split('t:1'), split('t:2')], ['s1', 's2']);
+    expect(list.map((p) => p.title)).toEqual(['Terminal · pane 1', 'Terminal · pane 2']);
+    expect(panel.map((p) => p.name)).toEqual(['Terminal · pane 1', 'Terminal · pane 2']);
+    expect(panel.map((p) => p.detail)).toEqual(['Terminal · pane 1', 'Terminal · pane 2']);
+    expect([...views.values()].map((v) => v.label)).toEqual(['main · pane 1', 'main · pane 2']);
+    expect(panel[0]).toMatchObject({ repo: 'repo', branch: 'main', tab: 'Terminal' });
+  });
+
+  it('panes titled alike are told apart, a pane with its own title is not touched', async () => {
+    const { list } = await names([
+      split('t:1', { title: 'vim' }),
+      split('t:2', { title: 'vim' }),
+      split('t:3', { title: 'logs' }),
+    ]);
+    expect(list.map((p) => p.title)).toEqual(['vim · pane 1', 'vim · pane 2', 'logs']);
+  });
+
+  it('a pane alone in its tab gets no suffix and an untitled one reads as its tab', async () => {
+    const { list, views } = await names(
+      [split('t:1'), split('u:1', { tabTitle: 'Other' })],
+      ['s1'],
+    );
+    expect(list.map((p) => p.title)).toEqual(['Terminal', 'Other']);
+    expect(views.get('s1')?.label).toBe('main');
+  });
+
+  it('the same tab id on another host is another tab', async () => {
+    const { list } = await names([split('t:1'), split('t:2', { hostId: 'ssh:box' })]);
+    expect(list.map((p) => p.title)).toEqual(['Terminal', 'Terminal']);
   });
 });

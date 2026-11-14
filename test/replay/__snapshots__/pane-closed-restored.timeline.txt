@@ -1,5 +1,7 @@
 t(ms)  key  orca event                  state          label | line 2
-     0  1    addPane a; addPane b       completed      Claude Code | done
-     0  2    addPane a; addPane b       completed      Claude Code | done
+     0  1    addPane a; addPane b       completed      Claude Code · pane 1 | done
+     0  2    addPane a; addPane b       completed      Claude Code · pane 2 | done
+  1000  1    removePane b               completed      Claude Code | done
   1000  2    removePane b               offline        Claude Code | offline
-  6000  2    addPane b                  completed      Claude Code | done
+  6000  1    addPane b                  completed      Claude Code · pane 1 | done
+  6000  2    addPane b                  completed      Claude Code · pane 2 | done

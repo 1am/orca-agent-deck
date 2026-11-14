@@ -571,6 +571,15 @@ process.exit(r.status ?? 1);`,
         throw new Error(
           `t=${st.at}: panel ${st.request} answered ${JSON.stringify(got)}, wanted ${JSON.stringify(st.result)}`,
         );
+    } else if (st.do === 'expect.log') {
+      // The Stream Deck plugin's log (what B writes), read from disk: the line must appear within the budget.
+      const end = Date.now() + TIMEOUT_MS;
+      while (!(await readLogs(stage)).includes(st.contains)) {
+        failIfBroken();
+        if (Date.now() > end)
+          throw new Error(`t=${st.at}: the plugin log never said ${JSON.stringify(st.contains)}`);
+        await wait(50);
+      }
     } else if (st.do === 'expect.reveal') {
       throw new Error(`t=${st.at}: the B runner cannot evaluate expect.reveal`);
     }

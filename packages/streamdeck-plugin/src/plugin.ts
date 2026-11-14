@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 import streamDeck from '@elgato/streamdeck';
 import { MappingStore, DeckController, type SlotSettings } from '@orca-agent-deck/core';
 import { makeExec } from '@orca-agent-deck/adapter-cli';
@@ -60,11 +61,6 @@ async function createController(): Promise<DeckController> {
     streamDeck.logger.info(
       `mappings: pane ${d.paneKey} was on ${d.removed.length + 1} keys, kept the newest (${d.removed.length} cleared)`,
     );
-  const raiser = makeRaiser();
-  const raise = async () => {
-    const r = await raiser.raise();
-    streamDeck.logger.info(`raise ok=${r.ok} ms=${r.ms}${r.error ? ` error=${r.error}` : ''}`);
-  };
   // Steady state reads the runtime socket (no process spawns); the CLI is the degraded fallback.
   const orca = createRuntimeAdapter({
     client: runtime,
@@ -104,31 +100,72 @@ async function createController(): Promise<DeckController> {
   return deck;
 }
 
+const raiser = makeRaiser();
+/** Brings Orca to the front: a focus press, and the deck gestures that change the Orca panel. */
+const raise = async () => {
+  const r = await raiser.raise();
+  streamDeck.logger.info(`raise ok=${r.ok} ms=${r.ms}${r.error ? ` error=${r.error}` : ''}`);
+};
+
 // One controller shared by all actions (created lazily, after connect).
 let shared: Promise<DeckController> | undefined;
 const controller = () => (shared ??= createController());
 /** A's `panelSelect`: the Orca panel is in view and open for mapping, so a tap on a key selects it there. */
 let panelSelecting = false;
-/** A hidden panel cannot say so, so its `panelSelect` lapses unless A renews it (A does, every 2s, while in view). */
-const PANEL_SELECT_TTL_MS = 5000;
+/** A hidden panel cannot say so, so its `panelSelect` lapses unless A renews it (A does, every second, while in view). */
+const PANEL_SELECT_TTL_MS = 2500;
 let panelSelectAt = 0;
 /** The Orca panel of plugin A (`orca-plugin.json`). */
 const PANEL_ID = 'deck';
-const paneSlot = new PaneSlot(controller, {
-  // Only an A of minor 3 sends `panelSelect`, so one that did reads `keyPicked`.
-  selecting: () => panelSelecting && Date.now() - panelSelectAt < PANEL_SELECT_TTL_MS,
-  pick: (key) => bridgeServer.send({ v: 1, type: 'keyPicked', key }),
-  // A held key: show the panel (Orca's `plugins.open`), then tell it which key's details to open.
-  open: (key) =>
-    openPluginPanel(runtime, PANEL_ID)
-      .then(() => bridgeServer.send({ v: 1, type: 'keyPicked', key }))
-      .catch((e: unknown) => {
-        streamDeck.logger.warn(
-          `open panel: ${e instanceof RuntimeUnavailableError ? 'unavailable' : 'refused'}`,
-        );
-        return false;
-      }),
-});
+/** Holds waiting for A's `holdResult`, by request id. */
+const holdWaits = new Map<string, (action: 'hidden' | 'show') => void>();
+/** How long a hold waits for A before it just shows the panel. */
+const HOLD_WAIT_MS = 1500;
+/** Asks A (minor 5) what a hold does: it hides the right sidebar while the panel is in view. 'show' when A cannot say. */
+function askHold(key: number): Promise<'hidden' | 'show'> {
+  if ((bridgeServer.connection?.minor ?? 0) < 5) return Promise.resolve('show');
+  const requestId = randomUUID();
+  return new Promise((resolve) => {
+    const done = (action: 'hidden' | 'show') => {
+      clearTimeout(timer);
+      holdWaits.delete(requestId);
+      resolve(action);
+    };
+    const timer = setTimeout(() => done('show'), HOLD_WAIT_MS);
+    holdWaits.set(requestId, done);
+    if (!bridgeServer.send({ v: 1, type: 'holdKey', requestId, key })) done('show');
+  });
+}
+const paneSlot = new PaneSlot(
+  controller,
+  {
+    // Only an A of minor 3 sends `panelSelect`, so one that did reads `keyPicked`.
+    selecting: () => panelSelecting && Date.now() - panelSelectAt < PANEL_SELECT_TTL_MS,
+    pick: (key) => bridgeServer.send({ v: 1, type: 'keyPicked', key }),
+    // A held key: with the panel in view A hides the right sidebar; else show the panel (Orca's `plugins.open`),
+    // then tell it which key's details to open.
+    open: async (key) =>
+      (await askHold(key)) === 'hidden'
+        ? 'hidden'
+        : openPluginPanel(runtime, PANEL_ID)
+            .then(() => {
+              const sent = bridgeServer.send({ v: 1, type: 'keyPicked', key });
+              // The panel is shown, but the Orca plugin's worker is not connected to say which key to open.
+              if (!sent)
+                streamDeck.logger.warn(
+                  'open panel: unavailable (the Orca plugin is not connected)',
+                );
+              return sent;
+            })
+            .catch((e: unknown) => {
+              streamDeck.logger.warn(
+                `open panel: ${e instanceof RuntimeUnavailableError ? 'unavailable' : 'refused'}`,
+              );
+              return false;
+            }),
+  },
+  raise,
+);
 streamDeck.actions.registerAction(paneSlot);
 /** Last `deckState` sent, so an unchanged deck is not sent again. */
 let lastDeck = '';
@@ -153,6 +190,7 @@ bridgeServer.on('hello', () => {
 bridgeServer.on('disconnect', () => (panelSelecting = false));
 bridgeServer.on('message', (m) => {
   if (m.type === 'requestDeck') return void pushDeck(true).catch(logFailure('deck push'));
+  if (m.type === 'holdResult') return void holdWaits.get(m.requestId)?.(m.action);
   if (m.type === 'panelSelect') {
     panelSelecting = m.on;
     panelSelectAt = Date.now();

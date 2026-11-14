@@ -97,7 +97,7 @@
           for (const p of list) {
             const o = document.createElement('option');
             o.value = p.paneKey;
-            o.textContent = `[${ICON[p.state] ?? '-'}] ${p.agent ?? 'shell'} · ${[p.tab, p.title].filter(Boolean).join(' / ')}`;
+            o.textContent = `${p.onKey ? `[${p.onKey}] ` : ''}[${ICON[p.state] ?? '-'}] ${p.agent ?? 'shell'} · ${[p.title.startsWith(p.tab) ? '' : p.tab, p.title].filter(Boolean).join(' / ')}`;
             o.selected = p.paneKey === config.paneKey;
             g.appendChild(o);
           }
@@ -139,11 +139,15 @@
         apply($('pane').value);
       };
 
-      const send = connectPi('state', (m) => {
-        panes = m.panes;
-        config = m.config;
-        render();
-      });
+      const send = connectPi(
+        'state',
+        (m) => {
+          panes = m.panes;
+          config = m.config;
+          render();
+        },
+        (m) => m.panes.length > 0,
+      );
     </script>
   </body>
 </html>

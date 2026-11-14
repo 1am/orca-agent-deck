@@ -40,12 +40,13 @@ interface Key {
 
 /**
  * The Orca panel, the one place a key is mapped. While it is open for mapping `pick` hands it a tapped key
- * (false: it could not be sent); `open` shows it at a held key's details (false: it could not be opened).
+ * (false: it could not be sent); `open` shows it at a held key's details (false: it could not be opened) or, while
+ * the panel is already in view, hides the right sidebar instead ('hidden').
  */
 export interface PanelPicker {
   selecting(): boolean;
   pick(key: number): boolean;
-  open(key: number): Promise<boolean>;
+  open(key: number): Promise<boolean | 'hidden'>;
 }
 const NO_PANEL: PanelPicker = {
   selecting: () => false,
@@ -78,10 +79,18 @@ export class PaneSlot extends SingletonAction {
   private readonly gestures = new HoldGestures((slot) => void this.onHold(slot));
   private readonly panel: PanelPicker;
 
-  constructor(create: () => Promise<DeckController>, panel: PanelPicker = NO_PANEL) {
+  /** Brings Orca to the front (the same raise a focus press uses); a no-op where the OS does not allow it. */
+  private readonly raise: () => Promise<unknown>;
+
+  constructor(
+    create: () => Promise<DeckController>,
+    panel: PanelPicker = NO_PANEL,
+    raise: () => Promise<unknown> = () => Promise.resolve(),
+  ) {
     super();
     this.create = create;
     this.panel = panel;
+    this.raise = raise;
     setInterval(() => void this.refresh(), 2000);
     // Spinner advances an eighth turn per tick, or every other tick with more than 2 working keys.
     // A tick with nothing to animate does not repaint at all; keys that did not change are not re-sent.
@@ -158,7 +167,11 @@ export class PaneSlot extends SingletonAction {
     // With the Orca panel open for mapping a tap selects the key there (its details open).
     const key = this.panel.selecting() ? this.keyOfSlot(id) : null;
     if (key !== null && this.panel.pick(key)) {
-      streamDeck.logger.info(`press slot=${id.slice(0, 6)} -> key ${key} opened in the Orca panel`);
+      // The panel's details change in Orca: bring it forward, no pane focus change.
+      void this.raise().catch(() => {});
+      streamDeck.logger.info(
+        `press slot=${id.slice(0, 6)} -> key ${key} opened in the Orca panel, Orca raised`,
+      );
       return;
     }
     // A paired-server pane takes over a second to switch: mark the key focused at once so the
@@ -183,8 +196,10 @@ export class PaneSlot extends SingletonAction {
     const key = this.keyOfSlot(slot);
     const t0 = Date.now();
     const opened = key !== null && (await this.panel.open(key));
+    // Only a panel that did open brings Orca forward; a hide leaves Orca where it is.
+    if (opened === true) await this.raise().catch(() => {});
     streamDeck.logger.info(
-      `hold slot=${slot.slice(0, 6)} -> ${opened ? 'panel opened' : 'panel not opened'} ${Date.now() - t0}ms`,
+      `hold slot=${slot.slice(0, 6)} -> ${opened === 'hidden' ? 'sidebar hidden' : opened ? 'panel opened, Orca raised' : 'panel not opened'} ${Date.now() - t0}ms`,
     );
     if (opened) return;
     // Orca closed, the Orca plugin missing or an old Orca: say where else a key is mapped, long enough to read.
@@ -209,7 +224,11 @@ export class PaneSlot extends SingletonAction {
       // A `load` can arrive before the first snapshot is in (the app opens the inspector as the plugin starts).
       await this.refresh();
     }
-    if (isCurrentPi(ev.action.id)) this.piOpen = ev.action.id;
+    const current = isCurrentPi(ev.action.id);
+    if (current) this.piOpen = ev.action.id;
+    streamDeck.logger.info(
+      `pi ${m.type ?? 'load'} slot=${ev.action.id.slice(0, 6)} -> ${current ? `reply ${c.listPanes().length} panes` : 'not the open inspector, no reply'}`,
+    );
     await this.replyState(c, ev.action.id);
   }
 
@@ -218,7 +237,11 @@ export class PaneSlot extends SingletonAction {
   private piSent = '';
 
   private async replyState(c: DeckController, id: string, force = true): Promise<void> {
-    const payload = { type: 'state', panes: c.listPanes(), config: c.slotConfig(id) };
+    const payload = {
+      type: 'state',
+      panes: c.listPanes((slot) => this.keyOfSlot(slot)),
+      config: c.slotConfig(id),
+    };
     const sig = JSON.stringify(payload);
     if (!force && sig === this.piSent) return;
     this.piSent = sig;

@@ -158,6 +158,7 @@ describe('nothing A sends drives Orca', () => {
     unmapKey: { v, type: 'unmapKey', requestId: 'r', key: 1 },
     openPanel: { v, type: 'openPanel', requestId: 'r', panelId: 'deck' },
     panelSelect: { v, type: 'panelSelect', on: true },
+    holdResult: { v, type: 'holdResult', requestId: 'r', action: 'hidden' },
   };
   // Hostile variants: fields that look like commands must stay inert data.
   const hostile = [

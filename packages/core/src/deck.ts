@@ -76,9 +76,12 @@ export interface PickerPane {
   repo: string;
   branch: string;
   tab: string;
+  /** The pane's name, the same everywhere: see `paneName`. */
   title: string;
   agent: string | null;
   state: DeckState;
+  /** The key of this deck the pane is on, when the caller can tell. */
+  onKey?: number;
 }
 
 /** One pane in the Orca panel's picker (the `deckState.panes` entry). */
@@ -93,6 +96,12 @@ export interface PanelPane {
   host?: string;
   /** The address behind a connection label (searchable), else absent. */
   hostAddress?: string;
+  /** Structured parts for a grouped list (`label` and `detail` stay for an older panel). */
+  repo: string;
+  branch: string;
+  tab: string;
+  /** The pane's name (`paneName`): unique inside its tab. */
+  name: string;
   agent: string | null;
   state: DeckState;
   remote: boolean;
@@ -157,9 +166,37 @@ function hostLabel(hostId: string | undefined, name?: string | null): string | n
   return !hostId || isLocalHost(hostId) ? null : name || 'Remote';
 }
 
-function labelOf(b: PaneBinding): string {
+function labelOf(b: PaneBinding, suffix = ''): string {
   const k = b.lastKnown;
-  return k.paneTitle || k.branch || k.repo || b.paneKey;
+  return (k.paneTitle || k.branch || k.repo || b.paneKey) + suffix;
+}
+
+/**
+ * A pane's name: its title, else its tab's title. Panes of one tab that end up with the same name get their
+ * position in the tab (counted in the order Orca lists the leaves) so no two share one: "Terminal · pane 2".
+ * A pane alone in its tab, or with a name of its own, gets no suffix. `panes` is every pane Orca lists.
+ */
+export function paneName(
+  pane: Pick<PaneInfo, 'paneKey' | 'hostId' | 'title' | 'tabTitle'>,
+  panes: readonly Pick<PaneInfo, 'paneKey' | 'hostId' | 'title' | 'tabTitle'>[],
+): string {
+  const base = pane.title || pane.tabTitle || '';
+  const suffix = paneSuffix(pane, panes);
+  return suffix ? (base ? `${base} · ${suffix}` : suffix) : base;
+}
+
+/** "pane N" when another pane of the same tab has the same name, else ''. */
+export function paneSuffix(
+  pane: Pick<PaneInfo, 'paneKey' | 'hostId' | 'title' | 'tabTitle'>,
+  panes: readonly Pick<PaneInfo, 'paneKey' | 'hostId' | 'title' | 'tabTitle'>[],
+): string {
+  const tab = splitPaneKey(pane.paneKey).tabId;
+  const nameOf = (p: Pick<PaneInfo, 'title' | 'tabTitle'>) => p.title || p.tabTitle || '';
+  const siblings = panes.filter(
+    (p) => p.hostId === pane.hostId && splitPaneKey(p.paneKey).tabId === tab,
+  );
+  if (siblings.filter((p) => nameOf(p) === nameOf(pane)).length < 2) return '';
+  return `pane ${siblings.findIndex((p) => p.paneKey === pane.paneKey) + 1}`;
 }
 
 /** Brings the Orca window to the front; must not throw. */
@@ -540,45 +577,57 @@ export class DeckController {
     }
   }
 
+  /** The key of the deck `keyOf` describes that shows the pane, if any. */
+  private keyOnDeck(
+    p: Pick<PaneInfo, 'paneKey' | 'hostId'>,
+    keyOf: (slot: string) => number | null,
+  ): number | undefined {
+    return this.store
+      .slotsFor(p.paneKey, p.hostId)
+      .map(keyOf)
+      .find((k): k is number => k !== null);
+  }
+
   /** Panes that can be mapped, grouped by the caller as host > repo > branch > tab > pane. */
-  listPanes(): PickerPane[] {
+  listPanes(keyOf?: (slot: string) => number | null): PickerPane[] {
     const down = new Set(this.snapshot.omittedHostIds);
     const live = new Set(this.snapshot.panes.map((p) => p.paneKey));
     const missing = [...this.remotePanes.values()].flat().filter((p) => !live.has(p.paneKey));
-    return [...this.snapshot.panes, ...missing]
-      .filter((p) => !p.orphaned)
-      .map((p) => {
-        const status = this.snapshot.statuses.find((e) => e.paneKey === p.paneKey);
-        const { state } = deriveDeckState({
-          mapped: true,
-          orcaRunning: this.orcaRunning,
-          found: true,
-          connected: p.connected,
-          hostDown: down.has(p.hostId),
-          agentType: p.agentType,
-          agent: status
-            ? {
-                state: status.state,
-                outcome: status.outcome ?? null,
-                awaiting: status.awaiting ?? null,
-              }
-            : null,
-          exitCause: p.exitCause ?? null,
-        });
-        return {
-          paneKey: p.paneKey,
-          hostId: p.hostId,
-          host: this.hostName(p.hostId, p.hostName) ?? 'This machine',
-          ...(p.hostAddress ? { hostAddress: p.hostAddress } : {}),
-          remote: !isLocalHost(p.hostId),
-          repo: p.repo ?? '',
-          branch: p.branch ?? '',
-          tab: p.tabTitle ?? '',
-          title: p.title,
-          agent: p.agentType,
-          state,
-        };
+    const all = [...this.snapshot.panes, ...missing].filter((p) => !p.orphaned);
+    return all.map((p) => {
+      const status = this.snapshot.statuses.find((e) => e.paneKey === p.paneKey);
+      const { state } = deriveDeckState({
+        mapped: true,
+        orcaRunning: this.orcaRunning,
+        found: true,
+        connected: p.connected,
+        hostDown: down.has(p.hostId),
+        agentType: p.agentType,
+        agent: status
+          ? {
+              state: status.state,
+              outcome: status.outcome ?? null,
+              awaiting: status.awaiting ?? null,
+            }
+          : null,
+        exitCause: p.exitCause ?? null,
       });
+      const onKey = keyOf ? this.keyOnDeck(p, keyOf) : undefined;
+      return {
+        paneKey: p.paneKey,
+        hostId: p.hostId,
+        host: this.hostName(p.hostId, p.hostName) ?? 'This machine',
+        ...(p.hostAddress ? { hostAddress: p.hostAddress } : {}),
+        remote: !isLocalHost(p.hostId),
+        repo: p.repo ?? '',
+        branch: p.branch ?? '',
+        tab: p.tabTitle ?? '',
+        title: paneName(p, all),
+        agent: p.agentType,
+        state,
+        ...(onKey !== undefined ? { onKey } : {}),
+      };
+    });
   }
 
   /**
@@ -588,19 +637,21 @@ export class DeckController {
   panelPanes(keyOf: (slot: string) => number | null): PanelPane[] {
     return this.listPanes()
       .map((p) => {
-        const onKey = this.store
-          .slotsFor(p.paneKey, p.hostId)
-          .map(keyOf)
-          .find((k): k is number => k !== null);
+        const onKey = this.keyOnDeck(p, keyOf);
         const where = [p.repo, p.branch].filter(Boolean).join(' / ');
         return {
           paneKey: p.paneKey,
           hostId: p.hostId,
           label: where || p.title,
-          // Title first: a long host name must not push it out of a narrow sidebar.
-          detail: [where ? p.title : '', p.tab]
+          // Name first: a long host name must not push it out of a narrow sidebar. The name already says
+          // the tab when the pane has no title of its own.
+          detail: [where ? p.title : '', p.title.startsWith(p.tab) ? '' : p.tab]
             .filter((s, i, all) => s && s !== where && all.indexOf(s) === i)
             .join(' · '),
+          repo: p.repo,
+          branch: p.branch,
+          tab: p.tab,
+          name: p.title,
           ...(p.remote ? { host: p.host } : {}),
           ...(p.remote && p.hostAddress ? { hostAddress: p.hostAddress } : {}),
           agent: p.agent,
@@ -926,6 +977,11 @@ export class DeckController {
     if (!b || !this.orcaRunning)
       return { state: 'unmapped', stale: false, label: '', line2: lineTwo('unmapped') };
     const pane = this.registry.get(b.paneKey, b.executionHostId);
+    // A split tab with unnamed panes: the key says which one it is.
+    const suffix = (p: PaneInfo) => {
+      const s = paneSuffix(p, this.snapshot.panes);
+      return s ? ` · ${s}` : '';
+    };
     const status = this.snapshot.statuses.find((e) => e.paneKey === b.paneKey);
     const hostDown = this.snapshot.omittedHostIds.includes(b.executionHostId ?? LOCAL_HOST);
     // Trust the live agentType while the pane exists (agent exited -> plain shell); lastKnown only when offline.
@@ -961,7 +1017,7 @@ export class DeckController {
     return {
       state: shown,
       stale: d.stale,
-      label: labelOf(b),
+      label: labelOf(b, pane && suffix(pane)),
       agent: kind,
       host: this.hostName(b.executionHostId, b.lastKnown.host),
       focused:

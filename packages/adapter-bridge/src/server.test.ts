@@ -36,13 +36,18 @@ const plugin = (await import(pluginPath.href)) as {
   statusBarItem: (s: Record<string, unknown>) => { text: string; tone: string } | null;
   createPanelApi: (
     bridge: object,
-    opts?: { onKeyPicked?: (key: number) => void; deckWaitMs?: number },
+    opts?: {
+      onKeyPicked?: (key: number) => void;
+      onHold?: (key: number) => Promise<'hidden' | 'show'>;
+      deckWaitMs?: number;
+    },
   ) => {
     get: () => Promise<Record<string, unknown>>;
     select: (on: boolean) => { ok: true };
     resync: () => void;
     onMessage: (msg: object) => void;
   };
+  hideRightSidebar: (orca: unknown, log?: (m: string) => void) => Promise<boolean>;
   default: (orca: unknown) => Promise<void>;
 };
 
@@ -255,6 +260,34 @@ describe('discovery file', () => {
     await newer.stop();
   });
 
+  it('plugin A finds a new B within seconds after the old one is gone for a while (Elgato quit, OpenDeck started)', async () => {
+    await server.start();
+    const first = vi.fn();
+    server.on('hello', first);
+    const a = plugin.createBridge({
+      orcaVersion: 'x',
+      discoveryPath,
+      retryMs: 20,
+      maxRetryMs: 60_000,
+      pollMs: 50,
+    });
+    await a.ensure();
+    await until(() => first.mock.calls.length === 1);
+    await server.stop();
+    await rm(discoveryPath, { force: true });
+    await until(() => a.status().state === 'b-not-running');
+    // Long enough for the backoff to have grown past pollMs several times over.
+    await new Promise((r) => setTimeout(r, 600));
+    const newer = new BridgeServer({ discoveryPath, ports: [0] });
+    const second = vi.fn();
+    newer.on('hello', second);
+    await newer.start();
+    await until(() => second.mock.calls.length === 1, 500);
+    a.stop();
+    await newer.stop();
+    server = new BridgeServer({ discoveryPath, ports: [0] });
+  });
+
   it('readDiscovery returns null for a missing or garbled file', async () => {
     expect(await readDiscovery(join(dir, 'nope.json'))).toBeNull();
   });
@@ -273,7 +306,7 @@ describe('server handshake', () => {
       v: 1,
       type: 'helloAck',
       deck: { connected: true, devices: [{ model: 'Mobile', keys: 15 }] },
-      minor: 4,
+      minor: 5,
     });
     // A hello without a minor is a v0.2.x A: minor 0.
     const info = { orcaVersion: '1.4.245', pluginVersion: '0.1.0', minor: 0 };
@@ -666,7 +699,7 @@ describe('plugin A client against the real server', () => {
     expect(server.connection).toEqual({
       orcaVersion: '1.4.245',
       pluginVersion: plugin.PLUGIN_VERSION,
-      minor: 3,
+      minor: 5,
     });
     expect(onAck).toHaveBeenCalledOnce();
     expect(a.status().deck).toEqual({ connected: true, devices: [{ model: 'Mobile', keys: 15 }] });
@@ -1161,6 +1194,26 @@ describe('panel api: deck taps select keys in the panel', () => {
     expect(await api.get(), 'handed over once').not.toHaveProperty('picked');
   });
 
+  it('answers a hold with what the worker decided: hide the sidebar or show the panel', async () => {
+    const b = fakeBridge(5);
+    const asked: number[] = [];
+    let action: 'hidden' | 'show' = 'hidden';
+    const api = plugin.createPanelApi(b.bridge, {
+      onHold: async (key) => (asked.push(key), action),
+    });
+    api.onMessage({ type: 'holdKey', requestId: 'r1', key: 4 });
+    await vi.waitFor(() => expect(b.sent).toHaveLength(1));
+    expect(b.sent[0]).toEqual({ v: 1, type: 'holdResult', requestId: 'r1', action: 'hidden' });
+    action = 'show';
+    api.onMessage({ type: 'holdKey', requestId: 'r2', key: 5 });
+    await vi.waitFor(() => expect(b.sent).toHaveLength(2));
+    expect(b.sent[1]).toMatchObject({ requestId: 'r2', action: 'show' });
+    expect(asked).toEqual([4, 5]);
+    const bad = fakeBridge(5);
+    plugin.createPanelApi(bad.bridge).onMessage({ type: 'holdKey', key: 1 });
+    expect(bad.sent, 'no request id: nothing to answer').toEqual([]);
+  });
+
   it('sends nothing to an older B or while disconnected', () => {
     const old = fakeBridge(2);
     plugin.createPanelApi(old.bridge).select(true);
@@ -1169,5 +1222,35 @@ describe('panel api: deck taps select keys in the panel', () => {
     b.down();
     plugin.createPanelApi(b.bridge).select(true);
     expect(b.sent).toEqual([]);
+  });
+});
+
+describe('hiding the right sidebar', () => {
+  it("runs Orca's sidebar.right.toggle through the host API", async () => {
+    const calls: unknown[][] = [];
+    const orca = { host: { call: async (...a: unknown[]) => void calls.push(a) } };
+    expect(await plugin.hideRightSidebar(orca)).toBe(true);
+    expect(calls).toEqual([['commands.run', { action: 'sidebar.right.toggle' }]]);
+  });
+
+  it('says no and logs once when the Orca has no host API, so the panel is shown', async () => {
+    const logged: string[] = [];
+    const orca = { commands: { register: () => {} } };
+    expect(await plugin.hideRightSidebar(orca, (m) => logged.push(m))).toBe(false);
+    expect(await plugin.hideRightSidebar(orca, (m) => logged.push(m))).toBe(false);
+    expect(logged).toHaveLength(1);
+  });
+
+  it('says no and logs when Orca refuses the call', async () => {
+    const logged: string[] = [];
+    const orca = {
+      host: {
+        call: async () => {
+          throw new Error('capability_denied');
+        },
+      },
+    };
+    expect(await plugin.hideRightSidebar(orca, (m) => logged.push(m))).toBe(false);
+    expect(logged[0]).toContain('capability_denied');
   });
 });

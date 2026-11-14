@@ -12,6 +12,11 @@ Issues that affect Agent Deck for Orca but are not ours to fix, plus how the dec
 - **How the plugin copes.** With no announced inspector, a `load` from an inspector is answered to that inspector alone through the SDK's internal connection (`actions/pi-send.ts`; `@elgato/streamdeck` is pinned to 3.0.4 and a test fails when the internals move). Before this, the Setup tab's Check again showed "No answer from the plugin. If it was restarted, select the key again." after 5 s (10 s while Orca is read through the CLI).
 - **Workaround.** Select another key and then this one again; the app announces the inspector and the tab answers. Not yet verified whether the Elgato app or OpenDeck re-announce it after a restart.
 
+### Windows: a deck tap or hold that changes the Orca panel does not bring Orca to the front
+
+- **What.** On macOS and X11 the plugin raises the Orca window itself when a key tap selects a key in the panel or a hold opens the panel, as it does for a focus press. On Windows (and Wayland) it cannot raise another app's window; a focus press gets Orca forward through Orca's own `terminal.reveal`, which the panel paths do not call.
+- **Workaround.** Switch to Orca by hand. An Orca-side raise through the host API is a later follow-up.
+
 ## Orca plugin tooling
 
 Checked: 2026-11-11.
@@ -29,7 +34,7 @@ Checked: 2026-11-12 (Orca 1.4.251, not reported upstream). Verified on macOS; no
 ### A plugin shortcut also reaches the program running in the terminal
 
 - **What.** Orca runs a plugin's `contributes.keybindings` from a handler on the window, which sees a key press after the terminal (xterm) has already taken it (read from the app's code, the effect seen on macOS). Orca's own shortcuts are claimed under its terminal shortcut policy, so the program in the pane does not get them; a plugin shortcut is not, so Orca runs the command and the same keys also go to the program. Any plugin chord is affected, not only Cmd+Alt+K, and remapping it in Orca's Settings > Keyboard changes the keys but not this.
-- **Deck impact.** "Open panel" (Cmd+Alt+K, Ctrl+Alt+K on Windows and Linux) works in a terminal pane as well as outside it, but in a terminal the chord also reaches the program there: Claude Code, for one, closed its prompt on Cmd+Alt+K. There is no shortcut to unmap: the panel's Unmap does it. The press only shows the panel, it never hides it: Orca's plugin API has no call to hide a single plugin panel, and hiding the whole right sidebar (`commands.run sidebar.right.toggle`) needs the `workspace:write` capability, which would add "Open and rename your workspaces ... and run its built-in commands" to Orca's consent dialog. Close the panel with Orca's own sidebar toggle.
+- **Deck impact.** "Open panel" (Cmd+Alt+K, Ctrl+Alt+K on Windows and Linux) works in a terminal pane as well as outside it, but in a terminal the chord also reaches the program there: Claude Code, for one, closed its prompt on Cmd+Alt+K. There is no shortcut to unmap: the panel's Unmap does it. The press toggles: with the panel in view it hides the whole right sidebar (`commands.run sidebar.right.toggle`; Orca's plugin API cannot hide a single plugin panel), otherwise it shows the panel. That needs the `workspace:write` capability, which adds "Open and rename your workspaces ... and run its built-in commands" to Orca's consent dialog. Orca older than host API 1.3 only shows.
 - **Workaround.** Click "Agent Deck" in Orca's status bar (it opens the panel and does not type anything into the pane) or run "Agent Deck: Open panel" from the command palette, and use the shortcut when you are not in a program that reacts to it.
 - **Upstream.** Needs Orca to claim a plugin shortcut for the app when it fires in a terminal (as it does for its own, under the terminal shortcut policy).
 

@@ -255,13 +255,14 @@ export class FakeHost {
         device: this.profile.deviceId,
       });
     this.opened = context;
+    // The Elgato app's inspector connects and asks for its state before the app announces it (seen on macOS).
+    if (!this.profile.hiddenPis) this.pi(key, action, { type: 'load' });
     this.send({
       event: 'propertyInspectorDidAppear',
       action: ACTION[action],
       context,
       device: this.profile.deviceId,
     });
-    if (!this.profile.hiddenPis) this.pi(key, action, { type: 'load' });
   }
 
   pi(key: number, action: keyof typeof ACTION, message: unknown): void {

@@ -24,6 +24,9 @@
   "capabilities": [
     {
       "kind": "agent:read"
+    },
+    {
+      "kind": "workspace:write"
     }
   ],
   "contributes": {

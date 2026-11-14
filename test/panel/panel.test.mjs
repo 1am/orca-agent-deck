@@ -48,7 +48,7 @@ test('draws only key numbers, shaped like the deck, and names the model', async 
       requests: { 'deck.get': () => ({ status: 'ok', deck: deckOf(cols, rows, { model }) }) },
     });
     const view = await mount(panel, { host });
-    assert.ok(view.find({ text: `${name}, ${cols} x ${rows} keys` }));
+    assert.ok(view.find({ text: name }));
     for (let n = 1; n <= cols * rows; n++) assert.ok(view.find({ text: String(n) }), `key ${n}`);
     assert.ok(!view.find({ text: '1 agent-deck/main' }));
     assert.ok(!view.find({ text: 'model 0' }));
@@ -207,14 +207,14 @@ test('shows a reason when the worker does not answer a click', async () => {
   await view.unmount();
 });
 
-test('the pane line puts the title first and the host last', async () => {
+test('a row says its name, the agent and the marks; the host is in the group header', async () => {
   const view = await mount(panel, {
     host: mockHost({ requests: { 'deck.get': () => ({ status: 'ok', deck }) } }),
   });
   await view.press({ text: '2' });
   const line = (label) => view.find({ label })?.props.description;
   assert.equal(line('agent-deck / main'), 'Tab 1 · claude · Focused');
-  assert.equal(line('orca / dev'), 'Build · build-1');
+  assert.equal(line('orca / dev'), 'Build');
   await view.unmount();
 });
 
@@ -286,6 +286,7 @@ test('deck taps open a key here only while the panel is in view with a key open'
   assert.deepEqual(selects, [false, true, false], 'hidden: deck taps focus again');
   await view.setVisible(true);
   await view.press({ text: 'Back' });
+  assert.equal(selects.at(-1), false, 'Back: off at once, before any redraw settles');
   await view.settled();
   assert.equal(selects.at(-1), false, 'no key open');
   await view.unmount();
@@ -305,13 +306,16 @@ test('a panel that stays in view renews its panelSelect so B keeps it; a hide st
   await view.post('deck.keyPicked', { key: 5 });
   await view.settled();
   assert.deepEqual(selects, [true]);
-  await new Promise((r) => globalThis.setTimeout(r, 2300));
+  await new Promise((r) => globalThis.setTimeout(r, 1300));
   await view.settled();
-  assert.deepEqual(selects, [true, true], 'renewed while in view');
+  assert.deepEqual(selects, [true, true], 'renewed every second while in view');
   await view.setVisible(false);
-  await new Promise((r) => globalThis.setTimeout(r, 2300));
+  await new Promise((r) => globalThis.setTimeout(r, 700));
   await view.settled();
-  assert.deepEqual(selects, [true, true, false], 'hidden: off once, no renewals');
+  assert.deepEqual(selects, [true, true, false], 'hidden: off within a second');
+  await new Promise((r) => globalThis.setTimeout(r, 1300));
+  await view.settled();
+  assert.deepEqual(selects, [true, true, false], 'and no renewals after');
   await view.unmount();
   assert.deepEqual(view.errors, []);
 });
@@ -407,7 +411,7 @@ test('draws every position of the deck: Pane keys press, the others are greyed w
     wide.findAll({ type: 'Button' }).filter((b) => /^\d+$/.test(String(b.text ?? b.label))).length,
     32,
   );
-  const cells = wide.findAll({ type: 'Box' }).filter((b) => b.props.grow);
+  const cells = wide.findAll({ type: 'Box' }).filter((b) => b.props.grow && b.props.radius);
   assert.equal(cells.length, 32, 'equal cells that share the width');
   assert.ok(
     cells.every((b) => b.props.width === 0),
@@ -428,7 +432,7 @@ test('a Stream Deck plugin without layout draws the Pane keys it lists', async (
   await view.unmount();
 });
 
-test('the details header is one line, Unmap and Use the focused pane share a row, a long list says it scrolls', async () => {
+test('the details header is one line, Unmap and Use the focused pane share a row, a long list says it scrolls, the header is one line', async () => {
   const many = Array.from({ length: 9 }, (_, i) => ({
     ...deck.panes[1],
     paneKey: `p-${i}`,
@@ -449,6 +453,43 @@ test('the details header is one line, Unmap and Use the focused pane share a row
   const use = view.find({ text: 'Use the focused pane' });
   assert.ok(unmap && use);
   assert.ok(view.find({ text: '9 panes: scroll the list for more' }));
+  assert.ok(
+    view.find({ text: 'Stream Deck (MK.2)' }),
+    'only the device name, so a narrow sidebar does not cut it',
+  );
+  assert.ok(!view.find({ text: 'Connected' }), 'no Connected pill');
+  // The list box, read off the drawn tree: growing into the sidebar down to a floor, no fixed maximum.
+  const boxes = [];
+  const walk = (n) => {
+    if (n?.type === 'Box' && n.props?.minHeight !== undefined) boxes.push(n.props);
+    for (const c of n?.children ?? []) walk(c);
+  };
+  walk(typeof view.tree === 'function' ? view.tree() : view.tree);
+  assert.deepEqual(
+    boxes.filter((b) => b.scroll),
+    [{ grow: true, scroll: 'y', minHeight: 120 }],
+  );
+  assert.ok(
+    boxes.filter((b) => !b.scroll).every((b) => b.minHeight === 0),
+    'the boxes around the list can shrink, so only the list scrolls',
+  );
+  await view.unmount();
+});
+
+test('the scroll hint is dropped when every row fits the minimum list box', async () => {
+  const few = Array.from({ length: 8 }, (_, i) => ({
+    ...deck.panes[1],
+    paneKey: `p-${i}`,
+    label: `pane ${i}`,
+    focused: false,
+  }));
+  const view = await mount(panel, {
+    host: mockHost({
+      requests: { 'deck.get': () => ({ status: 'ok', deck: { ...deck, panes: few } }) },
+    }),
+  });
+  await view.press({ text: '1' });
+  assert.ok(!view.find({ text: /scroll the list for more/ }));
   await view.unmount();
 });
 
@@ -465,4 +506,140 @@ test('a pushed offline replaces the grid and closes the open key, the next deck 
   assert.ok(view.find({ text: '2' }), 'the grid is back without a click');
   assert.ok(!view.find({ text: 'Key 1' }), 'the key stays closed');
   await view.unmount();
+});
+
+test('a panel in view reports it so the worker can hide the sidebar; hidden or unmounted: off', async () => {
+  const views = [];
+  const host = mockHost({
+    requests: {
+      'deck.get': () => ({ status: 'ok', deck }),
+      'deck.panelView': (input) => (views.push(input.on), { ok: true }),
+    },
+  });
+  const view = await mount(panel, { host });
+  await view.settled();
+  assert.equal(views.at(-1), true, 'in view on mount');
+  await view.setVisible(false);
+  await new Promise((r) => globalThis.setTimeout(r, 700));
+  await view.settled();
+  assert.equal(views.at(-1), false, 'hidden: reported off within a second');
+  await view.unmount();
+  assert.equal(views.at(-1), false);
+  assert.deepEqual(view.errors, []);
+});
+
+test('the list is grouped host > repo > branch like the key settings, each row has a key badge', async () => {
+  const pane = (paneKey, over) => ({
+    paneKey,
+    hostId: 'local',
+    label: 'x',
+    detail: '',
+    repo: 'agent-deck',
+    branch: 'main',
+    tab: 'Tab 1',
+    name: `pane ${paneKey}`,
+    agent: 'claude',
+    state: 'idle',
+    remote: false,
+    focused: false,
+    ...over,
+  });
+  const grouped = deckOf(3, 2, {
+    panes: [
+      pane('a'),
+      pane('b', { branch: 'dev', onKey: 7 }),
+      pane('c', { hostId: 'ssh:l', remote: true, host: 'RemoteLaptop', onKey: 2 }),
+      pane('d', { focused: true, branch: 'dev' }),
+    ],
+  });
+  const view = await mount(panel, {
+    host: mockHost({ requests: { 'deck.get': () => ({ status: 'ok', deck: grouped }) } }),
+  });
+  await view.press({ text: '2' });
+  const headers = () =>
+    view
+      .findAll({ type: 'Text' })
+      .map((t) => t.text)
+      .filter((t) => / > /.test(String(t)));
+  assert.deepEqual(headers(), [
+    'This machine > agent-deck > dev',
+    'This machine > agent-deck > main',
+    'Remote: RemoteLaptop > agent-deck > main',
+  ]);
+  const order = () => view.findAll({ type: 'ListItem' }).map((e) => e.label);
+  assert.deepEqual(order().slice(0, 2), ['pane d', 'pane b'], 'the focused pane leads its group');
+  assert.ok(view.find({ text: '7' }), 'key badge of a mapped pane');
+  const badge = (n) =>
+    view.findAll({ type: 'Button' }).find((b) => String(b.text ?? b.label) === String(n));
+  assert.equal(badge(7).props.variant, 'solid', 'a badge is a small grid key, filled');
+  assert.equal(badge(7).props.size, 'xs');
+  const tree = JSON.stringify(view.tree());
+  assert.ok(
+    tree.includes('"border":"accent"'),
+    'the key being edited is ringed like a selected key',
+  );
+  assert.equal(
+    (tree.match(/"height":28/g) ?? []).length,
+    2,
+    'the two free panes are empty squares',
+  );
+  assert.ok(!view.find({ text: /on key/ }), 'no "on key N" text');
+  await view.type({ label: 'Search panes' }, 'remotelaptop', { replace: true });
+  assert.deepEqual(headers(), ['Remote: RemoteLaptop > agent-deck > main'], 'empty groups go');
+  assert.deepEqual(view.errors, []);
+  await view.unmount();
+});
+
+test('switching keys and closing: the old result line goes, the same key again and Back close', async () => {
+  const host = mockHost({
+    requests: {
+      'deck.get': () => ({ status: 'ok', deck }),
+      'deck.assign': () => ({ ok: true, slot: { page: 1, index: 2 }, action: 'mapped' }),
+    },
+  });
+  const view = await mount(panel, { host });
+  await view.press({ text: '2' });
+  await view.press({ label: 'orca / dev' });
+  assert.ok(view.find({ text: 'Key 2 assigned.' }), 'the result line shows');
+  await view.press({ text: '3' });
+  assert.ok(view.find({ text: 'Key 3' }) && !view.find({ text: 'Key 2' }), 'key 3 is open');
+  assert.ok(!view.find({ text: 'Key 2 assigned.' }), 'the old result line is gone');
+  await view.press({ text: '3' });
+  assert.ok(!view.find({ text: 'Key 3' }), 'the same key again closes');
+  await view.press({ text: '2' });
+  await view.press({ label: 'orca / dev' });
+  assert.ok(view.find({ text: 'Key 2 assigned.' }));
+  await view.press({ text: 'Back' });
+  assert.ok(!view.find({ text: 'Key 2' }), 'Back closes');
+  assert.ok(!view.find({ text: 'Key 2 assigned.' }), 'and the result line goes with it');
+  assert.deepEqual(view.errors, []);
+  await view.unmount();
+});
+
+test('Use the focused pane: a paired-server pane shown (only "last opened from the deck") is not a focus', async () => {
+  const paired = {
+    ...deck,
+    panes: [
+      { ...deck.panes[1], hostId: 'env:srv', focused: false, lastPressed: true },
+      { ...deck.panes[0], focused: false },
+    ],
+  };
+  const view = await mount(panel, {
+    host: mockHost({ requests: { 'deck.get': () => ({ status: 'ok', deck: paired }) } }),
+  });
+  await view.press({ text: '4' });
+  assert.ok(view.find({ text: 'Use the focused pane' }).props.disabled);
+  assert.ok(view.find({ text: /^No pane is focused in Orca/ }), 'with the one-line reason');
+  await view.unmount();
+
+  const local = await mount(panel, {
+    host: mockHost({ requests: { 'deck.get': () => ({ status: 'ok', deck }) } }),
+  });
+  await local.press({ text: '4' });
+  assert.ok(
+    !local.find({ text: 'Use the focused pane' }).props.disabled,
+    'a local focus enables it',
+  );
+  assert.ok(!local.find({ text: /^No pane is focused in Orca/ }));
+  await local.unmount();
 });
