@@ -76,6 +76,30 @@
         "key": "Mod+Alt+K"
       }
     ],
+    "panels": [
+      {
+        "id": "deck",
+        "title": "Agent Deck",
+        "icon": "agent",
+        "entry": "orca-plugin/panel.jsx",
+        "ui": "components"
+      }
+    ],
+    "statusBarItems": [
+      {
+        "id": "deck",
+        "icon": "link",
+        "text": "Agent Deck",
+        "tooltip": "Open Agent Deck: the panel to map terminal panes to Stream Deck keys",
+        "command": "deck.map"
+      }
+    ],
+    "keybindings": [
+      {
+        "command": "deck.map",
+        "key": "Mod+Alt+K"
+      }
+    ],
     "events": [
       {
         "on": "agent.status.changed"
