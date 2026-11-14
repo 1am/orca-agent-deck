@@ -57,12 +57,9 @@
     <h1>Setup</h1>
     <div id="checks">Checking...</div>
     <button id="recheck">Check again</button>
+    <script src="pi.js"></script>
     <script>
-      let ws, uuid;
       const MARK = { ok: 'v', warn: '!', fail: 'x' };
-      const send = (msg) =>
-        ws.send(JSON.stringify({ event: 'sendToPlugin', context: uuid, payload: msg }));
-
       function render(checks) {
         const root = document.getElementById('checks');
         root.textContent = '';
@@ -85,21 +82,8 @@
         }
       }
 
+      const send = connectPi('checks', (m) => render(m.checks));
       document.getElementById('recheck').onclick = () => send({ type: 'load' });
-
-      window.connectElgatoStreamDeckSocket = (port, id, registerEvent) => {
-        uuid = id;
-        ws = new WebSocket('ws://127.0.0.1:' + port);
-        ws.onopen = () => {
-          ws.send(JSON.stringify({ event: registerEvent, uuid }));
-          send({ type: 'load' });
-        };
-        ws.onmessage = (e) => {
-          const m = JSON.parse(e.data);
-          if (m.event === 'sendToPropertyInspector' && m.payload.type === 'checks')
-            render(m.payload.checks);
-        };
-      };
     </script>
   </body>
 </html>

@@ -20,6 +20,11 @@ export default tseslint.config(
   },
   ...tseslint.configs.recommended,
   {
+    // Property Inspector script: runs in the host's browser and is loaded by the PI pages (defines `window.connectPi`)
+    files: ['**/*.sdPlugin/ui/*.js'],
+    languageOptions: { globals: { window: 'readonly', WebSocket: 'readonly' } },
+  },
+  {
     // core is pure logic: no @elgato/* imports
     files: ['packages/core/**/*.ts'],
     rules: {

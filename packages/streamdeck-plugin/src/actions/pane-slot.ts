@@ -18,13 +18,13 @@ import {
   type DeckController,
   type SlotView,
 } from '@orca-agent-deck/core';
+import { replyToPi } from './pi.ts';
 
 const image = (svg: string) => `data:image/svg+xml;charset=utf8,${encodeURIComponent(svg)}`;
 
 const HINT_MS = 3000;
 
 type PluginEvent = Parameters<NonNullable<SingletonAction['onSendToPlugin']>>[0];
-type PiPayload = Parameters<typeof streamDeck.ui.sendToPropertyInspector>[0];
 
 interface PiMessage {
   type?: string;
@@ -199,11 +199,11 @@ export class PaneSlot extends SingletonAction {
       });
       await this.refresh();
     }
-    await streamDeck.ui.sendToPropertyInspector({
+    await replyToPi(ev.action.id, {
       type: 'state',
       panes: c.listPanes(),
       config: c.slotConfig(ev.action.id),
-    } as unknown as PiPayload);
+    });
   }
 
   override async onPropertyInspectorDidAppear(ev: PropertyInspectorDidAppearEvent): Promise<void> {

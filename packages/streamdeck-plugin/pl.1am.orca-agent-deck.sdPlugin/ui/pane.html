@@ -55,10 +55,9 @@
     <button id="clear">Unassign</button>
     <button id="unmap">Auto-fill</button>
     <div id="hint"></div>
+    <script src="pi.js"></script>
     <script>
-      let ws,
-        uuid,
-        panes = [],
+      let panes = [],
         config = { mode: 'auto', paneKey: null, autofill: true };
       const $ = (id) => document.getElementById(id);
       const ICON = {
@@ -70,10 +69,6 @@
         unreachable: '?',
         exited: 'o',
       };
-
-      function send(msg) {
-        ws.send(JSON.stringify({ event: 'sendToPlugin', context: uuid, payload: msg }));
-      }
 
       // host > repo > branch > tab > pane as optgroups; the group label carries the path.
       function render() {
@@ -138,21 +133,11 @@
         apply($('pane').value);
       };
 
-      window.connectElgatoStreamDeckSocket = (port, id, registerEvent) => {
-        uuid = id;
-        ws = new WebSocket('ws://127.0.0.1:' + port);
-        ws.onopen = () => {
-          ws.send(JSON.stringify({ event: registerEvent, uuid }));
-          send({ type: 'load' });
-        };
-        ws.onmessage = (e) => {
-          const m = JSON.parse(e.data);
-          if (m.event !== 'sendToPropertyInspector' || m.payload.type !== 'state') return;
-          panes = m.payload.panes;
-          config = m.payload.config;
-          render();
-        };
-      };
+      const send = connectPi('state', (m) => {
+        panes = m.panes;
+        config = m.config;
+        render();
+      });
     </script>
   </body>
 </html>

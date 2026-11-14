@@ -1,6 +1,10 @@
 import { execFile } from 'node:child_process';
 import { existsSync } from 'node:fs';
-import streamDeck, { action } from '@elgato/streamdeck';
+import {
+  action,
+  type PropertyInspectorDidAppearEvent,
+  type SendToPluginEvent,
+} from '@elgato/streamdeck';
 import {
   doctorInfo,
   runChecks,
@@ -10,6 +14,7 @@ import {
 } from '@orca-agent-deck/core';
 import { resolveOrcaBinCached, type ResolvedBin } from '@orca-agent-deck/adapter-cli';
 import { InfoKey } from './info-key.ts';
+import { isCurrentPi, replyToPi } from './pi.ts';
 import { orcaPluginState, orcaPluginVersion, refreshInstalled } from '../bridge.ts';
 
 let bin: ResolvedBin | undefined;
@@ -70,21 +75,20 @@ export class StatusKey extends InfoKey {
     });
   }
   /** Setup tab: send every check result to the Property Inspector. */
-  override async onPropertyInspectorDidAppear(): Promise<void> {
-    await this.sendChecks();
+  override async onPropertyInspectorDidAppear(ev: PropertyInspectorDidAppearEvent): Promise<void> {
+    await this.sendChecks(ev.action.id);
   }
 
-  override async onSendToPlugin(): Promise<void> {
-    await this.sendChecks();
+  override async onSendToPlugin(ev: SendToPluginEvent<never, never>): Promise<void> {
+    await this.sendChecks(ev.action.id);
   }
 
-  private async sendChecks(): Promise<void> {
+  private async sendChecks(id: string): Promise<void> {
+    // A hidden PI's `load` must not cost a refresh and tmux spawn.
+    if (!isCurrentPi(id)) return;
     const c = await this.create();
     await Promise.all([c.refresh([]), readTmux(), refreshInstalled()]);
-    await streamDeck.ui.sendToPropertyInspector({
-      type: 'checks',
-      checks: runChecks(doctorFacts(c)),
-    } as never);
+    await replyToPi(id, { type: 'checks', checks: runChecks(doctorFacts(c)) });
   }
 
   protected async press(c: DeckController) {
