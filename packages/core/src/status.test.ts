@@ -40,6 +40,8 @@ const rows: [string, PaneObservation, DeckState][] = [
   ['done superseded', withAgent('done', 'superseded'), 'cancelled'],
   ['exit crash', { ...withAgent('working'), exitCause: 'crash' }, 'error'],
   ['exit non-zero', { ...base, exitCause: 'nonzero' }, 'error'],
+  ['crash, pane disconnected', { ...base, connected: false, exitCause: 'crash' }, 'error'],
+  ['clean exit, pane disconnected', { ...base, connected: false, exitCause: 'clean' }, 'offline'],
   ['exit clean', { ...base, exitCause: 'clean' }, 'idle'],
 ];
 

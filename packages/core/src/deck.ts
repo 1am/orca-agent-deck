@@ -96,6 +96,9 @@ export type PressResult = 'focused' | 'failed' | 'unmapped';
 
 export type HoldResult = 'mapped' | 'replaced' | 'released' | 'failed';
 
+/** The pane's process crashed or exited non-zero: Orca lists it with no agent, but it needs a look. */
+const endedBadly = (p: PaneInfo): boolean => p.exitCause === 'crash' || p.exitCause === 'nonzero';
+
 function bindingOf(p: PaneInfo): PaneBinding {
   const { tabId, leafId } = splitPaneKey(p.paneKey);
   const lastKnown: PaneBinding['lastKnown'] = {};
@@ -403,7 +406,7 @@ export class DeckController {
       const synthetic = this.snapshot.statuses.some(
         (e) => e.synthetic && e.paneKey === pane.paneKey,
       );
-      if ((!pane.agentType && !synthetic) || pane.orphaned) continue;
+      if ((!pane.agentType && !synthetic && !endedBadly(pane)) || pane.orphaned) continue;
       const state = this.paneState(pane);
       if (state) this.acks.update(pane.paneKey, state, now);
     }
@@ -682,7 +685,7 @@ export class DeckController {
     const down = new Set(this.snapshot.omittedHostIds);
     return (
       this.snapshot.panes
-        .filter((p) => p.agentType && !p.orphaned)
+        .filter((p) => (p.agentType || endedBadly(p)) && !p.orphaned)
         .map((pane) => {
           const status = this.snapshot.statuses.find((e) => e.paneKey === pane.paneKey);
           const { state } = deriveDeckState({

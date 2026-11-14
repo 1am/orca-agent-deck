@@ -815,3 +815,17 @@ describe('an Orca reply that does not parse', () => {
     expect(d.overview()).toMatchObject({ mode: 'down', badResponse: false });
   });
 });
+
+it('a pane whose process crashed counts on the Attention key even though its agent is gone', async () => {
+  const snap: Snapshot = {
+    panes: [
+      pane('a:1', { agentType: null, connected: false, exitCause: 'crash' }),
+      pane('b:1', { agentType: null, connected: false, exitCause: 'clean' }),
+    ],
+    statuses: [],
+    omittedHostIds: [],
+  };
+  const d = new DeckController(fake(snap).a, new MappingStore());
+  await d.refresh([]);
+  expect(d.overview()).toMatchObject({ urgent: 1, topState: 'error' });
+});
