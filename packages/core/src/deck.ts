@@ -826,7 +826,6 @@ export class DeckController {
       line2: acked
         ? `done ${acked.doneMinutes ?? 0}m`
         : lineTwo(d.state, {
-            toolName: status?.toolName ?? null,
             elapsedMs: status ? Date.now() - status.stateStartedAt : 0,
             agentName: kind,
           }),
