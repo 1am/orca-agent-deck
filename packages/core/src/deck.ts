@@ -1,4 +1,6 @@
 import type { OrcaAdapter, PaneInfo, PaneStatusEvent, Snapshot } from './adapter.ts';
+import { isLocalHost, LOCAL_HOST, readableHostId } from './host-id.ts';
+import { splitPaneKey } from './pane-key.ts';
 import { MappingStore, type PaneBinding, type SlotPosition } from './mapping.ts';
 import { PaneRegistry } from './registry.ts';
 import { ShellActivity } from './shell-activity.ts';
@@ -52,6 +54,8 @@ export interface Overview {
   badResponse: boolean;
   /** Hosts whose panes are currently missing. */
   hostsDown: number;
+  /** The same hosts by name (alias, Orca's name, else the id), for the Setup list. */
+  hostsDownNames: string[];
   /** Number of panes that need the user (needs_input, awaiting_reply, error). */
   urgent: number;
   /** State of the most urgent pane; null when nothing is urgent. */
@@ -93,7 +97,7 @@ export type PressResult = 'focused' | 'failed' | 'unmapped';
 export type HoldResult = 'mapped' | 'replaced' | 'released' | 'failed';
 
 function bindingOf(p: PaneInfo): PaneBinding {
-  const [tabId = '', leafId = ''] = p.paneKey.split(':');
+  const { tabId, leafId } = splitPaneKey(p.paneKey);
   const lastKnown: PaneBinding['lastKnown'] = {};
   if (p.repo) lastKnown.repo = p.repo;
   if (p.branch) lastKnown.branch = p.branch;
@@ -113,7 +117,7 @@ function bindingOf(p: PaneInfo): PaneBinding {
 
 /** Remote panes show their host name; "Remote" when Orca did not tell us one. */
 function hostLabel(hostId: string | undefined, name?: string | null): string | null {
-  return !hostId || hostId === 'local' ? null : name || 'Remote';
+  return !hostId || isLocalHost(hostId) ? null : name || 'Remote';
 }
 
 function labelOf(b: PaneBinding): string {
@@ -161,6 +165,8 @@ export class DeckController {
   private lastKnown = new Map<string, DeckState>();
   /** Last seen panes per remote host, so the picker keeps listing a host that drops out for a poll. */
   private remotePanes = new Map<string, PaneInfo[]>();
+  /** Hosts that showed something (worktree, terminal, agent) the last time they answered: only these count as down. */
+  private busyHosts = new Set<string>();
   /**
    * Panes the user took off a key (hold release, picker clear) -> their host and that key.
    * Auto-fill skips them until they are pinned again, their key goes back to auto, or they are
@@ -229,6 +235,14 @@ export class DeckController {
     return hostLabel(hostId, (hostId && this.hostAliases[hostId]?.trim()) || name);
   }
 
+  /** Devices whose keys appeared in this run (see `MappingStore.locate`). */
+  private readonly seenDevices = new Set<string>();
+
+  private downHostName(hostId: string): string {
+    const seen = this.remotePanes.get(hostId)?.find((p) => p.hostName)?.hostName;
+    return this.hostAliases[hostId]?.trim() || seen || readableHostId(hostId);
+  }
+
   /** Optional trace of mapping changes and slow refreshes, for the plugin log. Ids only, never content. */
   diag?: (message: string) => void;
 
@@ -293,15 +307,16 @@ export class DeckController {
     this.registry.update(snap.panes);
     const byHost = new Map<string, PaneInfo[]>();
     for (const p of snap.panes)
-      if (p.hostId !== 'local') byHost.set(p.hostId, [...(byHost.get(p.hostId) ?? []), p]);
+      if (!isLocalHost(p.hostId)) byHost.set(p.hostId, [...(byHost.get(p.hostId) ?? []), p]);
     for (const [h, list] of byHost) this.remotePanes.set(h, list);
     for (const h of [...this.remotePanes.keys()])
       if (!byHost.has(h) && !snap.omittedHostIds.includes(h)) this.remotePanes.delete(h);
+    if (this.orcaRunning && snap.busyHostIds) this.trackBusyHosts(snap);
     // A pane that is only temporarily missing (host down) must keep its mapping.
     const keep = new Set(snap.panes.map((p) => p.paneKey));
     for (const s of slots) {
       const b = this.store.get(s)?.pane;
-      if (b && snap.omittedHostIds.includes(b.executionHostId ?? 'local')) keep.add(b.paneKey);
+      if (b && snap.omittedHostIds.includes(b.executionHostId ?? LOCAL_HOST)) keep.add(b.paneKey);
     }
     if (this.orcaRunning) {
       for (const [k, r] of this.released)
@@ -444,7 +459,7 @@ export class DeckController {
         p.paneKey !== paneKey &&
         this.acks.view(p.paneKey, Date.now())?.unread,
     );
-    if (!stillUnread && pane.hostId === 'local') {
+    if (!stillUnread && isLocalHost(pane.hostId)) {
       void this.adapter.markWorktreeRead?.(pane.worktreeId)?.catch(() => {});
     }
   }
@@ -477,7 +492,7 @@ export class DeckController {
         return {
           paneKey: p.paneKey,
           host: this.hostName(p.hostId, p.hostName) ?? 'This machine',
-          remote: p.hostId !== 'local',
+          remote: !isLocalHost(p.hostId),
           repo: p.repo ?? '',
           branch: p.branch ?? '',
           tab: p.tabTitle ?? '',
@@ -506,14 +521,14 @@ export class DeckController {
   /** Empties a slot for good and keeps its pane off auto-fill. */
   private release(slot: string): void {
     const b = this.store.get(slot)?.pane;
-    if (b) this.released.set(b.paneKey, { host: b.executionHostId ?? 'local', slot });
+    if (b) this.released.set(b.paneKey, { host: b.executionHostId ?? LOCAL_HOST, slot });
     this.store.set(slot, { mode: 'pinned' });
   }
 
   /** Execution host of the pane on a slot ('local', 'ssh:..', 'env:..'), for the press log. */
   slotHost(slot: string): string | null {
     const b = this.store.get(slot)?.pane;
-    return b ? (b.executionHostId ?? 'local') : null;
+    return b ? (b.executionHostId ?? LOCAL_HOST) : null;
   }
 
   /** Pins a pane to a slot (null = back to auto-fill); a pane lives on one slot at a time. */
@@ -600,24 +615,49 @@ export class DeckController {
   /** Number of Pane slots holding a pane (for the Setup doctor). */
   /** A key appeared at `pos`: remember it, and inherit the mapping a key at that position had before. */
   locateSlot(slot: string, pos: SlotPosition, live: ReadonlySet<string>): boolean {
-    return this.store.locate(slot, pos, live);
+    const inherited = this.store.locate(slot, pos, live, this.seenDevices);
+    this.seenDevices.add(pos.device);
+    return inherited;
   }
 
   mappedSlotCount(): number {
     return this.store.mappedCount();
   }
 
+  /** A host that answered keeps its mark only while it shows something; one that is down keeps the last one. */
+  private trackBusyHosts(snap: Snapshot): void {
+    const busy = new Set(snap.busyHostIds);
+    const quiet = new Set([...snap.omittedHostIds, ...(snap.downHostIds ?? [])]);
+    for (const h of busy) this.busyHosts.add(h);
+    for (const h of [...this.busyHosts])
+      if (!busy.has(h) && !quiet.has(h)) this.busyHosts.delete(h);
+  }
+
+  /**
+   * Down hosts that matter: ones that showed something when they last answered, or that a key is
+   * mapped to (that survives a restart while the host is down). A configured host the user does
+   * not use is not "down".
+   */
+  private downHostsInUse(): string[] {
+    const down = this.snapshot.downHostIds ?? this.snapshot.omittedHostIds;
+    if (!this.snapshot.busyHostIds) return down;
+    const mapped = new Set(this.store.bindings().map((b) => b.executionHostId ?? LOCAL_HOST));
+    return down.filter((h) => this.busyHosts.has(h) || mapped.has(h));
+  }
+
   /** Health plus urgent count, from the latest refresh. */
   overview(): Overview {
     const urgent = this.urgentPanes();
     const onKeys = this.store.mappedPaneKeys();
+    // Omitted hosts keep their keys' last known state; only hosts no listing reached are down.
+    const down = this.downHostsInUse();
     return {
       mode: !this.orcaRunning ? 'down' : this.health.live ? 'live' : 'degraded',
       version: this.health.version,
       unsupported: this.health.unsupported,
       badResponse: this.orcaRunning && this.readFailure !== null,
-      // Omitted hosts keep their keys' last known state; only hosts no listing reached are down.
-      hostsDown: (this.snapshot.downHostIds ?? this.snapshot.omittedHostIds).length,
+      hostsDown: down.length,
+      hostsDownNames: down.map((id) => this.downHostName(id)),
       urgent: urgent.length,
       topState: urgent[0]?.state ?? null,
       offDeck: urgent.filter((u) => !onKeys.has(u.pane.paneKey)).length,
@@ -742,7 +782,7 @@ export class DeckController {
       return { state: 'unmapped', stale: false, label: '', line2: lineTwo('unmapped') };
     const pane = this.registry.get(b.paneKey);
     const status = this.snapshot.statuses.find((e) => e.paneKey === b.paneKey);
-    const hostDown = this.snapshot.omittedHostIds.includes(b.executionHostId ?? 'local');
+    const hostDown = this.snapshot.omittedHostIds.includes(b.executionHostId ?? LOCAL_HOST);
     // Trust the live agentType while the pane exists (agent exited -> plain shell); lastKnown only when offline.
     const liveAgent = pane ? (pane.agentType ?? null) : (b.lastKnown.agent ?? null);
     // tmux hides its agents from Orca (stablyai/orca#7797): without hook state the pane is "tmux", not a stale harness.

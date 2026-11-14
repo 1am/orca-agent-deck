@@ -5,16 +5,8 @@
  * when the sources call an SDK member that is not on this list, so new calls get reviewed here.
  */
 
-export type HostKind = 'elgato' | 'opendeck' | 'unknown';
-
-export interface HostInfo {
-  kind: HostKind;
-  /** Version string the host registered with (not comparable across hosts). */
-  version: string;
-  platform: string;
-  /** How `kind` was decided, for the Setup doctor and the log. */
-  basis: 'env' | 'platform' | 'none';
-}
+import streamDeck from '@elgato/streamdeck';
+import { detectHost, type DeckHostInfo } from '@orca-agent-deck/core';
 
 /** Portable subset: members of the `streamDeck` object used by B. `true` = fine in both hosts. */
 export const SDK_CALLS = {
@@ -25,6 +17,7 @@ export const SDK_CALLS = {
   'logger.setLevel': true,
   'settings.getGlobalSettings': true,
   'settings.setGlobalSettings': true,
+  'ui.action': true,
   'ui.sendToPropertyInspector': true,
   devices: true,
   info: true,
@@ -35,26 +28,14 @@ export type Feature = 'bundledProfiles' | 'switchToProfile' | 'deviceDidChange';
 
 const ELGATO_ONLY: ReadonlySet<Feature> = new Set(['bundledProfiles', 'switchToProfile']);
 
-/**
- * The registration info carries no application name, so the host cannot be read directly:
- * `ORCA_DECK_HOST` wins, a platform other than mac/windows means OpenDeck (Linux), else unknown.
- */
-export function detectHost(
-  info: { application?: { version?: string; platform?: string } },
-  env: Record<string, string | undefined> = process.env,
-): HostInfo {
-  const version = info.application?.version ?? '';
-  const platform = info.application?.platform ?? '';
-  const forced = env.ORCA_DECK_HOST?.toLowerCase();
-  if (forced === 'elgato' || forced === 'opendeck')
-    return { kind: forced, version, platform, basis: 'env' };
-  if (platform && platform !== 'mac' && platform !== 'windows')
-    return { kind: 'opendeck', version, platform, basis: 'platform' };
-  return { kind: 'unknown', version, platform, basis: 'none' };
-}
+let detected: DeckHostInfo | undefined;
+
+/** The host plugin B runs in; only after `streamDeck.connect()` (the registration info is not there before). */
+export const currentHost = (): DeckHostInfo =>
+  (detected ??= detectHost(streamDeck.info, process.platform, process.env));
 
 /** Whether a feature may be used. Unknown hosts get the portable subset only. */
-export function canUse(host: HostInfo, feature: Feature): boolean {
-  if (feature === 'deviceDidChange') return host.kind === 'elgato';
-  return ELGATO_ONLY.has(feature) ? host.kind === 'elgato' : true;
+export function canUse(host: DeckHostInfo, feature: Feature): boolean {
+  if (feature === 'deviceDidChange') return host.host === 'elgato';
+  return ELGATO_ONLY.has(feature) ? host.host === 'elgato' : true;
 }

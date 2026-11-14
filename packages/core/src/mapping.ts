@@ -98,7 +98,13 @@ export class MappingStore {
    * such key exists (the other keys being on another page cannot be told apart from vanished ones,
    * hence only keys without any settings inherit). Returns true when a mapping was carried over.
    */
-  locate(slot: string, pos: SlotPosition, live: ReadonlySet<string>): boolean {
+  locate(
+    slot: string,
+    pos: SlotPosition,
+    live: ReadonlySet<string>,
+    /** Devices seen live since this process started: their keys are not a host switch, a deck just went away. */
+    seenDevices: ReadonlySet<string> = new Set(),
+  ): boolean {
     const cur = this.slots[slot];
     // Only a key never seen before may inherit: a known key keeps its own settings, and a key that is
     // merely on another page right now must not be mistaken for a vanished one.
@@ -109,9 +115,36 @@ export class MappingStore {
       }
       return false;
     }
-    const orphans = Object.entries(this.slots).filter(
-      ([k, o]) => k !== slot && !live.has(k) && o.pane && samePos(o.pos, pos),
+    const vanished = Object.entries(this.slots).filter(
+      ([k, o]) =>
+        k !== slot &&
+        !live.has(k) &&
+        o.pane &&
+        o.pos?.column === pos.column &&
+        o.pos.row === pos.row,
     );
+    // The same deck seen by another host has another device id (OpenDeck: `sd-<serial>`): without an exact
+    // device match, take a vanished key whose device has no live key left, so two real decks are never merged.
+    const liveDevices = new Set(
+      Object.entries(this.slots).flatMap(([k, o]) => (live.has(k) && o.pos ? [o.pos.device] : [])),
+    );
+    // Another live deck with a key at this position could be the owner of that orphan, and a deck that was live a
+    // moment ago (Stream Deck Mobile disconnecting) is gone, not another host's name for this one: neither inherits.
+    const liveElsewhere = Object.entries(this.slots).some(
+      ([k, o]) =>
+        live.has(k) &&
+        o.pos?.device !== pos.device &&
+        o.pos?.column === pos.column &&
+        o.pos.row === pos.row,
+    );
+    const exact = vanished.filter(([, o]) => samePos(o.pos, pos));
+    const orphans = exact.length
+      ? exact
+      : liveElsewhere
+        ? []
+        : vanished.filter(
+            ([, o]) => !liveDevices.has(o.pos!.device) && !seenDevices.has(o.pos!.device),
+          );
     if (orphans.length === 1) {
       const [k, o] = orphans[0]!;
       delete this.slots[k];
@@ -141,7 +174,12 @@ export class MappingStore {
   }
 
   mappedPaneKeys(): Set<string> {
-    return new Set(Object.values(this.slots).flatMap((s) => (s.pane ? [s.pane.paneKey] : [])));
+    return new Set(this.bindings().map((b) => b.paneKey));
+  }
+
+  /** The pane of every mapped slot. */
+  bindings(): PaneBinding[] {
+    return Object.values(this.slots).flatMap((s) => (s.pane ? [s.pane] : []));
   }
 
   /**

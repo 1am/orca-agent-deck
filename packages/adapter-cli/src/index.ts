@@ -10,7 +10,21 @@ import type {
   PaneStatusEvent,
   Snapshot,
 } from '@orca-agent-deck/core';
-import { classifyFinalMessage, type AgentRawState, type AwaitingKind } from '@orca-agent-deck/core';
+import {
+  classifyFinalMessage,
+  envHostId,
+  isLocalHost,
+  LOCAL_HOST,
+  mergeHostCensus,
+  paneKey,
+  runtimeHostId,
+  splitPaneKey,
+  unreachableHostIds,
+  type HostCensus,
+  type ListingHostScope,
+  type AgentRawState,
+  type AwaitingKind,
+} from '@orca-agent-deck/core';
 import type { z } from 'zod';
 import { resolveOrcaBinCached } from './resolve-bin.ts';
 import {
@@ -83,32 +97,7 @@ export function awaitingOf(
   return classifyFinalMessage(a.lastAssistantMessage).asks ? 'text' : null;
 }
 
-/**
- * Hosts no listing could reach. Orca's `hostScope` reports the hosts a listing covered (`hostIds`)
- * and the ones it left out (`omittedHostIds`). A host one listing covered answered that query, even
- * when the other had nothing to report for it: an SSH host with worktrees but no terminals appears
- * only in the terminal listing's gaps.
- *
- * This drives the "hosts down" count only. `omittedHostIds` stays the union of both listings, so a
- * key keeps its last known state for every host a listing could not see.
- */
-export function unreachableHostIds(
-  terminalScope: ListingHostScope | undefined,
-  worktreeScope: ListingHostScope | undefined,
-): string[] {
-  const scopes = [terminalScope, worktreeScope].filter(
-    (scope): scope is ListingHostScope => scope !== undefined,
-  );
-  const covered = new Set(scopes.flatMap((scope) => scope.hostIds ?? []));
-  const omitted = new Set(scopes.flatMap((scope) => scope.omittedHostIds ?? []));
-  // `local` answered the call it came from.
-  return [...omitted].filter((id) => id !== 'local' && !covered.has(id));
-}
-
-export type ListingHostScope = {
-  hostIds?: readonly string[];
-  omittedHostIds?: readonly string[];
-};
+export { unreachableHostIds, type ListingHostScope };
 
 export class CliAdapter implements OrcaAdapter {
   /**
@@ -179,41 +168,46 @@ export class CliAdapter implements OrcaAdapter {
       hosts = this.lastHosts;
       hostsKnown = false;
     }
-    const omitted = new Set(local.omittedHostIds);
-    const down = new Set(local.downHostIds ?? []);
+    const paired: { id: string; census: HostCensus | null; busy: string[] }[] = [];
     for (const env of hosts.filter((h) => h.kind === 'environment')) {
-      omitted.delete(`runtime:${env.id}`);
-      down.delete(`runtime:${env.id}`);
       if (!hostsKnown) {
-        omitted.add(`env:${env.id}`);
-        down.add(`env:${env.id}`);
+        paired.push({ id: env.id, census: null, busy: [] });
         continue;
       }
       try {
         const r = await this.snapshotOne(env.id);
         local.panes.push(...r.panes);
         local.statuses.push(...r.statuses);
-        for (const h of r.omittedHostIds) omitted.add(h);
-        for (const h of r.downHostIds ?? []) down.add(h);
+        paired.push({
+          id: env.id,
+          census: { omitted: r.omittedHostIds, down: r.downHostIds ?? [] },
+          busy: r.busyHostIds ?? [],
+        });
       } catch {
-        omitted.add(`env:${env.id}`);
-        down.add(`env:${env.id}`);
+        paired.push({ id: env.id, census: null, busy: [] });
       }
     }
-    local.omittedHostIds = [...omitted];
-    local.downHostIds = [...down];
+    const merged = mergeHostCensus(
+      { omitted: local.omittedHostIds, down: local.downHostIds ?? [] },
+      paired,
+    );
+    local.omittedHostIds = [...merged.omitted];
+    local.downHostIds = [...merged.down];
+    local.busyHostIds = [
+      ...new Set([...(local.busyHostIds ?? []), ...paired.flatMap((p) => p.busy)]),
+    ];
     // Remote panes carry the host's display name; the raw host id means nothing to the user.
     const names = new Map(
       hosts.flatMap(
         (h) =>
           [
             [h.id, h.name],
-            [`env:${h.id}`, h.name],
+            [envHostId(h.id), h.name],
           ] as const,
       ),
     );
     for (const pane of local.panes) {
-      if (pane.hostId !== 'local') pane.hostName = names.get(pane.hostId) ?? null;
+      if (!isLocalHost(pane.hostId)) pane.hostName = names.get(pane.hostId) ?? null;
     }
     return local;
   }
@@ -228,8 +222,8 @@ export class CliAdapter implements OrcaAdapter {
     const titles = tabTitles(terms.result.visualLayouts);
     const wts = new Map(ps.result.worktrees.map((w) => [w.worktreeId, w]));
     const panes: PaneInfo[] = terms.result.terminals.map((t) => ({
-      paneKey: `${t.tabId}:${t.leafId}`,
-      hostId: environment ? `env:${environment}` : t.executionHostId,
+      paneKey: paneKey(t.tabId, t.leafId),
+      hostId: environment ? envHostId(environment) : t.executionHostId,
       handle: t.handle,
       worktreeId: t.worktreeId,
       // A title set in Orca (set-pane-title) wins, then the Orca tab title; the terminal's own
@@ -279,12 +273,18 @@ export class CliAdapter implements OrcaAdapter {
       ...(psScope?.omittedHostIds ?? []),
     ]);
     // Orca answering means its own host is up; it was seen flapping into omittedHostIds.
-    omitted.delete('local');
+    omitted.delete(LOCAL_HOST);
+    // On a paired server every row is that server's: its own worktrees say `local`.
+    const busy = new Set([
+      ...panes.map((p) => p.hostId),
+      ...ps.result.worktrees.map((w) => (environment ? envHostId(environment) : w.hostId)),
+    ]);
     return {
       panes,
       statuses,
       omittedHostIds: [...omitted],
       downHostIds: unreachableHostIds(termScope, psScope),
+      busyHostIds: [...busy],
     };
   }
 
@@ -329,7 +329,7 @@ export class CliAdapter implements OrcaAdapter {
       if (fromLayout) return fromLayout;
       this.focusNote += ' active-worktree-has-no-layout';
       const r = await this.call(terminalShowResponse, ['terminal', 'show']);
-      return `${r.result.terminal.tabId}:${r.result.terminal.leafId}`;
+      return paneKey(r.result.terminal.tabId, r.result.terminal.leafId);
     } catch (e) {
       this.focusNote = `focus read failed: ${(e as Error).message.slice(0, 80)}`;
       return null;
@@ -344,7 +344,7 @@ export class CliAdapter implements OrcaAdapter {
   async focus(
     pane: PaneRef & { handle: string; environment?: string | null; worktreeId?: string },
   ): Promise<FocusResult> {
-    const [tabId, leafId] = pane.paneKey.split(':');
+    const { tabId, leafId } = splitPaneKey(pane.paneKey);
     if (pane.environment && pane.worktreeId && tabId && leafId) {
       // A paired server has no window: the CLI asks it about the pane (a new remote connection
       // per call, 1.3-3.4 s) and then has this Orca reveal it. We know the pane already, so we
@@ -360,7 +360,7 @@ export class CliAdapter implements OrcaAdapter {
           '--leaf',
           leafId,
           '--execution-host',
-          `runtime:${encodeURIComponent(pane.environment)}`,
+          runtimeHostId(pane.environment),
         ]);
         if (r.result.reveal.navigated) return { ok: true };
       } catch {

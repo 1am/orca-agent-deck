@@ -3,7 +3,7 @@ import { MappingStore, DeckController, type SlotSettings } from '@orca-agent-dec
 import { makeExec } from '@orca-agent-deck/adapter-cli';
 import { createRuntimeAdapter } from '@orca-agent-deck/adapter-runtime';
 import { makeRaiser } from '@orca-agent-deck/window-raiser';
-import { detectHost } from './host.ts';
+import { currentHost } from './host.ts';
 import { FileSlotStorage, defaultMappingsPath } from './mapping-file.ts';
 import { PaneSlot } from './actions/pane-slot.ts';
 import { StatusKey } from './actions/status.ts';
@@ -115,7 +115,9 @@ statusFeed.onChange(() => paneSlot.nudge());
 streamDeck.actions.registerAction(new StatusKey(controller));
 streamDeck.actions.registerAction(new AttentionKey(controller));
 await streamDeck.connect();
-const host = detectHost(streamDeck.info);
-streamDeck.logger.info(`host: ${host.kind} (${host.basis}), app ${host.version}, ${host.platform}`);
+const host = currentHost();
+streamDeck.logger.info(
+  `host: ${host.host} (${host.basis}), app ${host.version}, os ${host.os}, node ${process.version}`,
+);
 void startBridge();
 process.once('SIGTERM', () => void stopBridge());
