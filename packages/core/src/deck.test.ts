@@ -96,6 +96,94 @@ it('keeps a key on a host only one listing omitted, without counting it down', a
   expect((await d.refresh(['s1'])).get('s1')?.state).toBe('unreachable');
   expect(store.get('s1')?.pane?.paneKey).toBe('a:1');
   expect(d.overview().hostsDown).toBe(1);
+  expect(d.overview().hostsDownNames).toEqual(['x']);
+});
+
+it('names a down host by alias, then Orca name, then its id', async () => {
+  const snap: Snapshot = {
+    panes: [
+      pane('a:1', { hostId: 'ssh:box', hostName: 'build box' }),
+      pane('b:1', { hostId: 'env:E1' }),
+    ],
+    statuses: [],
+    omittedHostIds: [],
+    downHostIds: [],
+  };
+  const d = new DeckController(fake(snap).a, new MappingStore());
+  d.hostAliases = { 'env:E1': 'silver' };
+  await d.refresh(['s1']);
+  snap.panes = [];
+  snap.omittedHostIds = ['ssh:box', 'env:E1', 'ssh:gone%201'];
+  snap.downHostIds = ['ssh:box', 'env:E1', 'ssh:gone%201'];
+  await d.refresh(['s1']);
+  expect(d.overview().hostsDownNames).toEqual(['build box', 'silver', 'gone 1']);
+});
+
+it('counts a down host only when it showed something the last time it answered', async () => {
+  const snap: Snapshot = {
+    panes: [],
+    statuses: [],
+    omittedHostIds: [],
+    downHostIds: [],
+    // ssh:busy has a worktree but no terminal; ssh:idle is configured and answered with nothing.
+    busyHostIds: ['local', 'ssh:busy'],
+  };
+  const d = new DeckController(fake(snap).a, new MappingStore());
+  await d.refresh([], { force: true });
+  snap.omittedHostIds = ['ssh:busy', 'ssh:idle', 'ssh:never'];
+  snap.downHostIds = ['ssh:busy', 'ssh:idle', 'ssh:never'];
+  snap.busyHostIds = ['local'];
+  await d.refresh([], { force: true });
+  expect(d.overview().hostsDownNames).toEqual(['busy']);
+  // Still down on later reads: it keeps its mark.
+  await d.refresh([], { force: true });
+  expect(d.overview().hostsDown).toBe(1);
+
+  // Back with nothing on it, then down again: no longer counted.
+  snap.omittedHostIds = [];
+  snap.downHostIds = [];
+  await d.refresh([], { force: true });
+  snap.omittedHostIds = ['ssh:busy'];
+  snap.downHostIds = ['ssh:busy'];
+  await d.refresh([], { force: true });
+  expect(d.overview().hostsDown).toBe(0);
+});
+
+it('counts a down host a key is mapped to, even when it was never seen up', async () => {
+  const store = new MappingStore();
+  store.set('s1', {
+    mode: 'pinned',
+    pane: {
+      paneKey: 'a:1',
+      worktreeId: 'w',
+      tabId: 'a',
+      leafId: '1',
+      executionHostId: 'ssh:x',
+      lastKnown: {},
+    },
+  });
+  const snap: Snapshot = {
+    panes: [],
+    statuses: [],
+    omittedHostIds: ['ssh:x', 'ssh:y'],
+    downHostIds: ['ssh:x', 'ssh:y'],
+    busyHostIds: ['local'],
+  };
+  const d = new DeckController(fake(snap).a, store);
+  await d.refresh(['s1']);
+  expect(d.overview().hostsDownNames).toEqual(['x']);
+});
+
+it('counts every down host for an adapter that does not report busy hosts', async () => {
+  const snap: Snapshot = {
+    panes: [],
+    statuses: [],
+    omittedHostIds: ['ssh:y'],
+    downHostIds: ['ssh:y'],
+  };
+  const d = new DeckController(fake(snap).a, new MappingStore());
+  await d.refresh([], { force: true });
+  expect(d.overview().hostsDown).toBe(1);
 });
 
 it('press focuses the mapped pane and reports failures', async () => {
@@ -215,47 +303,6 @@ it('picker names remote hosts and keeps listing them while a poll drops the host
   expect(d.listPanes()[1]?.state).toBe('unreachable');
 });
 
-it('hold maps the focused pane, replaces, and releases when it is already shown', async () => {
-  const snap: Snapshot = {
-    panes: [pane('a:1'), pane('b:1')],
-    statuses: [],
-    omittedHostIds: [],
-  };
-  const { a } = fake(snap);
-  let focused = 'b:1';
-  a.focusedPaneKey = async () => focused;
-  const d = new DeckController(a, new MappingStore());
-  await d.refresh(['s1', 's2']);
-  expect(await d.hold('s1')).toBe('replaced');
-  expect(d.slotConfig('s1')).toEqual({ mode: 'pinned', paneKey: 'b:1', autofill: true });
-  // The focused pane is already on s1: hold releases it and auto-fill must not refill the slot.
-  expect(await d.hold('s1')).toBe('released');
-  const v = await d.refresh(['s1', 's2']);
-  expect(v.get('s1')?.state).toBe('unmapped');
-  // Holding an empty slot maps the focused pane.
-  focused = 'a:1';
-  expect(await d.hold('s1')).toBe('mapped');
-  expect(d.slotConfig('s1').paneKey).toBe('a:1');
-});
-
-it('hold on an empty slot fails when Orca reports no focused pane', async () => {
-  const { a } = fake({ panes: [], statuses: [], omittedHostIds: [] });
-  const d = new DeckController(a, new MappingStore());
-  await d.refresh(['s1']);
-  expect(await d.hold('s1')).toBe('failed');
-});
-
-it('hold releases a slot showing a pane when the focus is unreadable (remote pane), but not an empty one', async () => {
-  const { a } = fake({ panes: [pane('a:1')], statuses: [], omittedHostIds: [] });
-  a.focusedPaneKey = async () => null;
-  const d = new DeckController(a, new MappingStore());
-  await d.refresh(['s1', 's2']);
-  d.configure('s1', { paneKey: 'a:1' });
-  expect(await d.hold('s1')).toBe('released');
-  expect(d.slotConfig('s1').paneKey).toBeNull();
-  expect(await d.hold('s2')).toBe('failed');
-});
-
 it('a released pane stays off auto-fill until it is pinned again', async () => {
   const snap: Snapshot = { panes: [pane('a:1')], statuses: [], omittedHostIds: [] };
   const { a } = fake(snap);
@@ -263,11 +310,11 @@ it('a released pane stays off auto-fill until it is pinned again', async () => {
   const d = new DeckController(a, new MappingStore());
   await d.refresh(['s1', 's2']);
   expect(d.slotConfig('s1').paneKey).toBe('a:1');
-  expect(await d.hold('s1')).toBe('released');
+  d.unmapSlot('r', 's1');
   // s2 is an empty auto key: it must not grab the pane that was just taken off s1.
   await d.refresh(['s1', 's2']);
   expect(d.slotConfig('s2').paneKey).toBeNull();
-  expect(await d.hold('s2')).toBe('mapped');
+  d.configure('s2', { paneKey: 'a:1' });
   expect(d.slotConfig('s2').paneKey).toBe('a:1');
 });
 
@@ -345,16 +392,6 @@ it('keeps the pressed key highlighted while Orca cannot report focus (paired ser
   focused = 'a:1';
   v = await d.refresh(['s1', 's2']);
   expect([v.get('s1')?.focused, v.get('s2')?.focused]).toEqual([true, false]);
-});
-
-it('a failed hold says on the key that a remote pane needs the picker', async () => {
-  const { a } = fake({ panes: [], statuses: [], omittedHostIds: [] });
-  a.focusedPaneKey = async () => null;
-  Object.assign(a, { focusNote: 'worktrees=1 active=0 layouts=1 no-active-worktree' });
-  const d = new DeckController(a, new MappingStore());
-  await d.refresh(['s1']);
-  expect(await d.hold('s1')).toBe('failed');
-  expect(d.holdHint).toBe('Remote pane: use the picker');
 });
 
 it('traces auto-fill and a freed slot through diag, without pane content', async () => {
@@ -655,17 +692,16 @@ it('pairing: names the pane A sent, pins it on the pressed slot and un-releases 
   expect(target?.paneKey).toBe('b:1');
   d.pairing.start('r1', target, true);
   expect(d.pairing.press('s1', 'tap')).toBe(true);
-  expect(results).toEqual([{ requestId: 'r1', ok: true, slot: 's1', action: 'mapped' }]);
+  // Auto-fill had put b:1 on s2: it moves to s1.
+  expect(results).toEqual([{ requestId: 'r1', ok: true, slot: 's1', action: 'moved' }]);
   expect((await d.refresh(['s1', 's2'])).get('s1')).toMatchObject({ label: 't-b:1' });
 });
 
-it('pairing: no named pane and none focused resolves to null; unmapPane frees the slots', async () => {
+it('pairing: a named pane that is not listed resolves to null', async () => {
   const snap: Snapshot = { panes: [pane('a:1')], statuses: [], omittedHostIds: [] };
   const d = new DeckController(fake(snap).a, new MappingStore());
   await d.refresh(['s1']);
   expect(await d.pairingTarget('nope:1')).toBeNull();
-  expect(await d.unmapPane('a:1')).toBe(1);
-  expect(await d.unmapPane('a:1')).toBe(0);
 });
 
 it('a host alias replaces the host name on the key and in the picker, and clears with the alias', async () => {
@@ -678,6 +714,336 @@ it('a host alias replaces the host name on the key and in the picker, and clears
   expect(d.listPanes()[0]?.host).toBe('build');
   d.hostAliases = { 'ssh:b1': '  ' };
   expect((await d.refresh(['s1'])).get('s1')?.host).toBe('build-server-01');
+});
+
+describe('press after Orca rotated the terminal handles', () => {
+  const setup = (failure: { error: string; code?: string }) => {
+    let gen = 1;
+    const calls: string[] = [];
+    let snapshots = 0;
+    const a: OrcaAdapter = {
+      health: async () => ({ orcaRunning: true, version: '1.4.0' }),
+      snapshot: async () => (
+        snapshots++,
+        { panes: [pane('a:1', { handle: `g${gen}` })], statuses: [], omittedHostIds: [] }
+      ),
+      listHosts: async () => [],
+      focus: async (p) => {
+        calls.push(p.handle);
+        return p.handle === 'g2' ? { ok: true } : { ok: false, ...failure };
+      },
+    };
+    const d = new DeckController(a, new MappingStore());
+    return {
+      d,
+      calls,
+      snapshots: () => snapshots,
+      restart: () => void (gen = 2),
+    };
+  };
+
+  it('retries once with the fresh handle when Orca says the handle is stale', async () => {
+    const t = setup({ error: 'terminal_handle_stale: gone', code: 'terminal_handle_stale' });
+    await t.d.refresh(['s1']);
+    t.d.configure('s1', { paneKey: 'a:1' });
+    await t.d.refresh(['s1']);
+    t.restart();
+    expect(await t.d.press('s1')).toBe('focused');
+    expect(t.calls).toEqual(['g1', 'g2']);
+  });
+
+  it('does not re-read the panes for an unrelated failure', async () => {
+    const t = setup({ error: 'method_not_found: nope', code: 'method_not_found' });
+    await t.d.refresh(['s1']);
+    t.d.configure('s1', { paneKey: 'a:1' });
+    await t.d.refresh(['s1']);
+    const before = t.snapshots();
+    t.restart();
+    expect(await t.d.press('s1')).toBe('failed');
+    expect(t.calls).toEqual(['g1']);
+    expect(t.snapshots()).toBe(before);
+  });
+
+  it('reads the code from the text on the CLI path, which has no code field', async () => {
+    const t = setup({ error: 'Command failed: terminal_not_found' });
+    await t.d.refresh(['s1']);
+    t.d.configure('s1', { paneKey: 'a:1' });
+    await t.d.refresh(['s1']);
+    t.restart();
+    expect(await t.d.press('s1')).toBe('focused');
+  });
+});
+
+describe('pairing target from the settings view', () => {
+  const setup = (focus: () => string | null) => {
+    const snap: Snapshot = { panes: [pane('a:1'), pane('b:1')], statuses: [], omittedHostIds: [] };
+    const a: OrcaAdapter = {
+      health: async () => ({ orcaRunning: true, version: '1.4.0', live: true, fast: true }),
+      snapshot: async () => snap,
+      listHosts: async () => [],
+      focus: async () => ({ ok: true }),
+      focusedPaneKey: async () => focus(),
+    };
+    return new DeckController(a, new MappingStore());
+  };
+
+  it('uses the last pane Orca reported focused when it reports none now', async () => {
+    let focus: string | null = 'b:1';
+    const d = setup(() => focus);
+    await d.refresh([]);
+    focus = null;
+    expect((await d.pairingTarget(null))?.paneKey).toBe('b:1');
+  });
+
+  it('is null when no pane was ever focused', async () => {
+    const d = setup(() => null);
+    await d.refresh([]);
+    expect(await d.pairingTarget(null)).toBeNull();
+  });
+});
+
+it('a pane whose process crashed counts on the Attention key even though its agent is gone', async () => {
+  const snap: Snapshot = {
+    panes: [
+      pane('a:1', { agentType: null, connected: false, exitCause: 'crash' }),
+      pane('b:1', { agentType: null, connected: false, exitCause: 'clean' }),
+    ],
+    statuses: [],
+    omittedHostIds: [],
+  };
+  const d = new DeckController(fake(snap).a, new MappingStore());
+  await d.refresh([]);
+  expect(d.overview()).toMatchObject({ urgent: 1, topState: 'error' });
+});
+
+describe('clicks in the Orca panel', () => {
+  const world = () => {
+    const snap: Snapshot = { panes: [pane('a:1'), pane('b:1')], statuses: [], omittedHostIds: [] };
+    const { a } = fake(snap);
+    a.focusedPaneKey = async () => 'b:1';
+    // Auto-fill is off in the shipped plugin: keys hold pinned panes only.
+    const d = new DeckController(a, new MappingStore(), undefined, { autofill: false });
+    const results: unknown[] = [];
+    d.onPairingResult = (r) => results.push(r);
+    return { d, results };
+  };
+
+  it('assign puts the focused pane on the key, as pairing followed by a tap does', async () => {
+    const { d, results } = world();
+    await d.refresh(['s1', 's2']);
+    await d.assignFocusedTo('r1', 's2', false, true);
+    expect(results).toEqual([{ requestId: 'r1', ok: true, slot: 's2', action: 'mapped' }]);
+    expect((await d.refresh(['s1', 's2'])).get('s2')).toMatchObject({ label: 't-b:1' });
+  });
+
+  it('a key that shows a pane needs replace, and the pane stays untouched without it', async () => {
+    const { d, results } = world();
+    await d.refresh(['s1']);
+    await d.assignFocusedTo('r1', 's1', false, true);
+    await d.assignFocusedTo('r2', 's1', false, true);
+    expect(results[1]).toEqual({ requestId: 'r2', ok: false, reason: 'occupied' });
+    d.configure('s1', { paneKey: 'a:1' });
+    await d.assignFocusedTo('r3', 's1', true, true);
+    expect(results[2]).toMatchObject({ requestId: 'r3', ok: true, slot: 's1' });
+    expect((await d.refresh(['s1'])).get('s1')).toMatchObject({ label: 't-b:1' });
+  });
+
+  it('answers a key that does not exist, a deck that is offline and no focused pane', async () => {
+    const { d, results } = world();
+    await d.refresh(['s1']);
+    await d.assignFocusedTo('r1', null, false, true);
+    await d.assignFocusedTo('r2', 's1', false, false);
+    d.unmapSlot('r3', null);
+    expect(results).toEqual([
+      { requestId: 'r1', ok: false, reason: 'noSuchKey' },
+      { requestId: 'r2', ok: false, reason: 'deckOffline' },
+      { requestId: 'r3', ok: false, reason: 'noSuchKey' },
+    ]);
+    const snap: Snapshot = { panes: [pane('a:1')], statuses: [], omittedHostIds: [] };
+    const { a } = fake(snap);
+    a.focusedPaneKey = async () => null;
+    const none = new DeckController(a, new MappingStore(), undefined, { autofill: false });
+    const got: unknown[] = [];
+    none.onPairingResult = (r) => got.push(r);
+    await none.assignFocusedTo('r4', 's1', false, true);
+    expect(got).toEqual([{ requestId: 'r4', ok: false, reason: 'noFocusedPane' }]);
+  });
+
+  it('a pane already on another key moves: the old key empties', async () => {
+    const { d, results } = world();
+    await d.refresh(['s1', 's2']);
+    await d.assignFocusedTo('r1', 's1', false, true);
+    await d.assignFocusedTo('r2', 's2', false, true);
+    expect(results[1]).toEqual({ requestId: 'r2', ok: true, slot: 's2', action: 'moved' });
+    const v = await d.refresh(['s1', 's2']);
+    expect(v.get('s2')).toMatchObject({ label: 't-b:1' });
+    expect(v.get('s1')?.state).toBe('unmapped');
+  });
+
+  it('assign puts the pane the panel chose on the key, not the focused one', async () => {
+    const { d, results } = world();
+    await d.refresh(['s1', 's2']);
+    await d.assignFocusedTo('r1', 's2', false, true, 'a:1');
+    expect(results).toEqual([{ requestId: 'r1', ok: true, slot: 's2', action: 'mapped' }]);
+    expect((await d.refresh(['s1', 's2'])).get('s2')).toMatchObject({ label: 't-a:1' });
+  });
+
+  it('a chosen pane that is on another key moves, and one that is gone is refused', async () => {
+    const { d, results } = world();
+    await d.refresh(['s1', 's2']);
+    await d.assignFocusedTo('r1', 's1', false, true, 'a:1');
+    await d.assignFocusedTo('r2', 's2', false, true, 'a:1');
+    await d.assignFocusedTo('r3', 's1', false, true, 'zz:9');
+    expect(results[1]).toEqual({ requestId: 'r2', ok: true, slot: 's2', action: 'moved' });
+    expect(results[2]).toEqual({ requestId: 'r3', ok: false, reason: 'noSuchPane' });
+    const v = await d.refresh(['s1', 's2']);
+    expect(v.get('s1')?.state).toBe('unmapped');
+    expect(v.get('s2')).toMatchObject({ label: 't-a:1' });
+  });
+
+  it('lists the panes for the panel: the focused one first, with the key each is on', async () => {
+    const { d } = world();
+    await d.refresh(['s1', 's2']);
+    await d.assignFocusedTo('r1', 's2', false, true, 'a:1');
+    await d.pairingTarget(null); // reads the focus: b:1
+    const keyOf = (slot: string) => (slot === 's2' ? 2 : null);
+    const panes = d.panelPanes(keyOf);
+    expect(panes.map((p) => [p.paneKey, p.focused, p.onKey])).toEqual([
+      ['b:1', true, undefined],
+      ['a:1', false, 2],
+    ]);
+  });
+
+  it('the key settings picker carries the key a pane is on when it can tell', async () => {
+    const { d } = world();
+    await d.refresh(['s1', 's2']);
+    await d.assignFocusedTo('r1', 's2', false, true, 'a:1');
+    const keyOf = (slot: string) => (slot === 's2' ? 2 : null);
+    expect(d.listPanes(keyOf).map((p) => [p.paneKey, p.onKey])).toEqual([
+      ['a:1', 2],
+      ['b:1', undefined],
+    ]);
+    expect(d.listPanes().every((p) => p.onKey === undefined)).toBe(true);
+  });
+
+  it('unmap empties the key and keeps its pane off auto-fill', async () => {
+    const { d, results } = world();
+    await d.refresh(['s1']);
+    await d.assignFocusedTo('r1', 's1', false, true);
+    d.unmapSlot('r2', 's1');
+    expect(results[1]).toEqual({ requestId: 'r2', ok: true, slot: 's1', action: 'unmapped' });
+    expect((await d.refresh(['s1'])).get('s1')?.state).toBe('unmapped');
+  });
+});
+
+describe('focus on a remote host', () => {
+  const remote = (key: string) => pane(key, { hostId: 'ssh:box', hostName: 'box' });
+  type Focus = { key: string | null; host: string | null };
+  function world(panes: PaneInfo[], focus: { current: Focus }) {
+    const { a } = fake({ panes, statuses: [], omittedHostIds: [] });
+    a.health = async () => ({ orcaRunning: true, version: '1.4.0', fast: true });
+    a.focusedPaneKey = async () => focus.current.key;
+    Object.defineProperty(a, 'focusHostId', { get: () => focus.current.host });
+    return new DeckController(a, new MappingStore(), undefined, { autofill: false });
+  }
+
+  it('the panel marks the focused pane of the focused host only', async () => {
+    const focus = { current: { key: 't:1', host: 'ssh:box' } };
+    const d = world([pane('t:1'), remote('t:1')], focus);
+    await d.refresh([]);
+    const marked = d.panelPanes(() => null).filter((p) => p.focused);
+    expect(marked.map((p) => p.remote)).toEqual([true]);
+  });
+
+  it('a remote host shown with no readable pane drops the last local focus', async () => {
+    const focus = { current: { key: 'a:1' as string | null, host: 'local' as string | null } };
+    const d = world([pane('a:1'), remote('r:1')], focus);
+    await d.refresh([]);
+    expect(d.panelPanes(() => null).find((p) => p.focused)?.paneKey).toBe('a:1');
+    focus.current = { key: null, host: 'ssh:box' };
+    await d.refresh([], { force: true });
+    expect(d.currentFocusKey()).toBeNull();
+    expect(d.panelPanes(() => null).some((p) => p.focused)).toBe(false);
+    // "Use the focused pane" has nothing to fall back on: it must not take the local pane.
+    expect(await d.pairingTarget(null)).toBeNull();
+  });
+
+  it('with no worktree shown (settings open) the last focus is still the one meant', async () => {
+    const focus = { current: { key: 'a:1' as string | null, host: 'local' as string | null } };
+    const d = world([pane('a:1')], focus);
+    await d.refresh([]);
+    focus.current = { key: null, host: null };
+    await d.refresh([], { force: true });
+    expect((await d.pairingTarget(null))?.paneKey).toBe('a:1');
+  });
+
+  it('with no worktree shown and paired-server panes around, the last local focus is dropped', async () => {
+    const focus = { current: { key: 'a:1' as string | null, host: 'local' as string | null } };
+    const paired = pane('e:1', { hostId: 'env:srv', hostName: 'srv', environment: 'srv' });
+    const d = world([pane('a:1'), paired], focus);
+    await d.refresh([]);
+    focus.current = { key: null, host: null };
+    Object.assign(d['adapter'], { focusNote: 'worktrees=1 active=0 layouts=1 no-active-worktree' });
+    await d.refresh([], { force: true });
+    expect(d.currentFocusKey()).toBeNull();
+    expect(d.panelPanes(() => null).some((p) => p.focused)).toBe(false);
+    expect(await d.pairingTarget(null)).toBeNull();
+  });
+
+  it('on a paired server the pane last opened from the deck is offered, never taken by the deck itself', async () => {
+    const focus = { current: { key: 'a:1' as string | null, host: 'local' as string | null } };
+    const paired = (key: string) =>
+      pane(key, { hostId: 'env:srv', hostName: 'srv', environment: 'srv' });
+    const d = world([pane('a:1'), paired('e:1'), paired('e:2')], focus);
+    await d.refresh(['s1']);
+    d.configure('s1', { paneKey: 'e:2', hostId: 'env:srv' });
+    focus.current = { key: null, host: null };
+    Object.assign(d['adapter'], { focusNote: 'worktrees=1 active=0 layouts=1 no-active-worktree' });
+    expect(await d.press('s1')).toBe('focused');
+    await d.refresh(['s1'], { force: true });
+    const panes = d.panelPanes(() => null);
+    expect(panes[0]).toMatchObject({ paneKey: 'e:2', focused: false, lastPressed: true });
+    expect(panes.filter((p) => p.lastPressed)).toHaveLength(1);
+    expect(await d.pairingTarget(null)).toBeNull();
+    // Back on a local pane Orca reports: no guess.
+    focus.current = { key: 'a:1', host: 'local' };
+    Object.assign(d['adapter'], { focusNote: 'worktrees=1 active=1 layouts=1' });
+    await d.refresh(['s1'], { force: true });
+    expect(d.panelPanes(() => null).some((p) => p.lastPressed)).toBe(false);
+  });
+
+  it('a pane the panel names with its host is the one mapped, when ids repeat across hosts', async () => {
+    const focus = { current: { key: null as string | null, host: null as string | null } };
+    const d = world(
+      [pane('t:1', { title: 'local' }), { ...remote('t:1'), title: 'remote' }],
+      focus,
+    );
+    const results: unknown[] = [];
+    d.onPairingResult = (r) => results.push(r);
+    await d.refresh(['s1', 's2']);
+    await d.assignFocusedTo('r1', 's1', false, true, 't:1', 'ssh:box');
+    await d.assignFocusedTo('r2', 's2', false, true, 't:1', 'local');
+    expect(results).toMatchObject([{ ok: true }, { ok: true }]);
+    const v = await d.refresh(['s1', 's2']);
+    expect(v.get('s1')).toMatchObject({ label: 'remote' });
+    expect(d.slotHost('s1')).toBe('ssh:box');
+    expect(v.get('s2')).toMatchObject({ label: 'local' });
+  });
+
+  it('the panel line puts the pane title first and the host apart', async () => {
+    const focus = { current: { key: null as string | null, host: null as string | null } };
+    const d = world(
+      [{ ...remote('t:1'), title: 'build', repo: 'r', branch: 'main', tabTitle: 'Tab 1' }],
+      focus,
+    );
+    await d.refresh([]);
+    expect(d.panelPanes(() => null)[0]).toMatchObject({
+      hostId: 'ssh:box',
+      label: 'r / main',
+      detail: 'build · Tab 1',
+      host: 'box',
+    });
+  });
 });
 
 describe('an Orca reply that does not parse', () => {
@@ -725,5 +1091,48 @@ describe('an Orca reply that does not parse', () => {
     breakIt();
     await d.refresh(['s1']);
     expect(d.overview()).toMatchObject({ mode: 'down', badResponse: false });
+  });
+});
+
+describe('pane names', () => {
+  const split = (key: string, over: Partial<PaneInfo> = {}) =>
+    pane(key, { title: '', tabTitle: 'Terminal', repo: 'repo', branch: 'main', ...over });
+  async function names(panes: PaneInfo[], slots: string[] = []) {
+    const { a } = fake({ panes, statuses: [], omittedHostIds: [] });
+    const d = new DeckController(a, new MappingStore(), undefined, { autofill: true });
+    const views = await d.refresh(slots);
+    return { list: d.listPanes(), panel: d.panelPanes(() => null), views };
+  }
+
+  it('two untitled panes of one tab get their position in the tab, everywhere', async () => {
+    const { list, panel, views } = await names([split('t:1'), split('t:2')], ['s1', 's2']);
+    expect(list.map((p) => p.title)).toEqual(['Terminal · pane 1', 'Terminal · pane 2']);
+    expect(panel.map((p) => p.name)).toEqual(['Terminal · pane 1', 'Terminal · pane 2']);
+    expect(panel.map((p) => p.detail)).toEqual(['Terminal · pane 1', 'Terminal · pane 2']);
+    expect([...views.values()].map((v) => v.label)).toEqual(['main · pane 1', 'main · pane 2']);
+    expect(panel[0]).toMatchObject({ repo: 'repo', branch: 'main', tab: 'Terminal' });
+  });
+
+  it('panes titled alike are told apart, a pane with its own title is not touched', async () => {
+    const { list } = await names([
+      split('t:1', { title: 'vim' }),
+      split('t:2', { title: 'vim' }),
+      split('t:3', { title: 'logs' }),
+    ]);
+    expect(list.map((p) => p.title)).toEqual(['vim · pane 1', 'vim · pane 2', 'logs']);
+  });
+
+  it('a pane alone in its tab gets no suffix and an untitled one reads as its tab', async () => {
+    const { list, views } = await names(
+      [split('t:1'), split('u:1', { tabTitle: 'Other' })],
+      ['s1'],
+    );
+    expect(list.map((p) => p.title)).toEqual(['Terminal', 'Other']);
+    expect(views.get('s1')?.label).toBe('main');
+  });
+
+  it('the same tab id on another host is another tab', async () => {
+    const { list } = await names([split('t:1'), split('t:2', { hostId: 'ssh:box' })]);
+    expect(list.map((p) => p.title)).toEqual(['Terminal', 'Terminal']);
   });
 });

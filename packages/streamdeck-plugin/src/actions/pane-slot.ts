@@ -10,20 +10,22 @@ import streamDeck, {
 } from '@elgato/streamdeck';
 import {
   HoldGestures,
+  deckLayout,
   formatKeyNumber,
   keyNumber,
-  pairingSlotView,
+  spinnerAdvances,
   renderKey,
   type DeckController,
+  type LayoutCell,
   type SlotView,
 } from '@orca-agent-deck/core';
+import { isCurrentPi, replyToPi } from './pi.ts';
 
 const image = (svg: string) => `data:image/svg+xml;charset=utf8,${encodeURIComponent(svg)}`;
 
 const HINT_MS = 3000;
 
 type PluginEvent = Parameters<NonNullable<SingletonAction['onSendToPlugin']>>[0];
-type PiPayload = Parameters<typeof streamDeck.ui.sendToPropertyInspector>[0];
 
 interface PiMessage {
   type?: string;
@@ -35,6 +37,22 @@ interface Key {
   setImage(image: string): Promise<void>;
   setTitle(title: string): Promise<void>;
 }
+
+/**
+ * The Orca panel, the one place a key is mapped. While it is open for mapping `pick` hands it a tapped key
+ * (false: it could not be sent); `open` shows it at a held key's details (false: it could not be opened) or, while
+ * the panel is already in view, hides the right sidebar instead ('hidden').
+ */
+export interface PanelPicker {
+  selecting(): boolean;
+  pick(key: number): boolean;
+  open(key: number): Promise<boolean | 'hidden'>;
+}
+const NO_PANEL: PanelPicker = {
+  selecting: () => false,
+  pick: () => false,
+  open: () => Promise.resolve(false),
+};
 
 /** One key per slot; slot id = action context. State comes from the shared DeckController. */
 @action({ UUID: 'pl.1am.orca-agent-deck.pane' })
@@ -48,26 +66,45 @@ export class PaneSlot extends SingletonAction {
   private ctl: DeckController | undefined;
   private readonly create: () => Promise<DeckController>;
   private ready: Promise<DeckController> | undefined;
-  private busy = false;
   /** Last image sent per key; keys are only updated on change (Mobile runs over Wi-Fi). */
   private readonly sent = new Map<string, string>();
   private readonly views = new Map<string, SlotView>();
   private tick = 0;
+  /** Spinner position, advanced by `spinnerAdvances` so a busy deck is not flooded with images. */
+  private spin = 0;
   /** A refresh was asked for while one ran; run once more so a press is not shown stale. */
   private again = false;
   /** Short text shown on a key for a moment after a failed hold. */
   private readonly hints = new Map<string, { text: string; until: number }>();
   private readonly gestures = new HoldGestures((slot) => void this.onHold(slot));
+  private readonly panel: PanelPicker;
 
-  constructor(create: () => Promise<DeckController>) {
+  /** Brings Orca to the front (the same raise a focus press uses); a no-op where the OS does not allow it. */
+  private readonly raise: () => Promise<unknown>;
+
+  constructor(
+    create: () => Promise<DeckController>,
+    panel: PanelPicker = NO_PANEL,
+    raise: () => Promise<unknown> = () => Promise.resolve(),
+  ) {
     super();
     this.create = create;
+    this.panel = panel;
+    this.raise = raise;
     setInterval(() => void this.refresh(), 2000);
-    // Spinner advances a quarter turn per tick; keys without a spinner produce an identical image and are not re-sent.
+    // Spinner advances an eighth turn per tick, or every other tick with more than 2 working keys.
+    // A tick with nothing to animate does not repaint at all; keys that did not change are not re-sent.
     setInterval(() => {
       this.tick++;
-      void this.repaint();
-    }, 500);
+      if (this.animating()) void this.repaint();
+    }, 250);
+  }
+
+  /** Is anything on the deck changing with time: a spinner, a hint about to expire? */
+  private animating(): boolean {
+    if (this.hints.size > 0) return true;
+    for (const id of this.keys.keys()) if (this.views.get(id)?.state === 'working') return true;
+    return false;
   }
 
   /** Created on first use, i.e. after the plugin connected to Stream Deck. */
@@ -127,9 +164,14 @@ export class PaneSlot extends SingletonAction {
     if (!this.gestures.keyUp(ev.action.id)) return;
     const id = ev.action.id;
     const c = await this.controller();
-    // Pairing mode: the next press binds the slot instead of focusing.
-    if (c.pairing.press(id, 'tap')) {
-      await this.refresh();
+    // With the Orca panel open for mapping a tap selects the key there (its details open).
+    const key = this.panel.selecting() ? this.keyOfSlot(id) : null;
+    if (key !== null && this.panel.pick(key)) {
+      // The panel's details change in Orca: bring it forward, no pane focus change.
+      void this.raise().catch(() => {});
+      streamDeck.logger.info(
+        `press slot=${id.slice(0, 6)} -> key ${key} opened in the Orca panel, Orca raised`,
+      );
       return;
     }
     // A paired-server pane takes over a second to switch: mark the key focused at once so the
@@ -149,29 +191,20 @@ export class PaneSlot extends SingletonAction {
     void this.refresh();
   }
 
-  /** Hold fires: assign / re-assign the focused pane, or release it when already shown here. */
+  /** Hold fires: the Orca panel opens at this key's details (mapping happens there, never from the deck). */
   private async onHold(slot: string): Promise<void> {
-    const found = this.actions.find((a) => a.id === slot);
-    const key = found?.isKey() ? found : undefined;
-    const c = await this.controller();
-    if (c.pairing.press(slot, 'hold')) {
-      await this.refresh();
-      return;
-    }
+    const key = this.keyOfSlot(slot);
     const t0 = Date.now();
-    const r = await c.hold(slot);
+    const opened = key !== null && (await this.panel.open(key));
+    // Only a panel that did open brings Orca forward; a hide leaves Orca where it is.
+    if (opened === true) await this.raise().catch(() => {});
     streamDeck.logger.info(
-      `hold slot=${slot.slice(0, 6)} -> ${r} ${Date.now() - t0}ms ${r === 'failed' ? c.holdError : ''}`,
+      `hold slot=${slot.slice(0, 6)} -> ${opened === 'hidden' ? 'sidebar hidden' : opened ? 'panel opened, Orca raised' : 'panel not opened'} ${Date.now() - t0}ms`,
     );
-    if (r === 'failed') {
-      await key?.showAlert();
-      // Say why on the key itself (a paired-server pane cannot be read from Orca).
-      this.hints.set(slot, { text: c.holdHint, until: Date.now() + HINT_MS });
-      void this.repaint();
-      return;
-    }
-    await this.refresh();
-    await key?.showOk();
+    if (opened) return;
+    // Orca closed, the Orca plugin missing or an old Orca: say where else a key is mapped, long enough to read.
+    this.hints.set(slot, { text: 'Map in Orca', until: Date.now() + HINT_MS });
+    void this.repaint();
   }
 
   /** The PI asks for its state on load and sends `configure` to pin, relabel or unmap. */
@@ -187,17 +220,42 @@ export class PaneSlot extends SingletonAction {
         paneKey: m.paneKey ?? null,
       });
       await this.refresh();
+    } else {
+      // A `load` can arrive before the first snapshot is in (the app opens the inspector as the plugin starts).
+      await this.refresh();
     }
-    await streamDeck.ui.sendToPropertyInspector({
+    const current = isCurrentPi(ev.action.id);
+    if (current) this.piOpen = ev.action.id;
+    streamDeck.logger.info(
+      `pi ${m.type ?? 'load'} slot=${ev.action.id.slice(0, 6)} -> ${current ? `reply ${c.listPanes().length} panes` : 'not the open inspector, no reply'}`,
+    );
+    await this.replyState(c, ev.action.id);
+  }
+
+  /** The slot whose inspector is open: it gets the pane list again when a refresh changes it. */
+  private piOpen: string | null = null;
+  private piSent = '';
+
+  private async replyState(c: DeckController, id: string, force = true): Promise<void> {
+    const payload = {
       type: 'state',
-      panes: c.listPanes(),
-      config: c.slotConfig(ev.action.id),
-    } as unknown as PiPayload);
+      panes: c.listPanes((slot) => this.keyOfSlot(slot)),
+      config: c.slotConfig(id),
+    };
+    const sig = JSON.stringify(payload);
+    if (!force && sig === this.piSent) return;
+    this.piSent = sig;
+    await replyToPi(id, payload);
   }
 
   override async onPropertyInspectorDidAppear(ev: PropertyInspectorDidAppearEvent): Promise<void> {
+    this.piOpen = ev.action.id;
     await this.refresh();
     await this.onSendToPlugin({ action: ev.action, payload: { type: 'load' } } as never);
+  }
+
+  override onPropertyInspectorDidDisappear(ev: { action: { id: string } }): void {
+    if (this.piOpen === ev.action.id) this.piOpen = null;
   }
 
   /** Redraw from the last views at once (pairing mode changes what keys show; no Orca round trip). */
@@ -205,48 +263,120 @@ export class PaneSlot extends SingletonAction {
     void this.repaint();
   }
 
-  /** A push from plugin A arrived: refresh now instead of waiting for the next poll. */
-  nudge(): void {
-    void this.refresh();
+  /** The slot (action id) of a 1-based key number on the deck the Orca panel shows, or null. */
+  slotOfKey(key: number): string | null {
+    const dev = this.shownDevice();
+    for (const a of this.actions)
+      if (a.device.id === dev && this.indexes.get(a.id) === key) return a.id;
+    return null;
   }
 
-  private async refresh(): Promise<void> {
-    if (this.keys.size === 0) return;
-    if (this.busy) {
+  /** The key number a slot has on the deck the Orca panel shows, or null. */
+  keyOfSlot(slot: string): number | null {
+    const dev = this.shownDevice();
+    const a = this.actions.find((x) => x.id === slot);
+    return a && a.device.id === dev ? (this.indexes.get(slot) ?? null) : null;
+  }
+
+  /** The first connected device that has our keys on it: the one the Orca panel draws. */
+  private shownDevice(): string | null {
+    for (const d of streamDeck.devices)
+      if (d.isConnected && this.actions.some((a) => a.device.id === d.id)) return d.id;
+    return null;
+  }
+
+  /** The Status and Attention actions, so the panel's grid can show what else of ours sits on the deck. */
+  private infoKeys: { kind: 'status' | 'attention'; source: SingletonAction }[] = [];
+  setInfoKeys(keys: { kind: 'status' | 'attention'; source: SingletonAction }[]): void {
+    this.infoKeys = keys;
+  }
+
+  /** The deck as the Orca panel draws it (the `deckState` frame without its envelope). */
+  deckState(): {
+    connected: boolean;
+    model: string | null;
+    cols: number;
+    rows: number;
+    keys: { key: number; label: string; state: string; mapped: boolean }[];
+    layout: LayoutCell[];
+  } {
+    const id = this.shownDevice();
+    const dev = streamDeck.devices.find((d) => d.id === id);
+    if (!dev) return { connected: false, model: null, cols: 0, rows: 0, keys: [], layout: [] };
+    const keys = this.actions
+      .filter((a) => a.device.id === id && this.indexes.has(a.id))
+      .toArray()
+      .map((a) => {
+        const v = this.views.get(a.id);
+        const mapped = !!v && v.state !== 'unmapped';
+        return {
+          key: this.indexes.get(a.id) ?? 0,
+          label: mapped ? v.label : '',
+          state: v?.state ?? 'unmapped',
+          mapped,
+        };
+      })
+      .sort((x, y) => x.key - y.key);
+    return {
+      connected: true,
+      model: String(dev.type),
+      cols: dev.size.columns,
+      rows: dev.size.rows,
+      keys,
+      layout: deckLayout(dev.size.columns, dev.size.rows, [
+        ...this.actions
+          .filter((a) => a.device.id === id && a.isKey() && !!a.coordinates)
+          .toArray()
+          .map((a) => ({ kind: 'pane' as const, coordinates: a.coordinates! })),
+        ...this.infoKeys.flatMap(({ kind, source }) =>
+          source.actions
+            .filter((a) => a.device.id === id && a.isKey() && !!a.coordinates)
+            .toArray()
+            .map((a) => ({ kind, coordinates: a.coordinates! })),
+        ),
+      ]),
+    };
+  }
+
+  /** A push from plugin A arrived: refresh now instead of waiting for the next poll. */
+  nudge(): Promise<void> {
+    return this.refresh();
+  }
+
+  /** Resolves when the refresh that is running, including the one it was asked to repeat, is done. */
+  private running: Promise<void> | null = null;
+
+  private refresh(): Promise<void> {
+    if (this.keys.size === 0) return Promise.resolve();
+    if (this.running) {
       this.again = true;
-      return;
+      return this.running;
     }
-    this.busy = true;
-    try {
-      do {
-        this.again = false;
-        const views = await (await this.controller()).refresh([...this.keys.keys()]);
-        for (const [id, v] of views) this.views.set(id, v);
-        await this.repaint();
-      } while (this.again);
-    } finally {
-      this.busy = false;
-    }
+    this.running = (async () => {
+      try {
+        do {
+          this.again = false;
+          const views = await (await this.controller()).refresh([...this.keys.keys()]);
+          for (const [id, v] of views) this.views.set(id, v);
+          await this.repaint();
+          if (this.piOpen && this.ctl) await this.replyState(this.ctl, this.piOpen, false);
+        } while (this.again);
+      } finally {
+        this.running = null;
+      }
+    })();
+    return this.running;
   }
 
   private async repaint(): Promise<void> {
     const now = Date.now();
+    let working = 0;
+    for (const id of this.keys.keys()) if (this.views.get(id)?.state === 'working') working++;
+    if (spinnerAdvances(this.tick, working)) this.spin++;
     await Promise.all(
       [...this.keys].map(async ([id, k]) => {
         const base = this.views.get(id);
-        const waiting = this.ctl?.pairing.state;
-        const v =
-          waiting?.phase === 'waitingForKey'
-            ? pairingSlotView(
-                waiting,
-                id,
-                base,
-                waiting.pane.lastKnown.paneTitle ??
-                  waiting.pane.lastKnown.title ??
-                  waiting.pane.paneKey,
-                this.tick % 2 === 0,
-              )
-            : base;
+        const v = base;
         if (!v) return;
         const hint = this.hints.get(id);
         if (hint && hint.until <= now) this.hints.delete(id);
@@ -256,9 +386,8 @@ export class PaneSlot extends SingletonAction {
             {
               ...shown,
               keyNumber: this.numbers.get(id),
-              bigNumber: shown.assign ? (this.numbers.get(id) ?? null) : null,
             },
-            { size: 144, spin: this.tick },
+            { size: 144, spin: this.spin },
           ),
         );
         if (this.sent.get(id) === img) return;

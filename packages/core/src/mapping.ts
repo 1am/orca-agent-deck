@@ -31,6 +31,15 @@ export interface SlotSettings {
   autoFilter?: Record<string, unknown>;
   /** ms epoch when the bound pane was last seen; used for offline retention. */
   lastSeenAt?: number;
+  /** ms epoch when this pane was put on this slot (not refreshed while it stays): which of two copies is newer. */
+  assignedAt?: number;
+}
+
+/** A pane that a mappings file had on several keys: it stays on the newest, the others were cleared. */
+export interface DedupedPane {
+  paneKey: string;
+  kept: string;
+  removed: string[];
 }
 
 export const DEFAULT_RETENTION_MS = 24 * 60 * 60 * 1000;
@@ -77,6 +86,34 @@ export class MappingStore {
     this.now = now;
     this.retentionMs = retentionMs;
     this.slots = storage.load();
+    this.dedupedOnLoad = this.dedupe();
+  }
+
+  /** What loading cleaned up (a pane on two keys, from before a pane lived on one key only), for the log. */
+  readonly dedupedOnLoad: DedupedPane[];
+
+  /** A pane is on at most one key: where a file has it on several, the most recently assigned keeps it. */
+  private dedupe(): DedupedPane[] {
+    const by = new Map<string, string[]>();
+    for (const [k, s] of Object.entries(this.slots)) {
+      if (!s.pane) continue;
+      const id = `${s.pane.executionHostId ?? 'local'}\0${s.pane.paneKey}`;
+      by.set(id, [...(by.get(id) ?? []), k]);
+    }
+    const out: DedupedPane[] = [];
+    for (const keys of by.values()) {
+      const paneKey = this.slots[keys[0]!]!.pane!.paneKey;
+      if (keys.length < 2) continue;
+      // Files from before `assignedAt` order by position in the file, which is assignment order.
+      const kept = keys.reduce((a, b) =>
+        (this.slots[b]!.assignedAt ?? 0) >= (this.slots[a]!.assignedAt ?? 0) ? b : a,
+      );
+      const removed = keys.filter((k) => k !== kept);
+      for (const k of removed) delete this.slots[k];
+      out.push({ paneKey, kept, removed });
+    }
+    if (out.length) this.persist();
+    return out;
   }
 
   get(slot: string): SlotSettings | undefined {
@@ -84,10 +121,18 @@ export class MappingStore {
   }
 
   set(slot: string, s: SlotSettings): void {
+    const prev = this.slots[slot];
     this.slots[slot] = {
       ...s,
-      pos: s.pos ?? this.slots[slot]?.pos,
+      pos: s.pos ?? prev?.pos,
       lastSeenAt: s.pane ? this.now() : s.lastSeenAt,
+      ...(s.pane
+        ? {
+            assignedAt:
+              s.assignedAt ??
+              (prev?.pane?.paneKey === s.pane.paneKey ? prev.assignedAt : this.now()),
+          }
+        : {}),
     };
     this.persist();
   }
@@ -98,7 +143,13 @@ export class MappingStore {
    * such key exists (the other keys being on another page cannot be told apart from vanished ones,
    * hence only keys without any settings inherit). Returns true when a mapping was carried over.
    */
-  locate(slot: string, pos: SlotPosition, live: ReadonlySet<string>): boolean {
+  locate(
+    slot: string,
+    pos: SlotPosition,
+    live: ReadonlySet<string>,
+    /** Devices seen live since this process started: their keys are not a host switch, a deck just went away. */
+    seenDevices: ReadonlySet<string> = new Set(),
+  ): boolean {
     const cur = this.slots[slot];
     // Only a key never seen before may inherit: a known key keeps its own settings, and a key that is
     // merely on another page right now must not be mistaken for a vanished one.
@@ -109,9 +160,36 @@ export class MappingStore {
       }
       return false;
     }
-    const orphans = Object.entries(this.slots).filter(
-      ([k, o]) => k !== slot && !live.has(k) && o.pane && samePos(o.pos, pos),
+    const vanished = Object.entries(this.slots).filter(
+      ([k, o]) =>
+        k !== slot &&
+        !live.has(k) &&
+        o.pane &&
+        o.pos?.column === pos.column &&
+        o.pos.row === pos.row,
     );
+    // The same deck seen by another host has another device id (OpenDeck: `sd-<serial>`): without an exact
+    // device match, take a vanished key whose device has no live key left, so two real decks are never merged.
+    const liveDevices = new Set(
+      Object.entries(this.slots).flatMap(([k, o]) => (live.has(k) && o.pos ? [o.pos.device] : [])),
+    );
+    // Another live deck with a key at this position could be the owner of that orphan, and a deck that was live a
+    // moment ago (Stream Deck Mobile disconnecting) is gone, not another host's name for this one: neither inherits.
+    const liveElsewhere = Object.entries(this.slots).some(
+      ([k, o]) =>
+        live.has(k) &&
+        o.pos?.device !== pos.device &&
+        o.pos?.column === pos.column &&
+        o.pos.row === pos.row,
+    );
+    const exact = vanished.filter(([, o]) => samePos(o.pos, pos));
+    const orphans = exact.length
+      ? exact
+      : liveElsewhere
+        ? []
+        : vanished.filter(
+            ([, o]) => !liveDevices.has(o.pos!.device) && !seenDevices.has(o.pos!.device),
+          );
     if (orphans.length === 1) {
       const [k, o] = orphans[0]!;
       delete this.slots[k];
@@ -129,9 +207,14 @@ export class MappingStore {
   }
 
   /** paneKey -> slot contexts (a pane may be shown on several slots). */
-  slotsFor(paneKey: string): string[] {
+  /** Slots showing `paneKey`; with `hostId` only that host's pane (tab and leaf ids repeat across hosts). */
+  slotsFor(paneKey: string, hostId?: string | null): string[] {
     return Object.entries(this.slots)
-      .filter(([, s]) => s.pane?.paneKey === paneKey)
+      .filter(
+        ([, s]) =>
+          s.pane?.paneKey === paneKey &&
+          (!hostId || (s.pane.executionHostId ?? 'local') === hostId),
+      )
       .map(([k]) => k);
   }
 
@@ -141,7 +224,12 @@ export class MappingStore {
   }
 
   mappedPaneKeys(): Set<string> {
-    return new Set(Object.values(this.slots).flatMap((s) => (s.pane ? [s.pane.paneKey] : [])));
+    return new Set(this.bindings().map((b) => b.paneKey));
+  }
+
+  /** The pane of every mapped slot. */
+  bindings(): PaneBinding[] {
+    return Object.values(this.slots).flatMap((s) => (s.pane ? [s.pane] : []));
   }
 
   /**

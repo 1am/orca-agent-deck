@@ -25,7 +25,18 @@ export class FakeRuntime {
 
   async start(): Promise<void> {
     this.server = createServer((sock) => this.serve(sock));
-    await new Promise<void>((r) => this.server?.listen(this.sockPath, r));
+    // A listen failure (a pipe name already taken) fails this start with its reason, not the whole process.
+    await new Promise<void>((resolve, reject) => {
+      const server = this.server!;
+      server.once('error', (e) =>
+        reject(new Error(`fake runtime cannot listen on ${this.sockPath}: ${e.message}`)),
+      );
+      server.listen(this.sockPath, () => {
+        server.removeAllListeners('error');
+        server.on('error', () => {});
+        resolve();
+      });
+    });
     await this.writeMeta();
   }
 
@@ -54,7 +65,7 @@ export class FakeRuntime {
         runtimeId: 'fake-runtime',
         authToken: this.token,
         transports: [
-          { kind: 'unix', endpoint: this.sockPath },
+          { kind: process.platform === 'win32' ? 'named-pipe' : 'unix', endpoint: this.sockPath },
           { kind: 'websocket', endpoint: 'ws://127.0.0.1:1' },
         ],
       }),
@@ -128,9 +139,10 @@ export class FakeRuntime {
         }
         return { worktree: { id: params['worktree'], isUnread: params['isUnread'] === true } };
       case 'terminal.resolveActive':
-        if (!s.focusedHandle)
+        // The local runtime's active terminal: a focused remote pane is not it.
+        if (!s.localFocusedHandle)
           throw Object.assign(new Error('no active terminal'), { code: 'no_active_terminal' });
-        return { handle: s.focusedHandle };
+        return { handle: s.localFocusedHandle };
       case 'terminal.show': {
         const p = s.panes.find((x) => x.handle === params['terminal']);
         if (!p)
@@ -138,6 +150,17 @@ export class FakeRuntime {
             code: 'terminal_handle_stale',
           });
         return { terminal: { tabId: p.tabId, leafId: p.leafId } };
+      }
+      case 'plugins.open': {
+        const key = params['pluginKey'];
+        // Without `orca.plugin` steps Agent Deck is installed from the catalog.
+        const known = s.plugins
+          ? s.plugins.filter((x) => x.status === 'enabled').map((x) => x.pluginKey)
+          : ['1am.agent-deck'];
+        if (typeof key !== 'string' || !known.includes(key))
+          throw Object.assign(new Error('plugin not found'), { code: 'plugin_not_found' });
+        const panelId = typeof params['panelId'] === 'string' ? params['panelId'] : 'deck';
+        return { kind: 'panel', title: 'Agent Deck', pluginKey: key, panelId };
       }
       default:
         throw Object.assign(new Error(`Unknown method: ${method}`), { code: 'method_not_found' });

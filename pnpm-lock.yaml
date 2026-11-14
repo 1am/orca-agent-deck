@@ -8,9 +8,6 @@ importers:
 
   .:
     dependencies:
-      '@elgato/streamdeck':
-        specifier: ^3.0.4
-        version: 3.0.4
       ws:
         specifier: 8.22.0
         version: 8.22.0
@@ -21,9 +18,30 @@ importers:
       '@elgato/cli':
         specifier: ^1.10.4
         version: 1.10.4(@types/node@22.20.5)
+      '@elgato/streamdeck':
+        specifier: 3.0.4
+        version: 3.0.4
       '@eslint/js':
         specifier: ^9.0.0
         version: 9.39.5
+      '@orca-agent-deck/adapter-bridge':
+        specifier: workspace:*
+        version: link:packages/adapter-bridge
+      '@orca-agent-deck/adapter-cli':
+        specifier: workspace:*
+        version: link:packages/adapter-cli
+      '@orca-agent-deck/adapter-runtime':
+        specifier: workspace:*
+        version: link:packages/adapter-runtime
+      '@orca-agent-deck/core':
+        specifier: workspace:*
+        version: link:packages/core
+      '@orca-agent-deck/fake-orca':
+        specifier: workspace:*
+        version: link:packages/fake-orca
+      '@orca-agent-deck/window-raiser':
+        specifier: workspace:*
+        version: link:packages/window-raiser
       '@rollup/plugin-commonjs':
         specifier: ^29.0.3
         version: 29.0.3(rollup@4.66.0)
@@ -39,6 +57,9 @@ importers:
       '@vitest/coverage-v8':
         specifier: ^2.1.0
         version: 2.1.9(supports-color@7.2.0)(vitest@2.1.9(@types/node@22.20.5)(supports-color@7.2.0))
+      esbuild:
+        specifier: 0.21.5
+        version: 0.21.5
       eslint:
         specifier: ^9.0.0
         version: 9.39.5(supports-color@7.2.0)
@@ -61,17 +82,55 @@ importers:
         specifier: ^2.1.0
         version: 2.1.9(@types/node@22.20.5)(supports-color@7.2.0)
 
-  packages/adapter-bridge: {}
+  packages/adapter-bridge:
+    dependencies:
+      '@orca-agent-deck/core':
+        specifier: workspace:*
+        version: link:../core
 
-  packages/adapter-cli: {}
+  packages/adapter-cli:
+    dependencies:
+      '@orca-agent-deck/core':
+        specifier: workspace:*
+        version: link:../core
 
-  packages/adapter-runtime: {}
+  packages/adapter-runtime:
+    dependencies:
+      '@orca-agent-deck/adapter-cli':
+        specifier: workspace:*
+        version: link:../adapter-cli
 
   packages/core: {}
 
-  packages/fake-orca: {}
+  packages/fake-orca:
+    dependencies:
+      '@orca-agent-deck/adapter-bridge':
+        specifier: workspace:*
+        version: link:../adapter-bridge
+      '@orca-agent-deck/adapter-cli':
+        specifier: workspace:*
+        version: link:../adapter-cli
+      '@orca-agent-deck/core':
+        specifier: workspace:*
+        version: link:../core
 
-  packages/streamdeck-plugin: {}
+  packages/streamdeck-plugin:
+    dependencies:
+      '@orca-agent-deck/adapter-bridge':
+        specifier: workspace:*
+        version: link:../adapter-bridge
+      '@orca-agent-deck/adapter-cli':
+        specifier: workspace:*
+        version: link:../adapter-cli
+      '@orca-agent-deck/adapter-runtime':
+        specifier: workspace:*
+        version: link:../adapter-runtime
+      '@orca-agent-deck/core':
+        specifier: workspace:*
+        version: link:../core
+      '@orca-agent-deck/window-raiser':
+        specifier: workspace:*
+        version: link:../window-raiser
 
   packages/window-raiser: {}
 

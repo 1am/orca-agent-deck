@@ -1,0 +1,4 @@
+t(ms)  key  orca event                  state          label | line 2
+     0  1    addPane r                  completed      Claude Code | done
+  1000  1    host ssh-1 down            unreachable    Claude Code | host down
+  6000  1    host ssh-1 up              completed      Claude Code | done

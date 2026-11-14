@@ -7,6 +7,8 @@ on:
 
 permissions:
   contents: write
+  id-token: write # keyless signing of the attestations (Sigstore)
+  attestations: write
 
 concurrency: release
 
@@ -62,6 +64,15 @@ jobs:
       - run: node --experimental-strip-types scripts/release.ts validate "$TAG"
       # typecheck, unit tests, build, sd:validate, pack, Orca zip, notes, checksums
       - run: make package
+      # Signs every release file as built by this workflow from this commit; the pin is the commit of v4.2.2.
+      - name: Attest the release files
+        uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
+        with:
+          subject-path: |
+            dist/*.streamDeckPlugin
+            dist/*.zip
+            dist/collect-diagnostics.mjs
+            dist/SHA256SUMS
       - name: Tag and publish the GitHub release
         env:
           GH_TOKEN: ${{ github.token }}

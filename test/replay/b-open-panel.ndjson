@@ -1,0 +1,15 @@
+{"v":2,"name":"b-open-panel","description":"A asks B to show the Agent Deck panel (a worker cannot): B calls Orca's runtime plugins.open for the catalog install, for a local install when that is the one enabled, and answers refused when Orca does not have the plugin. Revert check: drop the openPanel handler in plugin B (plugin.ts): no openPanelResult arrives.","sides":["b"],"keys":{}}
+{"at":0,"do":"orca.pane.add","pane":"a"}
+{"at":0,"do":"orca.focus","pane":"a"}
+{"at":0,"do":"deck.appear","key":1}
+{"at":100,"do":"bridge.frame","from":"a","frame":{"type":"openPanel","requestId":"o1","panelId":"deck"}}
+{"at":100,"do":"expect.runtime","method":"plugins.open","params":{"pluginKey":"1am.agent-deck","panelId":"deck"}}
+{"at":100,"do":"bridge.frame","from":"b","frame":{"type":"openPanelResult","requestId":"o1","ok":true}}
+{"at":200,"do":"orca.plugin","key":"1am.agent-deck","status":"absent"}
+{"at":200,"do":"orca.plugin","key":"local.agent-deck","status":"enabled"}
+{"at":300,"do":"bridge.frame","from":"a","frame":{"type":"openPanel","requestId":"o2","panelId":"deck"}}
+{"at":300,"do":"expect.runtime","method":"plugins.open","params":{"pluginKey":"local.agent-deck","panelId":"deck"}}
+{"at":300,"do":"bridge.frame","from":"b","frame":{"type":"openPanelResult","requestId":"o2","ok":true}}
+{"at":400,"do":"orca.plugin","key":"local.agent-deck","status":"disabled"}
+{"at":500,"do":"bridge.frame","from":"a","frame":{"type":"openPanel","requestId":"o3","panelId":"deck"}}
+{"at":500,"do":"bridge.frame","from":"b","frame":{"type":"openPanelResult","requestId":"o3","ok":false,"reason":"refused"}}

@@ -1,0 +1,17 @@
+{"v":2,"name":"b-panel-select","description":"The Orca panel is in view and open for mapping (panelSelect on): a tap on a key that shows a pane opens it in the panel (keyPicked) instead of focusing; a free key opens in the panel too; panelSelect off gives taps back their focus. Revert check: ignore panelSelect in plugin B (plugin.ts): the tap on key 1 focuses pane a and no keyPicked arrives.","sides":["b"],"keys":{"1":"a"}}
+{"at":0,"do":"orca.pane.add","pane":"a"}
+{"at":0,"do":"orca.pane.add","pane":"b"}
+{"at":0,"do":"orca.focus","pane":"b"}
+{"at":0,"do":"deck.appear","key":1}
+{"at":0,"do":"deck.appear","key":2}
+{"at":100,"do":"bridge.frame","from":"a","frame":{"type":"panelSelect","on":true}}
+{"at":200,"do":"deck.down","key":1}
+{"at":200,"do":"deck.up","key":1}
+{"at":200,"do":"bridge.frame","from":"b","frame":{"type":"keyPicked","key":1}}
+{"at":400,"do":"deck.down","key":2}
+{"at":400,"do":"deck.up","key":2}
+{"at":400,"do":"bridge.frame","from":"b","frame":{"type":"keyPicked","key":2}}
+{"at":500,"do":"bridge.frame","from":"a","frame":{"type":"panelSelect","on":false}}
+{"at":600,"do":"deck.down","key":1}
+{"at":600,"do":"deck.up","key":1}
+{"at":600,"do":"expect.focus","pane":"a"}

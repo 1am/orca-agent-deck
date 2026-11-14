@@ -162,8 +162,22 @@ export const host = z.object({
   id: z.string(),
   kind: z.enum(['local', 'ssh', 'environment']),
   name: z.string(),
+  /** Set by the runtime route for a paired server on an SSH target: that connection's name. */
+  label: z.string().optional(),
   connected: z.boolean().optional(),
 });
+
+export const environmentListResponse = envelope(
+  z.object({
+    environments: z.array(
+      z.object({
+        id: z.string(),
+        name: z.string(),
+        orcadDeployment: z.object({ sshTargetId: z.string().optional() }).partial().optional(),
+      }),
+    ),
+  }),
+);
 
 export const hostListResponse = envelope(z.object({ hosts: z.array(host) }));
 

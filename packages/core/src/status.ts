@@ -60,8 +60,10 @@ export function deriveDeckState(obs: PaneObservation, lastKnown?: DeckState): De
   if (obs.hostDown) {
     return { state: 'unreachable', stale: true, lastKnown };
   }
-  if (!obs.found || !obs.connected) return fresh('offline');
+  if (!obs.found) return fresh('offline');
+  // Orca lists a pane whose process ended as disconnected with the cause: a crash is an error, not "offline".
   if (obs.exitCause === 'crash' || obs.exitCause === 'nonzero') return fresh('error');
+  if (!obs.connected) return fresh('offline');
   const a = obs.agent;
   if (!a) return fresh('idle');
   switch (a.state) {
@@ -97,7 +99,7 @@ export const stateColour: Record<DeckState, string> = {
 
 export function lineTwo(
   state: DeckState,
-  ctx: { toolName?: string | null; elapsedMs?: number; agentName?: string | null } = {},
+  ctx: { elapsedMs?: number; agentName?: string | null } = {},
 ): string {
   const secs = Math.floor((ctx.elapsedMs ?? 0) / 1000);
   switch (state) {
@@ -112,7 +114,8 @@ export function lineTwo(
     case 'working':
       return `working ${secs}s`;
     case 'needs_input':
-      return ctx.toolName ? 'permission' : 'needs you';
+      // Orca's agent.status.changed carries no tool name, only the poll does: the same state must read the same on both paths.
+      return 'needs you';
     case 'awaiting_reply':
       return 'asks you';
     case 'completed':

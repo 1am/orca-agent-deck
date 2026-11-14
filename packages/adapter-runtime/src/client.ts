@@ -175,3 +175,29 @@ export class RuntimeClient {
     });
   }
 }
+
+/** Orca plugin keys of plugin A, in the order they are tried: a catalog or git install, then a local folder. */
+export const PLUGIN_A_KEYS: readonly string[] = ['1am.agent-deck', 'local.agent-deck'];
+
+/**
+ * Shows panel `panelId` of plugin A in Orca's sidebar (`plugins.open`, what `orca plugin open` calls). The install
+ * decides the plugin key, so each is tried until one is installed. Resolves to the key shown; rejects with the last
+ * error when none is (`RuntimeUnavailableError` when the runtime cannot be reached at all).
+ */
+export async function openPluginPanel(
+  client: Pick<RuntimeClient, 'call'>,
+  panelId: string,
+  keys: readonly string[] = PLUGIN_A_KEYS,
+): Promise<string> {
+  let last: unknown = new Error('no plugin key');
+  for (const pluginKey of keys) {
+    try {
+      await client.call('plugins.open', { pluginKey, panelId });
+      return pluginKey;
+    } catch (e) {
+      if (e instanceof RuntimeUnavailableError) throw e;
+      last = e;
+    }
+  }
+  throw last;
+}

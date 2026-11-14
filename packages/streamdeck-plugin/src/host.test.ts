@@ -2,31 +2,17 @@ import { readFileSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
-import { SDK_CALLS, canUse, detectHost } from './host.ts';
+import { detectHost } from '@orca-agent-deck/core';
+import { SDK_CALLS, canUse } from './host.ts';
 
 const mac = { application: { version: '7.1.0', platform: 'mac' } };
-
-describe('detectHost', () => {
-  it('Linux can only be OpenDeck', () => {
-    expect(detectHost({ application: { version: '1', platform: 'linux' } }, {}).kind).toBe(
-      'opendeck',
-    );
-  });
-  it('mac and windows cannot be told apart from the registration info: unknown unless forced', () => {
-    expect(detectHost(mac, {})).toMatchObject({ kind: 'unknown', basis: 'none' });
-    expect(detectHost(mac, { ORCA_DECK_HOST: 'OpenDeck' })).toMatchObject({
-      kind: 'opendeck',
-      basis: 'env',
-    });
-    expect(detectHost(mac, { ORCA_DECK_HOST: 'elgato' }).kind).toBe('elgato');
-  });
-});
+const host = (env: Record<string, string>) => detectHost(mac, 'darwin', env);
 
 describe('canUse', () => {
   it('non-portable features need the Elgato app; unknown hosts get the portable subset', () => {
-    const el = detectHost(mac, { ORCA_DECK_HOST: 'elgato' });
-    const od = detectHost(mac, { ORCA_DECK_HOST: 'opendeck' });
-    const un = detectHost(mac, {});
+    const el = host({ ORCA_DECK_HOST: 'elgato' });
+    const od = host({ ORCA_DECK_HOST: 'opendeck' });
+    const un = host({});
     for (const f of ['bundledProfiles', 'switchToProfile', 'deviceDidChange'] as const) {
       expect(canUse(el, f)).toBe(true);
       expect(canUse(od, f)).toBe(false);

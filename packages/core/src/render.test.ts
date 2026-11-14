@@ -1,5 +1,14 @@
-import { expect, it } from 'vitest';
-import { layoutLabel, renderKey, textWidth, type KeyModel } from './render.ts';
+import { describe, expect, it } from 'vitest';
+import {
+  decodeKey,
+  harnessLabel,
+  layoutLabel,
+  renderInfoKey,
+  renderKey,
+  spinnerAdvances,
+  textWidth,
+  type KeyModel,
+} from './render.ts';
 import type { DeckState } from './status.ts';
 
 const STATES: DeckState[] = [
@@ -65,9 +74,9 @@ it('cuts labels at 128 characters and ellipsises what does not fit', () => {
   expect(l.size).toBe(12);
   expect(l.lines.join(' ').length).toBeLessThanOrEqual(128);
   expect(l.lines.at(-1)?.endsWith('…')).toBe(true);
-  expect(renderKey({ state: 'idle', label: 'y'.repeat(300), line2: '' })).not.toContain(
-    'y'.repeat(129),
-  );
+  // The drawing is cut; the data-label marker keeps the whole label for the replay suite.
+  const svg = renderKey({ state: 'idle', label: 'y'.repeat(300), line2: '' });
+  expect(svg.slice(svg.indexOf('<rect'))).not.toContain('y'.repeat(129));
 });
 
 it('shows agent and host badges, link-broken marker; only the working icon spins', () => {
@@ -81,15 +90,49 @@ it('shows agent and host badges, link-broken marker; only the working icon spins
   };
   const svg = renderKey(m, { spin: 0 });
   expect(svg).toContain('M12 5v14');
-  expect(renderKey({ ...m, agent: 'pi' })).toContain('M6.5 8.5h11');
+  expect(renderKey({ ...m, agent: 'pi' })).toContain('M165.29 165.29'); // Orca's icon
   expect(renderKey({ ...m, agent: null })).toContain('M10 6.5l-1.2 11');
-  expect(renderKey({ ...m, agent: 'gemini' })).toContain('>G</text>');
+  expect(renderKey({ ...m, agent: 'kimi' })).toContain('data:image/png;base64,');
+  expect(renderKey({ ...m, agent: 'mystery-agent' })).toContain('>M</text>');
   expect(renderKey({ ...m, agent: null, state: 'unmapped' })).not.toContain('stroke-width="2.2"');
   expect(svg).toContain('devbox');
-  expect(renderKey(m, { spin: 1 })).toContain('rotate(90 20 20)');
+  expect(renderKey(m, { spin: 1 })).toContain('rotate(45 20 20)');
+  expect(renderKey(m, { spin: 8 })).toBe(renderKey(m, { spin: 0 }));
   expect(renderKey({ ...m, state: 'completed' }, { spin: 1 })).toBe(
     renderKey({ ...m, state: 'completed' }, { spin: 0 }),
   );
+});
+
+it('draws a distinct pictogram per known agent and two letters where first letters clash', () => {
+  const m: KeyModel = { state: 'idle', label: 'a', line2: 'b' };
+  const glyphs = ['opencode', 'droid', 'devin', 'gemini', 'copilot', 'cursor', 'amp'].map(
+    (agent) => {
+      const svg = renderKey({ ...m, agent });
+      expect(svg).not.toContain('text-anchor="middle"');
+      return svg;
+    },
+  );
+  expect(new Set(glyphs).size).toBe(glyphs.length);
+  // Orca's agent type may come in any case.
+  expect(renderKey({ ...m, agent: 'DROID' })).toBe(renderKey({ ...m, agent: 'droid' }));
+  expect(harnessLabel('cline')).toBe('Cl');
+  expect(harnessLabel('crush')).toBe('Cr');
+  expect(harnessLabel('kimi')).toBe('K');
+  expect(harnessLabel('mystery')).toBe('M');
+});
+
+it('asks for a metric-compatible font before DejaVu Sans', () => {
+  const stack = 'font-family="Helvetica, Arial, Liberation Sans, DejaVu Sans, sans-serif"';
+  expect(renderKey({ state: 'idle', label: 'a', line2: 'b' })).toContain(stack);
+  expect(renderInfoKey({ tone: 'idle', value: '1', caption: 'a' })).toContain(stack);
+});
+
+it('spinner: 4 fps up to 2 working keys, 2 fps above', () => {
+  const ticks = [0, 1, 2, 3, 4, 5, 6, 7];
+  expect(ticks.filter((t) => spinnerAdvances(t, 2))).toHaveLength(8);
+  expect(ticks.filter((t) => spinnerAdvances(t, 3))).toEqual([0, 2, 4, 6]);
+  expect(ticks.filter((t) => spinnerAdvances(t, 32))).toHaveLength(4);
+  expect(ticks.filter((t) => spinnerAdvances(t, 0))).toHaveLength(8);
 });
 
 it('high-contrast theme changes the palette', () => {
@@ -146,17 +189,72 @@ it('draws the host badge for a remote pane, ellipsized to 7 characters', () => {
   expect(renderKey({ state: 'working', label: 'x', line2: '' })).not.toContain('text-anchor="end"');
 });
 
-it('pairing mode draws the key number large and the label as one short line', () => {
-  const svg = renderKey({
-    state: 'unmapped',
-    label: 'Assign here: feature-login > claude',
-    line2: '',
-    bigNumber: '5',
-    keyNumber: '5',
+describe('decodeKey', () => {
+  it('reads back what the key says, including escaped text and the info key mapping', () => {
+    const svg = renderKey({
+      state: 'needs_input',
+      label: 'a "b" <c> & d',
+      line2: 'permission',
+      agent: 'claude',
+      keyNumber: '3',
+    });
+    expect(decodeKey(svg)).toEqual({
+      state: 'needs_input',
+      label: 'a "b" <c> & d',
+      line2: 'permission',
+      agent: 'claude',
+      number: '3',
+    });
+    expect(decodeKey(`data:image/svg+xml;charset=utf8,${encodeURIComponent(svg)}`)?.state).toBe(
+      'needs_input',
+    );
+    expect(
+      decodeKey(renderInfoKey({ tone: 'completed', value: 'OK', caption: 'live 1.4' })),
+    ).toEqual({ state: 'completed', label: 'live 1.4', line2: 'OK' });
+    expect(decodeKey('<svg xmlns="x"></svg>')).toBeNull();
   });
-  expect(svg).toContain('font-size="72"');
-  expect(svg).toContain('>5</text>');
-  expect(svg).not.toContain('5: Assign');
+});
+
+describe('Orca agent icons', () => {
+  const m: KeyModel = { state: 'idle', label: 'a', line2: 'b' };
+
+  it('draws a solid favicon as it is on the badge disc (chip)', () => {
+    const svg = renderKey({ ...m, agent: 'cursor' });
+    expect(svg).toContain('clip-path="url(#chip)"');
+    expect(svg).not.toContain('filter="url(#tint)"');
+  });
+
+  it('tints a logo on a transparent background with the key colour (mask)', () => {
+    const svg = renderKey({ ...m, agent: 'amp' });
+    expect(svg).toContain('filter="url(#tint)"');
+    expect(svg).toContain('<feFlood flood-color=');
+    expect(svg).not.toContain('url(#chip)');
+  });
+
+  it('an override picks the mode, an SVG glyph is filled with the key colour', () => {
+    expect(renderKey({ ...m, agent: 'goose' })).toContain('url(#chip)');
+    const codex = renderKey({ ...m, agent: 'codex' });
+    expect(codex).toContain('fill-rule="evenodd"');
+    expect(codex).not.toContain('<image');
+  });
+
+  it('keeps our own pictogram where Orca has no icon, and the letter where we have neither', () => {
+    expect(renderKey({ ...m, agent: 'claude' })).toContain('M12 5v14');
+    expect(renderKey({ ...m, agent: 'zzz-unknown' })).toContain('>Z</text>');
+  });
+});
+
+it('statusInfo says the Orca response was unexpected, not that Orca is down', async () => {
+  const { statusInfo } = await import('./render.ts');
+  expect(
+    statusInfo({
+      mode: 'degraded',
+      version: '1.4.256',
+      unsupported: false,
+      badResponse: true,
+      hostsDown: 0,
+    }),
+  ).toEqual({ tone: 'error', value: '!', caption: 'unexpected Orca response' });
 });
 
 it('statusInfo says the Orca response was unexpected, not that Orca is down', async () => {

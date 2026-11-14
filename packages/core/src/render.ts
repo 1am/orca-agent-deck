@@ -1,4 +1,6 @@
 import type { DeckState } from './status.ts';
+import { naturalMode, orcaIconArt, type IconMode } from './agent-icon-art.ts';
+import { ORCA_ICONS } from './agent-icons.generated.ts';
 
 /** Everything the key renderer needs; produced by DeckController. */
 export interface KeyModel {
@@ -13,17 +15,36 @@ export interface KeyModel {
   host?: string | null;
   /** Formatted key number (see formatKeyNumber), prefixed to the label as `5: title`. */
   keyNumber?: string | null;
-  /** Pairing mode: the key number drawn large, with the label as one small line below. */
-  bigNumber?: string | null;
   /** The pane Orca has selected right now: colours inverted, with a frame and a bold label. */
   focused?: boolean;
+}
+
+/** Positions of the working arc per turn. */
+export const SPIN_STEPS = 8;
+
+/** Spinning keys up to which the spinner advances on every 250 ms repaint tick (4 fps). */
+const FULL_RATE_KEYS = 2;
+
+/**
+ * Does the spinner advance on this repaint tick (250 ms apart)? Elgato asks plugins to keep to
+ * about 10 image updates per second (https://docs.elgato.com/guidelines/streamdeck/plugins/images-and-layouts),
+ * which reads as a total, not per key. Up to 2 spinning keys turn at 4 fps (8 updates per second,
+ * inside the guideline). With more, every other tick advances (2 fps): that is above the guideline
+ * from 6 keys on (a full 32-key deck sends 64 per second) but no more than the quarter turn every
+ * 500 ms the spinner made before, which hardware and Stream Deck Mobile have carried.
+ */
+export function spinnerAdvances(tick: number, workingCount: number): boolean {
+  return workingCount <= FULL_RATE_KEYS || tick % 2 === 0;
 }
 
 export interface RenderOptions {
   /** Output size in px; the drawing is always 144 units wide so it stays crisp at 72 and 144. */
   size?: 72 | 144;
   highContrast?: boolean;
-  /** Spinner rotation in quarter turns (0-3), advanced by the caller for 'working' keys (<= 2 fps). */
+  /**
+   * Spinner rotation in eighth turns (taken modulo `SPIN_STEPS`), advanced by the caller for
+   * 'working' keys at the pace `spinnerAdvances` allows.
+   */
   spin?: number;
 }
 
@@ -74,7 +95,8 @@ const ICONS: Record<DeckState, string> = {
 /**
  * Harness pictograms on a 24x24 grid, drawn as strokes in the badge's background colour.
  * Simplified original glyphs (no vendor artwork): spark for Claude Code, prompt for Codex,
- * pi for Pi, "#" for a plain shell, a split window for tmux without a detected agent.
+ * pi for Pi, "#" for a plain shell, a split window for tmux without a detected agent. Agents
+ * without a glyph show their first letter (see `harnessLabel`).
  */
 const PICTOGRAM: Record<string, string> = {
   claude: '<path d="M12 5v14M5 12h14M7.1 7.1l9.8 9.8M16.9 7.1l-9.8 9.8"/>',
@@ -82,7 +104,46 @@ const PICTOGRAM: Record<string, string> = {
   pi: '<path d="M6.5 8.5h11M10 8.5l-.8 8.5M14.5 8.5v6.8q0 1.7 2 1.7"/>',
   shell: '<path d="M10 6.5l-1.2 11M15.2 6.5L14 17.5M6.5 10h11M6 14h11"/>',
   tmux: '<path d="M5 6.5h14v11H5zM12 6.5v11M12 12h7"/>',
+  opencode: '<path d="M9.5 8L5.5 12l4 4M14.5 8l4 4-4 4"/>',
+  droid: '<path d="M6.5 9.5h11v8h-11zM12 9.5v-3.5M9.5 13v1M14.5 13v1"/>',
+  devin: '<path d="M12 5.5l5.5 3.2v6.6L12 18.5l-5.5-3.2V8.7zM12 12h.01"/>',
+  gemini: '<path d="M12 5q1 5.5 7 7-6 1.5-7 7-1-5.5-7-7 6-1.5 7-7z"/>',
+  copilot:
+    '<path d="M4.5 12a3.5 3.5 0 1 0 7 0 3.5 3.5 0 1 0-7 0M12.5 12a3.5 3.5 0 1 0 7 0 3.5 3.5 0 1 0-7 0M11.5 12h1"/>',
+  cursor: '<path d="M7.5 5.5l10 7-4.5 1-2 4.5z"/>',
+  amp: '<path d="M13 5l-5 8h4l-1 6 5-8h-4z"/>',
 };
+
+/**
+ * Per agent, how its badge is drawn when Orca has an icon for it (checked by eye in the render gallery at 72 and 144
+ * px): `own` keeps our pictogram, `mask` tints Orca's icon with the key's colour, `chip` shows it as it is on the badge
+ * disc. An agent not listed gets the natural mode (`naturalMode`).
+ */
+export const ICON_OVERRIDES: Readonly<Record<string, 'own' | IconMode>> = {
+  // Round or filled logos on a transparent background: tinted they would be a plain disc.
+  goose: 'chip',
+  openclaude: 'chip',
+  openclaw: 'chip',
+  'qwen-code': 'chip',
+};
+
+/** Agent types Orca reports that have no pictogram, so a first letter is ambiguous between them. */
+const LETTER_AGENTS = ['kimi', 'cline', 'qwen', 'goose', 'crush', 'aider'];
+
+/** Letters for the badge of an agent without a pictogram (`kind` lower-case): two when another such agent starts alike. */
+export function harnessLabel(kind: string): string {
+  const first = kind.slice(0, 1).toUpperCase();
+  const clash = LETTER_AGENTS.some(
+    (a) => a !== kind && a.startsWith(kind.slice(0, 1).toLowerCase()),
+  );
+  return clash && kind.length > 1 ? first + kind.slice(1, 2).toLowerCase() : first;
+}
+
+/**
+ * Liberation Sans has Arial's metrics, so a Linux host that has it (or Windows with Arial) lays
+ * text out as `textWidth` expects; DejaVu Sans (often fontconfig's pick) is about 10% wider.
+ */
+const FONT_STACK = 'Helvetica, Arial, Liberation Sans, DejaVu Sans, sans-serif';
 
 const esc = (s: string) =>
   s.replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c] ?? c);
@@ -181,6 +242,56 @@ const MX = 14;
 const MY = 22;
 const RIGHT = 144 - MX;
 
+/**
+ * What a key says, as attributes of the root element: the replay suite reads the semantic state back from the image
+ * through `decodeKey` instead of a second renderer. For an info key: state = tone, label = caption, line2 = value.
+ */
+const markers = (
+  state: string,
+  label: string,
+  line2: string,
+  agent?: string,
+  number?: string | null,
+) =>
+  `data-state="${state}" data-label="${esc(label)}" data-line2="${esc(line2)}"` +
+  (agent !== undefined ? ` data-agent="${esc(agent)}"` : '') +
+  (number ? ` data-number="${esc(number)}"` : '') +
+  ' ';
+
+export interface DecodedKey {
+  state: string;
+  label: string;
+  line2: string;
+  agent?: string;
+  number?: string;
+}
+
+/** Reads the markers back from a key image (an SVG string or a `data:image/svg+xml` URL); null when there are none. */
+export function decodeKey(image: string): DecodedKey | null {
+  const svg = image.startsWith('data:')
+    ? decodeURIComponent(image.slice(image.indexOf(',') + 1))
+    : image;
+  const tag = /<svg\b[^>]*>/.exec(svg)?.[0] ?? '';
+  const attr = (name: string): string | undefined => {
+    const v = new RegExp(`\\sdata-${name}="([^"]*)"`).exec(tag)?.[1];
+    return v === undefined
+      ? undefined
+      : v
+          .replace(/&lt;/g, '<')
+          .replace(/&gt;/g, '>')
+          .replace(/&quot;/g, '"')
+          .replace(/&amp;/g, '&');
+  };
+  const state = attr('state');
+  if (state === undefined) return null;
+  const out: DecodedKey = { state, label: attr('label') ?? '', line2: attr('line2') ?? '' };
+  const agent = attr('agent');
+  const number = attr('number');
+  if (agent !== undefined) out.agent = agent;
+  if (number !== undefined) out.number = number;
+  return out;
+}
+
 export function renderKey(m: KeyModel, o: RenderOptions = {}): string {
   const size = o.size ?? 144;
   const base = (o.highContrast && HIGH_CONTRAST[m.state]) || PALETTE[m.state];
@@ -188,43 +299,50 @@ export function renderKey(m: KeyModel, o: RenderOptions = {}): string {
   // from every other key at a glance and keeps its state colour in the frame.
   const pal = m.focused ? { bg: FOCUS_BG, fg: base.fg } : base;
   const { lines, size: fs } = layoutLabel(m.keyNumber ? `${m.keyNumber}: ${m.label}` : m.label);
-  // Pairing mode: a big number to find the key by, the label as one short line under it.
-  const big = m.bigNumber
-    ? `<text x="72" y="100" font-size="${m.bigNumber.length > 2 ? 56 : 72}" font-weight="700" text-anchor="middle">${esc(m.bigNumber)}</text>` +
-      `<text x="72" y="130" font-size="14" text-anchor="middle">${esc(ellipsis(m.label, 14))}</text>`
-    : '';
   // Pane name fills the box below the top line, top-aligned.
-  const text = m.bigNumber
-    ? big
-    : lines
-        .map(
-          (l, i) =>
-            `<text x="${MX}" y="${(BOX.top + CAP * fs + i * fs * LINE).toFixed(1)}" font-size="${fs}" font-weight="${m.focused ? 700 : 500}">${esc(l)}</text>`,
-        )
-        .join('');
+  const text = lines
+    .map(
+      (l, i) =>
+        `<text x="${MX}" y="${(BOX.top + CAP * fs + i * fs * LINE).toFixed(1)}" font-size="${fs}" font-weight="${m.focused ? 700 : 500}">${esc(l)}</text>`,
+    )
+    .join('');
   // A pane with no detected agent but a live mapping is a plain shell.
-  const kind = m.agent ? m.agent : m.state === 'unmapped' ? '' : 'shell';
-  const glyph = kind
-    ? (PICTOGRAM[kind] ??
-      `<text x="12" y="17" font-size="14" font-weight="500" text-anchor="middle" fill="${pal.bg}" stroke="none">${esc(kind.slice(0, 1).toUpperCase())}</text>`)
-    : '';
-  const badge = glyph
-    ? `<circle cx="${MX + 12}" cy="${MY + 12}" r="12" fill="${pal.fg}" fill-opacity=".85"/><g transform="translate(${MX} ${MY})" fill="none" stroke="${pal.bg}" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">${glyph}</g>`
-    : '';
+  // Orca's agent type, lower-cased once here for the pictogram and letter lookups.
+  const kind = (m.agent ? m.agent : m.state === 'unmapped' ? '' : 'shell').toLowerCase();
+  // Lookup: an own pictogram where the override table says so, else Orca's icon, else our pictogram, else a letter.
+  const override = ICON_OVERRIDES[kind];
+  const orca = kind && override !== 'own' ? ORCA_ICONS[kind] : undefined;
+  const glyph = orca
+    ? ''
+    : kind
+      ? (PICTOGRAM[kind] ??
+        `<text x="12" y="${harnessLabel(kind).length > 1 ? 16 : 17}" font-size="${harnessLabel(kind).length > 1 ? 11 : 14}" font-weight="500" text-anchor="middle" fill="${pal.bg}" stroke="none">${esc(harnessLabel(kind))}</text>`)
+      : '';
+  const mode: IconMode | null = orca
+    ? override === 'mask' || override === 'chip'
+      ? override
+      : naturalMode(orca)
+    : null;
+  const badge = orca
+    ? `<circle cx="${MX + 12}" cy="${MY + 12}" r="12" fill="${pal.fg}" fill-opacity=".85"/><g transform="translate(${MX} ${MY})">${orcaIconArt(orca, mode!, pal.bg)}</g>`
+    : glyph
+      ? `<circle cx="${MX + 12}" cy="${MY + 12}" r="12" fill="${pal.fg}" fill-opacity=".85"/><g transform="translate(${MX} ${MY})" fill="none" stroke="${pal.bg}" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">${glyph}</g>`
+      : '';
   const host = m.host
     ? `<text x="${RIGHT}" y="${MY + 17}" font-size="12" text-anchor="end">${esc(ellipsis(m.host, 7))}</text>`
     : '';
-  // The working arc turns a quarter per step; other icons are static.
+  // The working arc turns an eighth per step; other icons are static.
   const art = ICONS[m.state].replace(/var\(--bg\)/g, pal.bg);
   const icon =
     m.state === 'working'
-      ? `<g transform="rotate(${((o.spin ?? 0) % 4) * 90} 20 20)">${art}</g>`
+      ? `<g transform="rotate(${(((o.spin ?? 0) % SPIN_STEPS) * 360) / SPIN_STEPS} 20 20)">${art}</g>`
       : art;
   // Top line: agent badge, then the state icon; host name on the right.
-  const iconX = glyph ? MX + 32 : MX;
+  const iconX = glyph || orca ? MX + 32 : MX;
   return (
     `<svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}" viewBox="0 0 144 144" ` +
-    `style="--bg:${pal.bg}" font-family="Helvetica, Arial, sans-serif" font-weight="400" color="${pal.fg}" fill="${pal.fg}">` +
+    markers(m.state, m.label, m.line2, kind, m.keyNumber) +
+    `style="--bg:${pal.bg}" font-family="${FONT_STACK}" font-weight="400" color="${pal.fg}" fill="${pal.fg}">` +
     `<rect width="144" height="144" fill="${pal.bg}"/>` +
     badge +
     `<g transform="translate(${iconX} ${MY}) scale(.6)" opacity="${m.state === 'unmapped' ? 0.6 : 1}">${icon}</g>` +
@@ -258,7 +376,8 @@ export function renderInfoKey(m: InfoModel, o: RenderOptions = {}): string {
     .join('');
   return (
     `<svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}" viewBox="0 0 144 144" ` +
-    `font-family="Helvetica, Arial, sans-serif" font-weight="500" fill="${pal.fg}">` +
+    markers(m.tone, m.caption, m.value) +
+    `font-family="${FONT_STACK}" font-weight="500" fill="${pal.fg}">` +
     `<rect width="144" height="144" fill="${pal.bg}"/>` +
     `<text x="72" y="84" font-size="${m.value.length > 3 ? 40 : 56}" text-anchor="middle">${esc(m.value)}</text>` +
     caption +

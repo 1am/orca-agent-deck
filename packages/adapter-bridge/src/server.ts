@@ -3,11 +3,13 @@ import { WebSocketServer, type WebSocket } from 'ws';
 import {
   PORT_RANGE,
   defaultDiscoveryPath,
+  readDiscovery,
   removeDiscovery,
   writeDiscovery,
   type Discovery,
 } from './discovery.ts';
 import {
+  PROTOCOL_MINOR,
   PROTOCOL_VERSION,
   UnsupportedVersionError,
   parseFromA,
@@ -27,7 +29,8 @@ export interface BridgeServerOptions {
   log?: (msg: string) => void;
 }
 
-export type ConnectionInfo = { orcaVersion: string; pluginVersion: string };
+/** What A said in `hello`; `minor` is its protocol minor (0 when it sent none, i.e. v0.2.x). */
+export type ConnectionInfo = { orcaVersion: string; pluginVersion: string; minor: number };
 
 type Listener = {
   hello: (info: ConnectionInfo) => void;
@@ -108,7 +111,10 @@ export class BridgeServer {
   async stop(): Promise<void> {
     const wss = this.wss;
     this.wss = null;
-    await removeDiscovery(this.discoveryPath);
+    // A newer B may have taken the file over: remove it only while it still names this process.
+    const file = await readDiscovery(this.discoveryPath);
+    if (file?.pid === process.pid && file.token === this.token)
+      await removeDiscovery(this.discoveryPath);
     if (!wss) return;
     for (const c of wss.clients) c.terminate();
     await new Promise<void>((r) => wss.close(() => r()));
@@ -116,6 +122,22 @@ export class BridgeServer {
 
   /** When a plugin A last said hello without the challenge handshake (an older release), else null. */
   outdatedPeerAt: number | null = null;
+
+  /** Is this raw frame an `auth` with a valid MAC for our challenge, whatever bridge version it names? */
+  private provesToken(data: unknown, nonce: string): boolean {
+    try {
+      const m = JSON.parse(String(data)) as { type?: unknown; nonce?: unknown; mac?: unknown };
+      return (
+        m.type === 'auth' &&
+        typeof m.nonce === 'string' &&
+        typeof m.mac === 'string' &&
+        NONCE.test(m.nonce) &&
+        macMatches(m.mac, authMac(this.token, nonce, m.nonce))
+      );
+    } catch {
+      return false;
+    }
+  }
 
   /** Connections that have not said hello yet, oldest first. */
   private readonly pending: WebSocket[] = [];
@@ -142,6 +164,9 @@ export class BridgeServer {
       } catch (e) {
         if (e instanceof UnsupportedVersionError) {
           this.opts.log?.(`unsupported protocol version from A: ${String(e.received)}`);
+          // Reported like an A from before the handshake (the Setup doctor says to update), but only when the peer
+          // proved it holds the token: any local process can open this port and say anything.
+          if (proven || this.provesToken(data, nonce)) this.outdatedPeerAt = Date.now();
           ws.close(4002, 'unsupported protocol version');
         } else if (!authed) {
           ws.close(4001, 'unauthorized');
@@ -181,12 +206,17 @@ export class BridgeServer {
         // A newer connection replaces the old one (worker restarted).
         if (this.socket && this.socket !== ws) this.socket.close(4003, 'replaced');
         this.socket = ws;
-        this.info = { orcaVersion: msg.orcaVersion, pluginVersion: msg.pluginVersion };
+        this.info = {
+          orcaVersion: msg.orcaVersion,
+          pluginVersion: msg.pluginVersion,
+          minor: msg.minor ?? 0,
+        };
         this.opts.log?.(`A connected: Orca ${msg.orcaVersion}, plugin ${msg.pluginVersion}`);
         this.send({
           v: PROTOCOL_VERSION,
           type: 'helloAck',
           deck: this.opts.deck?.() ?? { connected: false, devices: [] },
+          minor: PROTOCOL_MINOR,
         });
         for (const fn of this.listeners.hello) fn(this.info);
         return;

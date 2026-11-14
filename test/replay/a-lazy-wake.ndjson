@@ -1,0 +1,7 @@
+{"v":2,"name":"a-lazy-wake","description":"B is not running when the worker wakes: the event that woke it is kept and replayed once B is back. Revert check: remove onAck: () => forwarder?.replay() in activate.","sides":["a"],"keys":{}}
+{"at":0,"do":"deck.restart","up":false}
+{"at":0,"do":"orca.activate"}
+{"at":100,"do":"orca.event","name":"agent.status.changed","payload":{"workspaceId":"w1","paneKey":"t:a","state":"working","receivedAt":1800000000000,"mainAgent":{"state":"working","stateStartedAt":1000}}}
+{"at":200,"do":"deck.restart"}
+{"at":200,"do":"bridge.frame","from":"a","frame":{"type":"hello"}}
+{"at":200,"do":"bridge.frame","from":"a","frame":{"type":"agentStatus","paneKey":"t:a","state":"working","stateStartedAt":1000}}

@@ -26,13 +26,13 @@
 
 | | Status |
 |---|---|
-| 1.4.245 | Minimum. Older versions are refused ("Orca x.y.z too old"). |
+| 1.4.248 | Minimum, set by the Orca plugin (status bar button): older Orca refuses to install it. Before 1.4.245 the deck also shows "Orca x.y.z too old". |
 | 1.4.245 to 1.4.251 | Tested |
 | Newer than 1.4.251 | Untested. Newer Orca versions are expected to work, and the Status key shows the version it sees. |
 
 ## Harnesses
 
-Agent Deck for Orca draws what Orca reports, so each harness depends on Orca's agent hooks. Claude Code, Codex and Pi are the ones the deck has pictograms for; others show their state without a harness badge guarantee.
+Agent Deck for Orca draws what Orca reports, so each harness depends on Orca's agent hooks. Keys carry a small badge for the harness: a pictogram for Claude Code, Codex, Pi, OpenCode, Droid, Devin, Gemini, Copilot, Cursor and Amp, and a letter for any other agent (two letters when two agents start alike, such as Cl and Cr). The state shows either way.
 
 | Harness | Reported states | Notes |
 |---|---|---|
@@ -42,6 +42,9 @@ Agent Deck for Orca draws what Orca reports, so each harness depends on Orca's a
 | Others | Whatever Orca reports | Untested |
 
 State names follow the colours on the key: working (blue), needs input (amber), asks you (orange), done (green), error (red), stopped (purple-grey), idle (grey). The mapping from Orca's states is in `packages/core/src/status.ts`.
+
+## Agent icons on the keys
+The badge on a pane key shows the agent's icon from Orca (see `NOTICE.md` for the attribution), read from Orca v1.4.251: aider, amp, ante, antigravity, aug, autohand, cline, codebuddy, codebuff, codex, command-code, continue, copilot, crush, cursor, devin, droid, dsh, freebuff, gemini, goose, grok, hermes, jcode, kilo, kimi, kiro, mimo-code, mistral-vibe, muse, omp, openclaude, openclaw, opencode, pi, prime-agent, qoder, qwen-code, rovo, trae, zcode. Solid favicons and round logos are shown as they are on the badge disc; logos on a transparent background take the key's colour. Claude Code, plain shells and tmux use our own glyphs, and an agent without an icon shows its first letter (two when another starts alike). The icons are PNGs and SVG paths inside the key image: not yet checked on a real Stream Deck in either host app.
 
 ## Hosts
 
@@ -62,6 +65,36 @@ Filled from the dual-host smoke runs, one row per run.
 | Elgato Stream Deck app | 7.4.2 | Neo | 0.2.0 | OK on Windows 11 (Orca 1.4.255): plugin loads, bridge connects, keys render and focus panes |
 | OpenDeck (Linux) | | MK.2 | 0.2.0 | OK on Ubuntu 22.04: plugin loads, bridge connects, keys render and focus panes, same as in the Elgato app |
 | OpenDeck (macOS) | | MK.2 | | not run |
+
+## OpenDeck (source review of v2.14.2)
+
+Read from nekename/OpenDeck tag `v2.14.2` (commit `3ddecc1`, latest stable on 2026-11-10); no device run yet (the dual-host smoke checklist confirms). Refs are `file:line` under `src-tauri/src/` unless they start with `src/`. "Device only" = the code cannot answer it.
+
+| Question | Answer | Source |
+|---|---|---|
+| Which node, how started | `node` from OpenDeck's PATH (login-shell PATH merged at start, so nvm/fnm set up in a non-login rc is not seen; nekename/OpenDeck#72). Run as `node <CodePath> -port <p> -pluginUUID <dir name> -registerEvent registerPlugin -info <json>`, cwd = plugin folder, env inherited, stdout+stderr to `<log dir>/plugins/<dir name>.log` | `plugins/mod.rs:204-212,246-278`; `main.rs:62` |
+| Node missing or old | `node --version` is compared to `"v20.0.0"` as a string (so v9 passes, v100 fails). Failure only logs `Node.js version 20.0.0 or higher is required`; no UI, the keys stay inert. Flatpak runs it via `flatpak-spawn --host node`. The plugin logs its Node in the `host:` line, the Setup tab's Stream Deck app row warns below 20, and `make replay-b NODE=<node 20>` (CI job `node20`) runs the built bundle on Node 20 | `plugins/mod.rs:248-253,70-73` |
+| Manifest fields read | Required: `Name`, `Author`, `Version`, `Icon`, `Actions` (each with `States`), `OS`. Optional: `CodePath`, `CodePathWin/Mac/Lin`, `CodePaths`, `PropertyInspectorPath`, `Category`. Unknown fields are ignored (no `deny_unknown_fields`): `SDKVersion`, `Nodejs`, `Software.MinimumVersion`, `Profiles` and `OS[].MinimumVersion` have no effect | `plugins/manifest.rs:8-69`; `shared.rs:201-244` |
+| `OS` handling | The list must contain the host's platform (`mac`, `windows`, `linux`), else `unsupported on platform X` and the plugin does not start. A `windows` entry on another OS counts as supported (Wine path) but a `.js` `CodePath` is run with node before the Wine branch, so `OS: [mac, windows]` runs natively on Linux | `plugins/mod.rs:157-201,246,279` |
+| Per-platform overrides | `manifest.<macos\|windows\|linux>.json` next to `manifest.json` is JSON-merge-patched over it (arrays are replaced) | `plugins/manifest.rs:81-86` |
+| Registration info (Node plugin) | Built with the Wine flag on for every OS: `platform` is always `"windows"` and `platformVersion` always `"10.0.19045.4474"`; `version` is the fixed `"7.1.0"`; `devicePixelRatio` is `0`. Same `-info` argument and `registerPlugin` event as the Elgato app. No env var, argv flag or field names OpenDeck | `plugins/info_param.rs:71-104`; `plugins/mod.rs:255` |
+| Port | First free pair from 57116 (WebSocket) and 57118 (web server) | `plugins/mod.rs:39-51` |
+| Events before registration | Queued per plugin and replayed on registration. A second `registerPlugin` for the same UUID is ignored and logged (2.14.2) | `events/outbound/mod.rs:57-70`; `events/mod.rs:30-33` |
+| `setImage` with SVG data URLs | `data:` values pass through; the web view decodes `data:image/svg+xml` (URL-encoded or base64). Rendered in OpenDeck's main window, so latency is device only | `events/inbound/states.rs:67-102`; `src/lib/rendererHelper.ts:12-19` |
+| `setTitle`, `showAlert`, `showOk`, `setState` | Supported; `setTitle` and `setImage` skip the redraw when nothing changes | `events/inbound/states.rs:32-65,134`; `events/inbound/misc.rs:33-43` |
+| Settings | `setSettings`, `getSettings`, `setGlobalSettings`, `getGlobalSettings` supported; global settings only for the plugin's own UUID | `events/inbound/mod.rs:106-113` |
+| `keyDown` / `keyUp` timing | Forwarded as they arrive from the device, no debounce, so hold gestures work. The first press after a device sleep is swallowed (device sleep feature) | `events/outbound/keypad.rs:24-110`; `events/inbound/devices.rs:105-117` |
+| Devices | `deviceDidConnect` / `deviceDidDisconnect` and `systemDidWakeUp` are sent; there is no `deviceDidChange`. OpenDeck device ids are `sd-<serial>` | `events/outbound/devices.rs:21,36`; `events/outbound/misc.rs:11`; `elgato.rs:272` |
+| `willAppear` payload | `coordinates` is computed from the key position and the device column count | `events/outbound/mod.rs:31-55` |
+| Bundled `Profiles`, `switchToProfile` | Not available: the manifest has no `Profiles` field, and `switchProfile` from a plugin is dropped unless its UUID is one of two hard-coded ones | `plugins/manifest.rs:17-69`; `events/inbound/mod.rs:114-119` |
+| PI lifecycle | One hidden iframe per action instance, all mounted at profile load. They load and send `sendToPlugin` at once; `propertyInspectorDidAppear` / `Disappear` go out only when the user selects another key. Nothing stops a hidden PI's message from reaching the plugin, and the SDK's `ui.sendToPropertyInspector` targets only the current PI (nekename/OpenDeck#449, closed as not planned). Handled in #169 | `src/components/PropertyInspectorView.svelte:199-205`; `src/lib/propertyInspector.ts:10-16`; `events/outbound/property_inspector.rs:56-70` |
+| PI context | A PI is registered under its action context and OpenDeck drops its `sendToPlugin` when the payload context differs | `events/inbound/mod.rs:186-196` |
+| Install routes | `.streamDeckPlugin` / `.zip` file or URL (needs one top-level `*.sdPlugin` folder in the zip); GitHub release asset ending `.streamDeckPlugin` or `.zip` (prereleases skipped when a stable one exists); catalogue at openactionapi.github.io; marketplace at marketplace.rivul.us; `streamdeck://` deep links are registered too | `events/frontend/plugins.rs:67-125`; `src/components/PluginManager.svelte:87-128,190`; `main.rs:295-320`; `README.md:24` |
+| Paths | Plugins in `<app config dir>/plugins/<dir name>`; app id `opendeck` | `events/frontend/plugins.rs:99-101`; `tauri.conf.json:41` |
+
+**Manifest decision.** The manifest lists `{"Platform": "windows", "MinimumVersion": "10"}` in `OS`. Do not add a `linux` entry: it is not in the Stream Deck manifest schema (`streamdeck validate` would fail, see ChrisRegado/streamdeck-googlemeet#62), and OpenDeck on Linux already starts a `.js` plugin when `windows` is listed. If a device run shows that is not enough, ship `manifest.linux.json` with `{"OS":[{"Platform":"linux"}]}` instead; `validate` never reads it. Keep `SDKVersion` 2, `Nodejs` 20 and `Software.MinimumVersion` 7.1: OpenDeck ignores them.
+
+**Host marker.** There is nothing better than the registration values: no env var, argv flag or info field names OpenDeck. The strongest signals, all from `plugins/info_param.rs`: `application.version === "7.1.0"` (hard-coded, 3 parts), `devicePixelRatio === 0` (the Elgato app sends the real ratio), and `platform === "windows"` while `process.platform !== "win32"` (Node plugins are told `windows` on every OS, so the current "platform other than mac/windows means OpenDeck" rule never fires). `platformVersion === "10.0.19045.4474"` is a fourth. The Elgato side (4-part build version, real pixel ratio) is device only.
 
 ## Marketplace DRM (SDKVersion 3)
 

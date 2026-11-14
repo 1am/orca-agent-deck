@@ -1,0 +1,15 @@
+{"v":2,"name":"b-hold-open-panel","description":"Holding a Pane key opens the Agent Deck panel at that key (plugins.open, then keyPicked) whatever pane Orca has focused, and maps nothing; with no plugin to open the key says Map in Orca. Revert check: make PaneSlot.onHold do nothing.","sides":["b"],"keys":{}}
+{"at":0,"do":"orca.pane.add","pane":"a"}
+{"at":0,"do":"orca.pane.add","pane":"b","title":"Build"}
+{"at":0,"do":"orca.focus","pane":"b"}
+{"at":0,"do":"deck.appear","key":1}
+{"at":50,"do":"bridge.frame","from":"a","frame":{"type":"requestDeck"}}
+{"at":100,"do":"deck.down","key":1}
+{"at":1300,"do":"deck.up","key":1}
+{"at":1300,"do":"expect.runtime","method":"plugins.open","params":{"pluginKey":"1am.agent-deck","panelId":"deck"}}
+{"at":1300,"do":"bridge.frame","from":"b","frame":{"type":"keyPicked","key":1}}
+{"at":1300,"do":"expect.key","key":1,"state":"unmapped"}
+{"at":1400,"do":"orca.plugin","key":"1am.agent-deck","status":"absent"}
+{"at":1500,"do":"deck.down","key":1}
+{"at":2700,"do":"deck.up","key":1}
+{"at":2700,"do":"expect.key","key":1,"label":"Map in Orca"}

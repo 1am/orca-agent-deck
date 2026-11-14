@@ -23,6 +23,8 @@ export interface PaneInfo extends PaneRef {
   environment?: string | null;
   /** Display name of a remote host (SSH target or paired server); absent for this machine. */
   hostName?: string | null;
+  /** Address Orca names the host by when `hostName` is a connection label; absent otherwise. */
+  hostAddress?: string | null;
   /** Orca marks terminals whose pane is gone. */
   orphaned?: boolean;
   /** paneKey this terminal was recorded under before a restart, when Orca reports it. */
@@ -52,12 +54,16 @@ export interface HostInfo {
   id: string;
   kind: 'local' | 'ssh' | 'environment';
   name: string;
+  /** The connection name the user gave it in Orca, when `name` is only its address (a paired server of an SSH target). */
+  label?: string;
   connected: boolean;
 }
 
 export interface FocusResult {
   ok: boolean;
   error?: string;
+  /** Orca's error code when it gave one (`terminal_handle_stale`, ...), else absent. */
+  code?: string;
 }
 
 export interface AdapterHealth {
@@ -82,6 +88,11 @@ export interface Snapshot {
    * `omittedHostIds`.
    */
   downHostIds?: string[];
+  /**
+   * Hosts this read shows anything on (a worktree, a terminal, an agent): what Orca's left sidebar
+   * lists. Only these count as down once they stop answering. Unset: every down host counts.
+   */
+  busyHostIds?: string[];
 }
 
 export interface OrcaAdapter {
@@ -103,6 +114,8 @@ export interface OrcaAdapter {
   focusedPaneKey?(maxAgeMs?: number): Promise<string | null>;
   /** Why the last focus read had no answer (counts only), for the log. */
   readonly focusNote?: string;
+  /** Execution host of the worktree shown in the last focus read (ids repeat across hosts), null when none was. */
+  readonly focusHostId?: string | null;
   /** Clears Orca's unread dot for a worktree (`isUnread`), so reading in the deck clears it in Orca too. */
   markWorktreeRead?(worktreeId: string): Promise<void>;
 }

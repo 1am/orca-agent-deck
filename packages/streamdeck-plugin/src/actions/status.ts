@@ -1,6 +1,10 @@
 import { execFile } from 'node:child_process';
 import { existsSync } from 'node:fs';
-import streamDeck, { action } from '@elgato/streamdeck';
+import {
+  action,
+  type PropertyInspectorDidAppearEvent,
+  type SendToPluginEvent,
+} from '@elgato/streamdeck';
 import {
   doctorInfo,
   runChecks,
@@ -10,6 +14,8 @@ import {
 } from '@orca-agent-deck/core';
 import { resolveOrcaBinCached, type ResolvedBin } from '@orca-agent-deck/adapter-cli';
 import { InfoKey } from './info-key.ts';
+import { currentHost } from '../host.ts';
+import { isCurrentPi, replyToPi } from './pi.ts';
 import { orcaPluginState, orcaPluginVersion, refreshInstalled } from '../bridge.ts';
 
 let bin: ResolvedBin | undefined;
@@ -33,6 +39,19 @@ function readTmux(): Promise<void> {
   );
 }
 
+/** Longest the Setup list waits for one probe; the inspector gives up after 5 s (10 s while Orca is read through the CLI). */
+const PROBE_MS = 4000;
+
+/** `p`, or undefined after `ms` or when it fails: the caller carries on with what it already knows. */
+function within(p: Promise<unknown>, ms: number): Promise<unknown> {
+  let stop = () => {};
+  const deadline = new Promise<undefined>((done) => {
+    const t = setTimeout(done, ms);
+    stop = () => clearTimeout(t);
+  });
+  return Promise.race([p.catch(() => undefined), deadline]).finally(stop);
+}
+
 /** Setup doctor facts. */
 function doctorFacts(c: DeckController): DoctorFacts {
   if (Date.now() - tmux.at > TMUX_TTL_MS) {
@@ -48,10 +67,14 @@ function doctorFacts(c: DeckController): DoctorFacts {
     binSource: bin?.source ?? null,
     binReason: bin?.reason,
     liveLink: o.mode === 'down' ? null : o.fast ? 'socket' : 'cli',
+    // The key counts the same hosts (`overview().hostsDown`), so key and list cannot disagree.
+    hostsDown: o.mode === 'down' ? null : o.hostsDownNames,
     mappedSlots: c.mappedSlotCount(),
     orcaPlugin: orcaPluginState(),
     orcaPluginVersion: orcaPluginVersion(),
     tmuxMissing: tmux.missing,
+    host: currentHost(),
+    nodeVersion: process.version,
   };
 }
 
@@ -68,21 +91,29 @@ export class StatusKey extends InfoKey {
     });
   }
   /** Setup tab: send every check result to the Property Inspector. */
-  override async onPropertyInspectorDidAppear(): Promise<void> {
-    await this.sendChecks();
+  override async onPropertyInspectorDidAppear(ev: PropertyInspectorDidAppearEvent): Promise<void> {
+    await this.sendChecks(ev.action.id);
   }
 
-  override async onSendToPlugin(): Promise<void> {
-    await this.sendChecks();
+  override async onSendToPlugin(ev: SendToPluginEvent<never, never>): Promise<void> {
+    await this.sendChecks(ev.action.id);
   }
 
-  private async sendChecks(): Promise<void> {
+  private async sendChecks(id: string): Promise<void> {
+    // A hidden PI's `load` must not cost a refresh and tmux spawn.
+    if (!isCurrentPi(id)) return;
     const c = await this.create();
-    await Promise.all([c.refresh([]), readTmux(), refreshInstalled()]);
-    await streamDeck.ui.sendToPropertyInspector({
+    // Every probe gets a deadline below the inspector's own: a hung one (a host that does not answer, a queued
+    // refresh behind it) must not keep the whole list from being sent. The list then shows what is known.
+    await Promise.all(
+      [c.refresh([]), readTmux(), refreshInstalled()].map((p) => within(p, PROBE_MS)),
+    );
+    await replyToPi(id, {
       type: 'checks',
       checks: runChecks(doctorFacts(c)),
-    } as never);
+      // The inspector waits longer for an answer while every read spawns the CLI.
+      slow: !c.overview().fast,
+    });
   }
 
   protected async press(c: DeckController) {

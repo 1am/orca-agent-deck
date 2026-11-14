@@ -9,14 +9,7 @@
     "noEmit": true,
     "allowImportingTsExtensions": true,
     "erasableSyntaxOnly": true,
-    "types": ["node"],
-    "paths": {
-      "@orca-agent-deck/core": ["./packages/core/src/index.ts"],
-      "@orca-agent-deck/adapter-cli": ["./packages/adapter-cli/src/index.ts"],
-      "@orca-agent-deck/adapter-runtime": ["./packages/adapter-runtime/src/index.ts"],
-      "@orca-agent-deck/adapter-bridge": ["./packages/adapter-bridge/src/index.ts"],
-      "@orca-agent-deck/window-raiser": ["./packages/window-raiser/src/index.ts"]
-    }
+    "types": ["node"]
   },
   "include": ["packages", "test", "scripts", "*.ts"]
 }

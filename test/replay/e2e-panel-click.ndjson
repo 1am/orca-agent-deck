@@ -1,0 +1,21 @@
+{"v":2,"name":"e2e-panel-click","description":"A click in the Orca sidebar panel puts the focused pane on a key through both shipped plugins: the panel asks plugin A, A sends assignKey over the bridge, B maps the pane and answers pairResult, and the key shows it. A key that shows a pane then needs replace, a pane that is on another key moves (the old key empties), Unmap empties a key, and a pane the panel names (not the focused one) goes on the key, or is refused as noSuchPane when it is gone. Revert check: drop the assignKey handler in plugin B (plugin.ts): the click answers timeout.","sides":["e2e"],"keys":{"1":"a"}}
+{"at":0,"do":"orca.pane.add","pane":"a"}
+{"at":0,"do":"orca.pane.add","pane":"b","title":"Build"}
+{"at":0,"do":"orca.focus","pane":"b"}
+{"at":0,"do":"deck.appear","key":2}
+{"at":0,"do":"deck.appear","key":3}
+{"at":0,"do":"expect.key","key":1,"state":"completed","label":"Claude Code"}
+{"at":100,"do":"expect.panel","request":"deck.get","result":{"status":"ok","deck":{"connected":true}}}
+{"at":200,"do":"expect.panel","request":"deck.assign","input":{"key":2,"replace":false},"result":{"ok":true,"slot":{"index":2},"action":"mapped"}}
+{"at":200,"do":"expect.key","key":2,"state":"completed","label":"Build"}
+{"at":300,"do":"expect.panel","request":"deck.assign","input":{"key":2,"replace":false},"result":{"ok":false,"reason":"occupied"}}
+{"at":300,"do":"expect.panel","request":"deck.assign","input":{"key":99,"replace":false},"result":{"ok":false,"reason":"noSuchKey"}}
+{"at":350,"do":"expect.panel","request":"deck.assign","input":{"key":3,"replace":false},"result":{"ok":true,"slot":{"index":3},"action":"moved"}}
+{"at":350,"do":"expect.key","key":3,"state":"completed","label":"Build"}
+{"at":350,"do":"expect.key","key":2,"state":"unmapped"}
+{"at":400,"do":"expect.panel","request":"deck.unmap","input":{"key":3},"result":{"ok":true,"action":"unmapped"}}
+{"at":400,"do":"expect.key","key":3,"state":"unmapped"}
+{"at":500,"do":"expect.panel","request":"deck.assign","input":{"key":2,"replace":false,"paneKey":"tab-1:leaf-a"},"result":{"ok":true,"slot":{"index":2},"action":"moved"}}
+{"at":500,"do":"expect.key","key":2,"state":"completed","label":"Claude Code"}
+{"at":500,"do":"expect.key","key":1,"state":"unmapped"}
+{"at":550,"do":"expect.panel","request":"deck.assign","input":{"key":3,"replace":false,"paneKey":"tab-1:leaf-gone"},"result":{"ok":false,"reason":"noSuchPane"}}
