@@ -101,6 +101,11 @@ describe('awaiting_reply', () => {
   it('a permission prompt stays needs_input', () => {
     expect(deriveDeckState(obs({ state: 'waiting', awaiting: null })).state).toBe('needs_input');
   });
+  it('needs_input reads "needs you" whatever the path knows about the tool', () => {
+    // Orca's pushed status has no tool name and the poll has: the label must not depend on it.
+    expect(lineTwo('needs_input')).toBe('needs you');
+    expect(lineTwo('needs_input', { elapsedMs: 5000, agentName: 'claude' })).toBe('needs you');
+  });
   it('shows the label "asks you"', () => {
     expect(lineTwo('awaiting_reply')).toBe('asks you');
   });
