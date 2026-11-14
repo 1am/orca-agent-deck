@@ -1,0 +1,9 @@
+{"v":2,"name":"a-bridge-major-mismatch","description":"B answers with another bridge major: A does not use the message (no snapshot replay), logs that Agent Deck for Orca needs an update and closes; it reconnects to a B that speaks its own major. Revert check: remove the msg.v check in createBridge.","sides":["a"],"keys":{}}
+{"at":0,"do":"orca.activate"}
+{"at":0,"do":"bridge.frame","from":"a","frame":{"type":"hello"}}
+{"at":100,"do":"orca.event","name":"agent.status.changed","payload":{"workspaceId":"w1","paneKey":"t:a","state":"working","receivedAt":1800000000000,"mainAgent":{"state":"working","stateStartedAt":1000}}}
+{"at":100,"do":"bridge.frame","from":"a","frame":{"type":"agentStatus","paneKey":"t:a","state":"working"}}
+{"at":200,"do":"bridge.frame","from":"b","frame":{"v":2,"type":"requestSnapshot"}}
+{"at":200,"do":"expect.log","contains":"update Agent Deck for Orca"}
+{"at":300,"do":"bridge.frame","from":"a","frame":{"type":"hello"}}
+{"at":300,"do":"bridge.frame","from":"a","frame":{"type":"agentStatus","paneKey":"t:a","state":"working"}}

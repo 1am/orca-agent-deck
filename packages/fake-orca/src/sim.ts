@@ -1,6 +1,8 @@
-export type AgentState = 'working' | 'waiting' | 'done';
+export type AgentState = 'working' | 'waiting' | 'blocked' | 'done' | 'idle';
 
 export interface Pane {
+  /** The scenario's name for the pane; tab and leaf ids default to `tab-1` and `leaf-<key>`. */
+  key: string;
   handle: string;
   tabId: string;
   leafId: string;
@@ -8,11 +10,14 @@ export interface Pane {
   agentIdentity: string | null;
   executionHostId: string;
   connected: boolean;
+  /** Set when the pane's process ended: Orca reports it with `connected: false`. */
+  exitCause?: 'crash' | 'nonzero' | 'clean' | null;
   preview: string;
   lastOutputAt: number;
   agent: {
     state: AgentState;
     toolName: string | null;
+    outcome?: string | null;
     stateStartedAt: number;
     /** What `worktree ps` reports as lastAssistantMessage (content stays inside the adapter). */
     lastMessage?: string;
@@ -22,7 +27,8 @@ export interface Pane {
 
 export interface Host {
   id: string;
-  kind: 'local' | 'ssh';
+  /** `runtime`: a paired runtime that only shows up in the listings' host scope, not in `host list`. */
+  kind: 'local' | 'ssh' | 'runtime';
   name: string;
   connected: boolean;
 }
@@ -34,6 +40,12 @@ export interface SimState {
   hosts: Host[];
   panes: Pane[];
   focusedHandle: string | null;
+  /** The last local pane focused: what the local runtime's `terminal.resolveActive` answers. */
+  localFocusedHandle: string | null;
+  /** Whether Orca sends a layout tree for a remote host's worktree (see `orca.layouts`). */
+  remoteLayouts: boolean;
+  /** What `orca plugin list` reports; undefined = the call fails (an unanswered probe). */
+  plugins?: { pluginKey: string; status: string }[];
   log: string[];
 }
 
@@ -47,6 +59,8 @@ export function newState(): SimState {
     hosts: [{ id: 'local', kind: 'local', name: 'this machine', connected: true }],
     panes: [],
     focusedHandle: null,
+    localFocusedHandle: null,
+    remoteLayouts: true,
     log: [],
   };
 }
@@ -56,13 +70,14 @@ const handleFor = (gen: number, key: string) => `term_g${gen}-${key}`;
 export function addPane(
   s: SimState,
   key: string,
-  opts: { title?: string; agent?: string | null; host?: string } = {},
+  opts: { title?: string; agent?: string | null; host?: string; tab?: string; leaf?: string } = {},
 ): void {
   const agentIdentity = opts.agent === undefined ? 'claude' : opts.agent;
   s.panes.push({
+    key,
     handle: handleFor(s.generation, key),
-    tabId: 'tab-1',
-    leafId: `leaf-${key}`,
+    tabId: opts.tab ?? 'tab-1',
+    leafId: opts.leaf ?? `leaf-${key}`,
     title: opts.title ?? (agentIdentity === 'claude' ? 'Claude Code' : key),
     agentIdentity,
     executionHostId: opts.host ?? 'local',
@@ -75,12 +90,12 @@ export function addPane(
 }
 
 export function removePane(s: SimState, key: string): void {
-  s.panes = s.panes.filter((p) => p.leafId !== `leaf-${key}`);
+  s.panes = s.panes.filter((p) => p.key !== key);
   note(s, `removePane ${key}`);
 }
 
 function find(s: SimState, key: string): Pane {
-  const p = s.panes.find((x) => x.leafId === `leaf-${key}`);
+  const p = s.panes.find((x) => x.key === key);
   if (!p) throw new Error(`unknown pane ${key}`);
   return p;
 }
@@ -90,7 +105,7 @@ export function setAgent(
   key: string,
   state: AgentState,
   toolName: string | null = null,
-  extra: { lastMessage?: string; interactivePrompt?: string } = {},
+  extra: { lastMessage?: string; interactivePrompt?: string; outcome?: string | null } = {},
 ): void {
   const p = find(s, key);
   if (!p.agent) throw new Error(`pane ${key} has no agent`);
@@ -110,8 +125,9 @@ export function setHost(s: SimState, id: string, connected: boolean): void {
 /** Simulated Orca restart: handles rotate, panes keep tab/leaf ids. */
 export function restart(s: SimState): void {
   s.generation += 1;
-  for (const p of s.panes) p.handle = handleFor(s.generation, p.leafId.slice(5));
+  for (const p of s.panes) p.handle = handleFor(s.generation, p.key);
   s.focusedHandle = null;
+  s.localFocusedHandle = null;
   note(s, `restart gen=${s.generation}`);
 }
 
@@ -124,9 +140,21 @@ export function focus(s: SimState, handle: string): void {
   const p = s.panes.find((x) => x.handle === handle);
   if (!p) throw new Error('terminal_handle_stale');
   s.focusedHandle = handle;
-  note(s, `focus ${p.leafId.slice(5)}`);
+  if (p.executionHostId === 'local') s.localFocusedHandle = handle;
+  note(s, `focus ${p.key}`);
 }
 
 function note(s: SimState, msg: string): void {
   s.log.push(`t+${s.now - BASE_TIME}ms ${msg}`);
+}
+
+/** The pane's process ended: Orca lists it as disconnected with the cause, and its agent is gone. */
+export function exitPane(s: SimState, paneId: string, cause: 'crash' | 'nonzero' | 'clean'): void {
+  const p = s.panes.find((x) => x.key === paneId);
+  if (!p) return;
+  p.connected = false;
+  p.exitCause = cause;
+  p.agentIdentity = null;
+  p.agent = null;
+  note(s, `pane ${paneId} exited (${cause})`);
 }

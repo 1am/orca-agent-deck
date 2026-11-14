@@ -1,0 +1,8 @@
+{"v":2,"name":"orca-restart","description":"Orca restarts mid-turn: handles rotate, the key keeps its pane and finishes","sides":["sim"],"keys":{"1":"a","2":"b"}}
+{"at":0,"do":"orca.pane.add","pane":"a"}
+{"at":0,"do":"orca.pane.add","pane":"b"}
+{"at":1000,"do":"orca.agent","pane":"a","state":"working"}
+{"at":2000,"do":"orca.restart"}
+{"at":2000,"do":"expect.key","key":1,"state":"working"}
+{"at":3000,"do":"orca.agent","pane":"a","state":"done","outcome":"success"}
+{"at":3000,"do":"expect.key","key":1,"state":"completed"}

@@ -27,7 +27,7 @@ export class BridgeSimulator {
    * Reads the discovery file (like A does on every connect), answers B's challenge, checks B's
    * proof and says hello. Resolves after the ack. `token` overrides the one used for the MAC.
    */
-  async connect(overrides: { token?: string; v?: number } = {}): Promise<void> {
+  async connect(overrides: { token?: string; v?: number; minor?: number } = {}): Promise<void> {
     const d = await readDiscovery(this.discoveryPath);
     if (!d) throw new Error('no bridge discovery file');
     const ws = new WebSocket(`ws://127.0.0.1:${d.port}`);
@@ -58,6 +58,7 @@ export class BridgeSimulator {
       type: 'hello',
       orcaVersion: this.versions.orca,
       pluginVersion: this.versions.plugin,
+      ...(overrides.minor !== undefined ? { minor: overrides.minor } : {}),
     });
     await Promise.race([this.waitFor(fresh('helloAck')), closed]);
   }
@@ -68,7 +69,7 @@ export class BridgeSimulator {
 
   /** Sends the current agent state of a pane in the sim (what `agent.status.changed` would carry). */
   sendStatus(s: SimState, key: string): void {
-    const p = s.panes.find((x) => x.leafId === `leaf-${key}`);
+    const p = s.panes.find((x) => x.key === key);
     if (!p?.agent) throw new Error(`pane ${key} has no agent`);
     this.send({
       v: 1,
@@ -84,7 +85,7 @@ export class BridgeSimulator {
 
   /** Re-sends every agent's state, like A does after a reconnect or `requestSnapshot`. */
   replay(s: SimState): void {
-    for (const p of s.panes) if (p.agent) this.sendStatus(s, p.leafId.slice(5));
+    for (const p of s.panes) if (p.agent) this.sendStatus(s, p.key);
   }
 
   pairRequest(

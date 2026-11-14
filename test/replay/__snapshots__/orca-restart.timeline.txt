@@ -1,0 +1,6 @@
+t(ms)  key  orca event                  state          label | line 2
+     0  1    addPane a; addPane b       completed      Claude Code · pane 1 | done
+     0  2    addPane a; addPane b       completed      Claude Code · pane 2 | done
+  1000  1    agent a working            working        Claude Code · pane 1 | working 0s
+  2000  1    restart gen=2              working        Claude Code · pane 1 | working 1s
+  3000  1    agent a done               completed      Claude Code · pane 1 | done

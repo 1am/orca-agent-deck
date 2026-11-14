@@ -7,13 +7,24 @@ jobs:
   check:
     strategy:
       matrix:
-        os: [macos-latest, ubuntu-latest]
+        os: [macos-latest, ubuntu-latest, windows-latest]
     runs-on: ${{ matrix.os }}
     steps:
+      # Prettier wants LF: do not let the Windows checkout turn files into CRLF.
+      - if: runner.os == 'Windows'
+        run: git config --global core.autocrlf false
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
         with:
           version: 12
+      # The Elgato app brings Node 20 and OpenDeck uses the Node on the machine: the replay suite runs the built plugin
+      # on 20 (Linux; macOS and Windows use the Node below). Captured here, before the Node that runs the scripts.
+      - if: runner.os == 'Linux'
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - if: runner.os == 'Linux'
+        run: echo "NODE20=$(command -v node)" >> "$GITHUB_ENV"
       - uses: actions/setup-node@v4
         with:
           node-version: 22
@@ -22,9 +33,13 @@ jobs:
       - run: pnpm lint
       - run: pnpm typecheck
       - run: pnpm test
-      - run: pnpm test:integration
+      # The integration tests serve a unix socket and chmod files; they have not been run on Windows yet.
+      - if: runner.os != 'Windows'
+        run: pnpm test:integration
       - run: pnpm sd:build
       - run: pnpm sd:validate
+      - name: Replay suite B (built plugin in a fake Stream Deck host; Node 20 on Linux)
+        run: pnpm replay-b ${{ runner.os == 'Linux' && '--node "$NODE20"' || '' }}
       - name: Check image metadata
         if: runner.os == 'Linux'
         run: |

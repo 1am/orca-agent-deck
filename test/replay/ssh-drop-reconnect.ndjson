@@ -1,0 +1,8 @@
+{"v":2,"name":"ssh-drop-reconnect","description":"An SSH host drops and returns: the remote key goes unreachable, never empty, then recovers","sides":["sim"],"keys":{"1":"r"}}
+{"at":0,"do":"orca.host.add","id":"ssh-1","kind":"ssh","name":"remote"}
+{"at":0,"do":"orca.pane.add","pane":"r","host":"ssh-1"}
+{"at":0,"do":"expect.key","key":1,"state":"completed"}
+{"at":1000,"do":"orca.host.set","id":"ssh-1","connected":false}
+{"at":1000,"do":"expect.key","key":1,"state":"unreachable"}
+{"at":6000,"do":"orca.host.set","id":"ssh-1","connected":true}
+{"at":6000,"do":"expect.key","key":1,"state":"completed"}

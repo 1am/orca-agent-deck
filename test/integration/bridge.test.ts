@@ -45,7 +45,8 @@ const execFor =
     throw new Error(`unsupported ${args.join(' ')}`);
   };
 
-const until = async (fn: () => boolean, ms = 3000) => {
+// Conditions are waited for, never slept past: a loaded machine only makes them take longer.
+const until = async (fn: () => boolean, ms = 15_000) => {
   const end = Date.now() + ms;
   while (!fn()) {
     if (Date.now() > end) throw new Error('timeout');
@@ -156,7 +157,12 @@ describe('bridge status over the real server', () => {
     a.sendStatus(s, 'a');
     await until(() => feed.status(KEY_A)?.state === 'done');
     a.sendStatus(older, 'a');
-    await new Promise((r) => setTimeout(r, 60));
+    // Frames on one socket arrive in order: once a later frame for another pane is in, the
+    // replayed older one has been handled too.
+    advance(s, 1000);
+    setAgent(s, 'b', 'working');
+    a.sendStatus(s, 'b');
+    await until(() => feed.status('tab-1:leaf-b')?.state === 'working');
     expect(feed.status(KEY_A)?.state).toBe('done');
   });
 
@@ -196,15 +202,15 @@ describe('connection lifecycle', () => {
     await d.refresh([]);
     expect(d.overview().mode).toBe('degraded');
     await a.connect();
-    await new Promise((r) => setTimeout(r, 1600)); // info-key refresh throttle
-    await d.refresh([]);
+    await until(() => feed.connected);
+    // A refresh with slots is not throttled like the info refresh, so it looks right away.
+    await d.refresh(['k1']);
     expect(d.overview().mode).toBe('live');
     a.drop(); // worker idled out
     await until(() => !feed.connected);
-    await new Promise((r) => setTimeout(r, 1600));
-    await d.refresh([]);
+    await d.refresh(['k1']);
     expect(d.overview().mode).toBe('live');
-  }, 10_000);
+  }, 30_000);
 
   it('keeps the last pushed state while A is asleep and takes the replay on wake', async () => {
     await a.connect();

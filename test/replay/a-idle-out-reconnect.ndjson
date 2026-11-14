@@ -1,0 +1,10 @@
+{"v":2,"name":"a-idle-out-reconnect","description":"Orca idles the worker out and restarts it: the new worker connects on activate, with no event needed. Revert check: remove the await bridge.ensure() that ends activate.","sides":["a"],"keys":{}}
+{"at":0,"do":"orca.activate"}
+{"at":0,"do":"bridge.frame","from":"a","frame":{"type":"hello"}}
+{"at":100,"do":"orca.event","name":"agent.status.changed","payload":{"workspaceId":"w1","paneKey":"t:a","state":"working","receivedAt":1800000000000,"mainAgent":{"state":"working","stateStartedAt":1000}}}
+{"at":100,"do":"bridge.frame","from":"a","frame":{"type":"agentStatus","paneKey":"t:a","state":"working"}}
+{"at":200,"do":"orca.deactivate"}
+{"at":300,"do":"orca.activate"}
+{"at":300,"do":"bridge.frame","from":"a","frame":{"type":"hello"}}
+{"at":400,"do":"orca.event","name":"agent.status.changed","payload":{"workspaceId":"w1","paneKey":"t:b","state":"done","receivedAt":1800000000000,"mainAgent":{"state":"done","stateStartedAt":3000}}}
+{"at":400,"do":"bridge.frame","from":"a","frame":{"type":"agentStatus","paneKey":"t:b","state":"done"}}
