@@ -9,3 +9,4 @@ packages/streamdeck-plugin/pl.1am.orca-agent-deck.sdPlugin/logs
 tmp
 .claude/
 orca-deck-diagnostics-*.txt
+logs/
