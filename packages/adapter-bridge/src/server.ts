@@ -3,6 +3,7 @@ import { WebSocketServer, type WebSocket } from 'ws';
 import {
   PORT_RANGE,
   defaultDiscoveryPath,
+  readDiscovery,
   removeDiscovery,
   writeDiscovery,
   type Discovery,
@@ -110,7 +111,10 @@ export class BridgeServer {
   async stop(): Promise<void> {
     const wss = this.wss;
     this.wss = null;
-    await removeDiscovery(this.discoveryPath);
+    // A newer B may have taken the file over: remove it only while it still names this process.
+    const file = await readDiscovery(this.discoveryPath);
+    if (file?.pid === process.pid && file.token === this.token)
+      await removeDiscovery(this.discoveryPath);
     if (!wss) return;
     for (const c of wss.clients) c.terminate();
     await new Promise<void>((r) => wss.close(() => r()));

@@ -8,8 +8,12 @@ export const PROTOCOL_VERSION = 1;
  * advertises its own in `hello` / `helloAck`; a peer that sends none speaks minor 0 (v0.2.x).
  * 1: the Orca panel's deck grid (`requestDeck`, `deckState`, `assignKey`, `unmapKey`).
  * 2: B opens the Orca panel on A's request (`openPanel`, `openPanelResult`).
+ * 3: a deck press selects the key in the Orca panel while it is open for mapping (`panelSelect`, `keyPicked`).
+ * 4: holding a key opens the panel at that key (`keyPicked` after `openPanel`); the deck's own map mode is gone, so
+ *    `pairRequest`, `pairCancel`, `unmapRequest` and `pairState` are no longer sent or read (an A that still sends one is ignored).
+ *    `deckState.layout` (what sits at every position of the deck) is an additive optional field of the same minor.
  */
-export const PROTOCOL_MINOR = 2;
+export const PROTOCOL_MINOR = 4;
 
 /** Thrown for a message whose major `v` we do not speak; B shows "update Agent Deck for Orca plugin". */
 export class UnsupportedVersionError extends Error {
@@ -23,8 +27,6 @@ export class UnsupportedVersionError extends Error {
 
 const base = <T extends string>(type: T) =>
   z.object({ v: z.literal(PROTOCOL_VERSION), type: z.literal(type) });
-
-const panePick = z.object({ paneKey: z.string(), worktreeId: z.string() });
 
 // A -> B
 export const hello = base('hello').extend({
@@ -44,21 +46,12 @@ export const agentStatus = base('agentStatus').extend({
   /** Harness id (claude, codex, pi) when Orca's event has it; optional, so v1 stays compatible. */
   agentType: z.string().nullish(),
 });
+/** No longer sent (A dropped the workspace:read capability); still parsed so an older A build stays compatible. */
 export const workspace = base('workspace').extend({
   event: z.enum(['created', 'removed']),
   workspaceId: z.string(),
   path: z.string(),
 });
-/** `pane: null` lets B resolve the focused pane. */
-export const pairRequest = base('pairRequest').extend({
-  requestId: z.string(),
-  pane: panePick.nullable(),
-});
-export const unmapRequest = base('unmapRequest').extend({
-  requestId: z.string(),
-  pane: panePick.nullable(),
-});
-export const pairCancel = base('pairCancel').extend({ requestId: z.string() });
 /** Minor 1: A asks B to send `deckState` now (the Orca panel opened). */
 export const requestDeck = base('requestDeck');
 const key = z.number().int().min(1);
@@ -78,6 +71,8 @@ export const assignKey = base('assignKey').extend({
 export const unmapKey = base('unmapKey').extend({ requestId: z.string(), key });
 /** Minor 2: A asks B to show its sidebar panel `panelId` (B calls Orca's `plugins.open`; A has no call for it). */
 export const openPanel = base('openPanel').extend({ requestId: z.string(), panelId: z.string() });
+/** Minor 3: the Orca panel is in view and open for mapping (`on`), or no longer; B then sends `keyPicked` on a tap. */
+export const panelSelect = base('panelSelect').extend({ on: z.boolean() });
 
 // B -> A
 /** First message on every connection: B's nonce. A answers with `auth`, B proves itself with `proof`. */
@@ -98,6 +93,13 @@ export const deckState = base('deckState').extend({
   cols: z.number().int().min(0),
   rows: z.number().int().min(0),
   keys: z.array(z.object({ key, label: z.string(), state: z.string(), mapped: z.boolean() })),
+  /**
+   * What sits at every position of the deck (`cols * rows` entries, 1-based row-major, sorted): `pane`, our `status` or
+   * `attention` key, or `other` (empty, or another plugin's action: the SDK does not say). Absent from an older B.
+   */
+  layout: z
+    .array(z.object({ key, kind: z.enum(['pane', 'status', 'attention', 'other']) }))
+    .optional(),
   /** The panes the panel offers for a key (at most 200, the focused one first); absent from an older B. */
   panes: z
     .array(
@@ -111,10 +113,14 @@ export const deckState = base('deckState').extend({
         detail: z.string(),
         /** Host name of a remote pane. */
         host: z.string().optional(),
+        /** The address behind a connection label, searchable; absent when the host is shown by its address. */
+        hostAddress: z.string().optional(),
         agent: z.string().nullable(),
         state: z.string(),
         remote: z.boolean(),
         focused: z.boolean(),
+        /** Orca shows a paired server (no focus to read) and this pane was last opened from the deck there. */
+        lastPressed: z.boolean().optional(),
         /** The 1-based key the pane is on, when it is on one. */
         onKey: z.number().int().min(1).optional(),
       }),
@@ -130,12 +136,9 @@ export const openPanelResult = base('openPanelResult')
       z.object({ ok: z.literal(false), reason: z.enum(['unavailable', 'refused']) }),
     ]),
   );
+/** Minor 3: a key tapped on the deck while `panelSelect` is on, or (minor 4) held, after `openPanel`: the panel opens its details. */
+export const keyPicked = base('keyPicked').extend({ key });
 export const requestSnapshot = base('requestSnapshot');
-export const pairState = base('pairState').extend({
-  requestId: z.string(),
-  state: z.string(),
-  pane: z.object({ label: z.string() }).optional(),
-});
 const slot = z.object({ page: z.number().int().min(1), index: z.number().int().min(1) });
 export const pairResult = base('pairResult')
   .extend({ requestId: z.string() })
@@ -167,23 +170,21 @@ export const messageFromA = z.union([
   auth,
   agentStatus,
   workspace,
-  pairRequest,
-  unmapRequest,
-  pairCancel,
   requestDeck,
   assignKey,
   unmapKey,
   openPanel,
+  panelSelect,
 ]);
 export const messageFromB = z.union([
   challenge,
   proof,
   helloAck,
   requestSnapshot,
-  pairState,
   pairResult,
   deckState,
   openPanelResult,
+  keyPicked,
 ]);
 
 export type MessageFromA = z.infer<typeof messageFromA>;

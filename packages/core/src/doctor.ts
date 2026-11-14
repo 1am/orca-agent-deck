@@ -411,7 +411,9 @@ export function doctorInfo(
   if (w) {
     const tone: DeckState =
       w.id === 'orca-running' ? 'offline' : w.result === 'fail' ? 'error' : 'idle';
-    return { tone, value: w.id === 'orca-running' ? 'OFF' : '!', caption: w.caption };
+    const value =
+      w.id === 'orca-running' ? 'OFF' : w.id === 'remote-hosts' ? String(ok.hostsDown) : '!';
+    return { tone, value, caption: w.caption };
   }
   if (ok.hostsDown > 0) {
     return {

@@ -153,7 +153,7 @@ describe('plugin A recording', () => {
     for (const leak of ['secret plan', 'term_1', '/Users/ann', 'acme', 'token'])
       expect(text).not.toContain(leak);
     expect(text).toContain('"kind":"orca.event"');
-    expect(text).toContain('"workspaceId":"w2"');
+    expect(text).toContain('"workspaceId":"w1"');
     expect(await readdir(dir)).toHaveLength(1);
     // Nothing is written once stopped.
     rec.event('agent.status.changed', { paneKey: 't:late' });

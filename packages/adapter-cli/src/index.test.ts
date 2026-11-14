@@ -223,6 +223,46 @@ it('queries paired environments with --environment and focuses with it', async (
   expect(calls.at(-1)).toContain('E1');
 });
 
+it('names a paired server after the SSH connection it runs on, keeping the address', async () => {
+  const exec: Exec = async (args) => {
+    const k = args.slice(0, 2).join(' ');
+    if (k === 'host list')
+      return JSON.stringify({
+        ok: true,
+        result: {
+          hosts: [
+            { id: 'ssh-1', kind: 'ssh', name: 'RemoteLaptop', connected: true },
+            { id: 'E1', kind: 'environment', name: '192.168.1.12' },
+          ],
+        },
+      });
+    if (k === 'environment list')
+      return JSON.stringify({
+        ok: true,
+        result: {
+          environments: [
+            { id: 'E1', name: '192.168.1.12', orcadDeployment: { sshTargetId: 'ssh-1' } },
+          ],
+        },
+      });
+    if (k === 'terminal list') {
+      const o = JSON.parse(await fixtureExec(args));
+      if (args.includes('--environment')) o.result.terminals = o.result.terminals.slice(0, 1);
+      o.result.hostScope = { hostIds: ['local'], omittedHostIds: [] };
+      return JSON.stringify(o);
+    }
+    return fixtureExec(args);
+  };
+  const a = new CliAdapter(exec);
+  const hosts = await a.listHosts();
+  expect(hosts.find((h) => h.id === 'E1')).toMatchObject({
+    name: '192.168.1.12',
+    label: 'RemoteLaptop',
+  });
+  const remote = (await a.snapshot()).panes.filter((p) => p.environment === 'E1');
+  expect(remote[0]).toMatchObject({ hostName: 'RemoteLaptop', hostAddress: '192.168.1.12' });
+});
+
 it('takes agentType from hook status when the pane has no agent identity', async () => {
   const s = await new CliAdapter(async (args) => {
     const o = JSON.parse(await fixtureExec(args));

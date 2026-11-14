@@ -1,6 +1,6 @@
 // Agent Deck for Orca plugin A (trusted-worker). Single ESM file, no dependencies.
 // Finds plugin B (the Stream Deck plugin) through its discovery file, proves the shared token,
-// forwards agent status and workspace events, and reconnects on every activate.
+// forwards agent status, and reconnects on every activate.
 // Never log tokens or terminal content.
 import net from 'node:net';
 import { createHash, createHmac, randomBytes, timingSafeEqual } from 'node:crypto';
@@ -9,8 +9,8 @@ import { homedir } from 'node:os';
 import { dirname, join, posix, win32 } from 'node:path';
 
 export const PROTOCOL_VERSION = 1;
-/** Additive features of this major: 1 = the deck grid for the sidebar panel, 2 = B opens that panel for us (see docs/bridge-protocol.md). */
-export const PROTOCOL_MINOR = 2;
+/** Additive features of this major: 1 = the deck grid for the sidebar panel, 2 = B opens that panel for us, 3 = a deck press selects the key in that panel (see docs/bridge-protocol.md). */
+export const PROTOCOL_MINOR = 3;
 export const PLUGIN_VERSION = '0.2.2';
 const GUID = '258EAFA5-E914-47DA-95CA-C5AB0DC85B11';
 
@@ -173,6 +173,7 @@ export function createBridge({
   retryMs = 1000,
   maxRetryMs = 30_000,
   handshakeMs = HANDSHAKE_MS,
+  followMs = 5000,
   onAck = () => {},
   onMessage: onBridgeMessage = () => {},
   onChange = () => {},
@@ -188,6 +189,29 @@ export function createBridge({
   let versionNote = null;
   let stopped = false;
   let delay = retryMs;
+  /** The discovery file the open connection was made from, to notice a newer B (see `follow`). */
+  let connectedTo = null;
+  const sameB = (a, b) => a.pid === b.pid && a.port === b.port && a.token === b.token;
+  /**
+   * Every B writes a new bridge.json, but an open socket never looks at it: after the Stream Deck app is swapped
+   * (Elgato <-> OpenDeck) A would stay on the old B for good. Drop the socket when the file names another B.
+   */
+  const follow = setInterval(async () => {
+    if (stopped || state !== 'connected' || !ws || !connectedTo) return;
+    const socket = ws;
+    try {
+      const now = JSON.parse(await readFile(discoveryPath, 'utf8'));
+      if (ws !== socket || sameB(connectedTo, now)) return;
+      log(
+        `bridge: a newer Stream Deck plugin (pid ${now.pid}) owns the discovery file, reconnecting`,
+      );
+      delay = retryMs;
+      socket.close();
+    } catch {
+      // No file (or half written): keep the connection, the next tick looks again.
+    }
+  }, followMs);
+  follow.unref?.();
 
   const setState = (s) => {
     if (s === state) return;
@@ -218,6 +242,7 @@ export function createBridge({
       return schedule();
     }
     if (stopped || ws) return;
+    connectedTo = disc;
     setState('connecting');
     // Challenge-response: the token itself never goes over the wire, and nothing is sent
     // (no hello, no statuses) until B has proven it knows the token.
@@ -324,6 +349,7 @@ export function createBridge({
     discoveryPath,
     stop() {
       stopped = true;
+      clearInterval(follow);
       clearTimeout(timer);
       ws?.close();
       ws = null;
@@ -357,7 +383,7 @@ export function toAgentStatus(ev, now = Date.now()) {
 }
 
 /**
- * Forwards status and workspace events and replays the last known state of every pane after a
+ * Forwards status events and replays the last known state of every pane after a
  * (re)connect or a `requestSnapshot`. Orca delivers the same transition 2-3 times, so duplicates
  * (same pane, state and stateStartedAt) are dropped.
  */
@@ -378,17 +404,6 @@ export function createForwarder(bridge, { maxPanes = 500 } = {}) {
       if (lastByPane.size > maxPanes) lastByPane.delete(lastByPane.keys().next().value);
       forward(msg);
       return true;
-    },
-    onWorkspace(event, ev) {
-      const workspaceId = ev?.workspaceId ?? ev?.id;
-      if (typeof workspaceId !== 'string') return false;
-      return forward({
-        v: PROTOCOL_VERSION,
-        type: 'workspace',
-        event,
-        workspaceId,
-        path: typeof ev?.path === 'string' ? ev.path : '',
-      });
     },
     replay() {
       for (const msg of lastByPane.values()) forward(msg);
@@ -477,7 +492,7 @@ export function sanitizeForRecording(value) {
 
 /**
  * What is written is an allow-list, the drop pass above is the second line of defence. The fields are the ones the
- * plugin itself reads (`toAgentStatus`, `onWorkspace`) and the replay schema needs; anything else Orca adds (a
+ * plugin itself reads (`toAgentStatus`) and the replay schema needs; anything else Orca adds (a
  * branch name, a terminal handle, a title, a path) never reaches the file. A value is kept only when it is a
  * string, number, boolean or null; a spec of `1` means "this field", an object means "these fields of it".
  */
@@ -490,8 +505,6 @@ export const RECORD_EVENT_FIELDS = {
     agentType: 1,
     mainAgent: { state: 1, outcome: 1, stateStartedAt: 1, agentType: 1 },
   },
-  'workspace.created': { workspaceId: 1, id: 1, kind: 1 },
-  'workspace.removed': { workspaceId: 1, id: 1, kind: 1 },
 };
 /** Per frame type of the bridge; a type not listed keeps only `v` and `type`. */
 export const RECORD_FRAME_FIELDS = {
@@ -506,10 +519,6 @@ export const RECORD_FRAME_FIELDS = {
     receivedAt: 1,
     agentType: 1,
   },
-  workspace: { v: 1, type: 1, event: 1, workspaceId: 1 },
-  pairRequest: { v: 1, type: 1, requestId: 1, pane: 1 },
-  unmapRequest: { v: 1, type: 1, requestId: 1, pane: 1 },
-  pairCancel: { v: 1, type: 1, requestId: 1 },
   requestSnapshot: { v: 1, type: 1 },
   pairResult: {
     v: 1,
@@ -524,6 +533,8 @@ export const RECORD_FRAME_FIELDS = {
   unmapKey: { v: 1, type: 1, requestId: 1, key: 1 },
   openPanel: { v: 1, type: 1, requestId: 1, panelId: 1 },
   openPanelResult: { v: 1, type: 1, requestId: 1, ok: 1, reason: 1 },
+  panelSelect: { v: 1, type: 1, on: 1 },
+  keyPicked: { v: 1, type: 1, key: 1 },
   // No labels: they are pane names.
   deckState: { v: 1, type: 1, connected: 1, cols: 1, rows: 1 },
 };
@@ -672,14 +683,13 @@ export function statusSummary({ state, deck, seen, tracked, ago, versionNote = n
 }
 
 const STATUS_ITEM = 'deck';
-const PRESS_KEY = 'Press a key on the deck to map this pane';
 const PANEL_ID = 'deck';
-const MAP_TIP =
-  'Agent Deck: open the panel to map the last focused terminal pane to a Stream Deck key (shortcut: Cmd+Option+K, Ctrl+Alt+K on Windows and Linux)';
+const OPEN_TIP =
+  'Open Agent Deck: the panel to map terminal panes to Stream Deck keys (shortcut: Cmd+Option+K, Ctrl+Alt+K on Windows and Linux)';
 
 /**
- * The status bar button (`contributes.statusBarItems`, id `deck`): it always runs Map pane (which opens the
- * Agent Deck panel), and its text says when that cannot work. Null while connecting, so a reconnect does not flicker.
+ * The status bar button (`contributes.statusBarItems`, id `deck`): it always runs Open panel (the Agent Deck
+ * panel), and its text says when that cannot work. Null while connecting, so a reconnect does not flicker.
  * `deckConnected` is the last `deckState` of this connection, else what `helloAck` said.
  */
 export function statusBarItem({ state, deck, versionNote = null, deckConnected = null }) {
@@ -703,7 +713,7 @@ export function statusBarItem({ state, deck, versionNote = null, deckConnected =
       tone: 'warning',
       tooltip: 'Agent Deck: the Stream Deck app shows no device with Agent Deck keys',
     };
-  return { text: 'Agent Deck', tone: 'neutral', tooltip: MAP_TIP };
+  return { text: 'Agent Deck', tone: 'neutral', tooltip: OPEN_TIP };
 }
 
 /** How long the panel waits for the deck's state, and for the result of a click. */
@@ -721,19 +731,24 @@ export function createPanelApi(
   bridge,
   {
     onDeck = () => {},
-    onMap = () => {},
+    onOpened = () => {},
+    onKeyPicked = () => {},
     deckWaitMs = DECK_WAIT_MS,
     resultWaitMs = RESULT_WAIT_MS,
     openWaitMs = OPEN_WAIT_MS,
   } = {},
 ) {
-  // The panel was opened to map the focused pane: its keys assign at a click until a key is chosen or Cancel.
-  let mapping = false;
-  const setMapping = (on) => {
-    if (mapping === on) return;
-    mapping = on;
-    onMap(on);
+  // The panel is in view with a key's details open: B hands deck taps to it (minor 3).
+  let selecting = false;
+  const sendSelect = () => {
+    const { state, minor } = bridge.status();
+    if (state === 'connected' && minor >= 3)
+      bridge.send({ v: PROTOCOL_VERSION, type: 'panelSelect', on: selecting });
   };
+  // The key B last asked to show (a hold opens the panel, then sends keyPicked): a panel that was not mounted yet
+  // missed the post, so `get` hands it over once, while it is fresh.
+  let picked = null;
+  const PICKED_FRESH_MS = 5000;
   let deckNow = null;
   let deckSession = -1;
   const pending = new Map();
@@ -763,7 +778,10 @@ export function createPanelApi(
       while (!current() && Date.now() < end) await sleep(50);
     }
     // A Stream Deck plugin of this minor answers at once: silence means it is not the one we know.
-    return current() ? { status: 'ok', deck: current(), mapping } : { status: 'update' };
+    if (!current()) return { status: 'update' };
+    const key = picked && Date.now() - picked.at < PICKED_FRESH_MS ? picked.key : undefined;
+    picked = null;
+    return { status: 'ok', deck: current(), ...(key ? { picked: key } : {}) };
   }
 
   async function click(frame, waitMs = resultWaitMs, minMinor = 1) {
@@ -786,22 +804,27 @@ export function createPanelApi(
     get,
     assign: async ({ key, replace, paneKey, hostId }) => {
       if (!Number.isInteger(key) || key < 1) return { ok: false, reason: 'noSuchKey' };
-      const r = await click({
+      return click({
         type: 'assignKey',
         key,
         replace: replace === true,
         ...(typeof paneKey === 'string' && paneKey ? { paneKey } : {}),
         ...(typeof hostId === 'string' && hostId ? { hostId } : {}),
       });
-      if (r.ok) setMapping(false);
-      return r;
     },
     /** Asks B to show the panel in Orca's sidebar (minor 2). */
     open: (panelId) => click({ type: 'openPanel', panelId }, openWaitMs, 2),
-    startMap: () => setMapping(true),
-    endMap: () => setMapping(false),
-    get mapping() {
-      return mapping;
+    /** The panel was asked for (status bar, shortcut, palette): it shows the focused pane's key, if it has one. */
+    opened: () => onOpened(),
+    /** The panel says whether deck taps should select keys in it. */
+    select: (on) => {
+      selecting = on === true;
+      sendSelect();
+      return { ok: true };
+    },
+    /** A new connection: B forgot the panel state with the old one. */
+    resync: () => {
+      if (selecting) sendSelect();
     },
     unmap: ({ key }) =>
       Number.isInteger(key) && key >= 1
@@ -818,8 +841,46 @@ export function createPanelApi(
         pending.has(msg.requestId)
       ) {
         pending.get(msg.requestId)(omit(msg, ['type', 'v', 'requestId']));
+      } else if (msg.type === 'keyPicked' && Number.isInteger(msg.key)) {
+        picked = { key: msg.key, at: Date.now() };
+        onKeyPicked(msg.key);
       }
     },
+  };
+}
+
+const OFFLINE_PUSH_MS = 1000;
+
+/**
+ * Tells the panel when the link to the Stream Deck plugin is gone, since it only learns by asking (`deck.get`). A drop
+ * is told after `delayMs` of staying down (a switch of the Stream Deck plugin reconnects within that and must not
+ * flicker); the deck B pushes after the next handshake brings the grid back.
+ */
+export function createLinkNotifier({ bridge, post, delayMs = OFFLINE_PUSH_MS }) {
+  let timer = null;
+  let told = false;
+  const cancel = () => {
+    if (timer) clearTimeout(timer);
+    timer = null;
+  };
+  return {
+    /** The bridge state changed. */
+    change() {
+      if (bridge.status().state === 'connected') {
+        // B pushes its deck after the handshake, which brings the panel back.
+        told = false;
+        return cancel();
+      }
+      if (timer || told) return;
+      timer = setTimeout(() => {
+        timer = null;
+        if (bridge.status().state === 'connected') return;
+        told = true;
+        post({ status: 'offline' });
+      }, delayMs);
+      timer.unref?.();
+    },
+    stop: cancel,
   };
 }
 
@@ -837,9 +898,8 @@ export default async function activate(orca) {
   const resumed = await recorder.resume();
   if (resumed) log(`record: resumed after a restart of this worker, writing to ${resumed}`);
   // activate() gets no app version, only the plugin API version; B reads the app version itself.
-  const pairing = { id: null, last: null, reason: null };
   // The panel's calls are registered once the bridge exists; its messages arrive before that only if B is fast.
-  let panelApi = { onMessage: () => {} };
+  let panelApi = { onMessage: () => {}, resync: () => {} };
   // Orca before 1.4.248 has no status bar for plugins; the button is a convenience, never an error.
   const canShowItem = orca.host?.has?.('statusBar.update') === true;
   let shownItem = '';
@@ -862,8 +922,14 @@ export default async function activate(orca) {
   const bridge = createBridge({
     orcaVersion: orca.api ? `api ${orca.api.major}.${orca.api.minor}` : 'unknown',
     log,
-    onAck: () => forwarder?.replay(),
-    onChange: () => updateItem(),
+    onAck: () => {
+      forwarder?.replay();
+      panelApi.resync();
+    },
+    onChange: () => {
+      updateItem();
+      link.change();
+    },
     onMessage: (msg) => {
       recorder.frame('b', msg);
       panelApi.onMessage(msg);
@@ -872,15 +938,11 @@ export default async function activate(orca) {
         updateItem();
       }
       if (msg.type === 'requestSnapshot') forwarder?.replay();
-      else if (msg.type === 'pairResult' && msg.requestId === pairing.id) {
-        pairing.id = null;
-        // No page: the Stream Deck SDK does not tell which profile page shows, so it is always 1.
-        pairing.last = msg.ok ? `mapped to key ${msg.slot?.index}` : msg.reason;
-        pairing.reason = msg.ok ? null : msg.reason;
-        if (msg.ok) panelApi.endMap();
-        log(`pairing: ${msg.ok ? pairing.last : `not mapped (${msg.reason})`}`);
-      }
     },
+  });
+  const link = createLinkNotifier({
+    bridge,
+    post: (payload) => orca.panels?.post?.('deck.changed', payload),
   });
   // Frames A sends are recorded where they leave (the handshake does not pass here).
   const sendRaw = bridge.send;
@@ -890,28 +952,15 @@ export default async function activate(orca) {
   };
   forwarder = createForwarder(bridge);
   panelApi = createPanelApi(bridge, {
-    onDeck: (state) =>
-      orca.panels?.post?.('deck.changed', {
-        status: 'ok',
-        deck: state,
-        mapping: panelApi.mapping,
-      }),
-    onMap: (mapping) => orca.panels?.post?.('map.changed', { mapping }),
+    onDeck: (state) => orca.panels?.post?.('deck.changed', { status: 'ok', deck: state }),
+    onOpened: () => orca.panels?.post?.('panel.opened', {}),
+    onKeyPicked: (key) => orca.panels?.post?.('deck.keyPicked', { key }),
   });
   orca.panels?.handle?.('deck.get', () => panelApi.get());
   orca.panels?.handle?.('deck.assign', (input) => panelApi.assign(input ?? {}));
   orca.panels?.handle?.('deck.unmap', (input) => panelApi.unmap(input ?? {}));
-  // Another pane chosen in the panel's list: the deck's Assign-here would map the focused one, so it ends.
-  orca.panels?.handle?.('deck.mapChoose', () => {
-    if (pairing.id) bridge.send({ v: PROTOCOL_VERSION, type: 'pairCancel', requestId: pairing.id });
-    return { ok: true };
-  });
-  orca.panels?.handle?.('deck.mapEnd', () => {
-    panelApi.endMap();
-    if (pairing.id) bridge.send({ v: PROTOCOL_VERSION, type: 'pairCancel', requestId: pairing.id });
-    return { ok: true };
-  });
-  const seen = { status: 0, forwarded: 0, workspace: 0, lastAt: 0, wokeAt: Date.now() };
+  orca.panels?.handle?.('deck.panelSelect', (input) => panelApi.select(input?.on));
+  const seen = { status: 0, forwarded: 0, lastAt: 0, wokeAt: Date.now() };
   log(`worker started: plugin ${PLUGIN_VERSION}, ${bridge.status().state}`);
   // The event that woke a lazy worker arrives right after activate(); keep it even if B is down.
   orca.events.on('agent.status.changed', async (ev) => {
@@ -921,58 +970,25 @@ export default async function activate(orca) {
     if (forwarder.onStatus(ev)) seen.forwarded++;
     await bridge.ensure();
   });
-  orca.events.on?.('workspace.created', (ev) => {
-    seen.workspace++;
-    recorder.event('workspace.created', ev);
-    forwarder.onWorkspace('created', ev);
-  });
-  orca.events.on?.('workspace.removed', (ev) => {
-    seen.workspace++;
-    recorder.event('workspace.removed', ev);
-    forwarder.onWorkspace('removed', ev);
-  });
   await bridge.ensure();
   updateItem();
-  // The feedback that matters is on the deck; the returned string is only the palette toast.
-  const sendPairing = (type) => async () => {
+  // The status bar button, the shortcut and the palette: show the Agent Deck panel (B opens it). It only shows:
+  // hiding the right sidebar needs `commands.run`, which needs the workspace:write capability. The panel then
+  // opens the key of the pane Orca has focused, if it is on one.
+  orca.commands.register('deck.map', async () => {
     await bridge.ensure();
     await new Promise((r) => setTimeout(r, 300));
     const { state, deck } = bridge.status();
     if (state !== 'connected') return 'Stream Deck plugin not running';
     if (!deck?.connected) return 'Stream Deck not connected';
-    const requestId = randomBytes(8).toString('hex');
-    if (type === 'pairRequest') {
-      if (pairing.id)
-        bridge.send({ v: PROTOCOL_VERSION, type: 'pairCancel', requestId: pairing.id });
-      pairing.id = requestId;
-    }
-    bridge.send({ v: PROTOCOL_VERSION, type, requestId, pane: null });
-    log(`pairing: ${type} sent`);
-    if (type !== 'pairRequest') return 'Unmapping this pane';
-    // B answers at once when it has no pane to map (nothing focused, none seen before): say so, nothing is pairing.
-    for (let i = 0; i < 16 && pairing.id === requestId; i++)
-      await new Promise((r) => setTimeout(r, 50));
-    if (pairing.id !== requestId && pairing.reason === 'noFocusedPane')
-      return 'Focus a terminal pane first (a paired-server pane: pick it in the Agent Deck panel)';
-    if (pairing.id !== requestId && pairing.last && pairing.reason)
-      return `Not mapped: ${pairing.last}`.slice(0, 200);
-    return PRESS_KEY;
-  };
-  // The status bar button and the shortcut: pairing mode on the deck (press a key there) and the panel beside it
-  // (click a key there). B opens the panel; where it cannot (an older B, no runtime), the deck alone keeps working.
-  orca.commands.register('deck.map', async () => {
-    const text = await sendPairing('pairRequest')();
     const opened = await panelApi.open(PANEL_ID);
     if (!opened.ok) {
-      log(`pairing: panel not opened (${opened.reason}), deck only`);
-      return text;
+      log(`panel not opened (${opened.reason})`);
+      return 'Could not open the Agent Deck panel: open it from the sidebar';
     }
-    panelApi.startMap();
-    return text === PRESS_KEY
-      ? 'Pick a key in the Agent Deck panel, or press one on the deck'
-      : text;
+    panelApi.opened();
+    return 'Agent Deck panel';
   });
-  orca.commands.register('deck.unmap', sendPairing('unmapRequest'));
   // Orca's plugin API has no confirm dialog (and notifications stay off), so Uninstall asks twice: the first run only arms.
   let armedAt = 0;
   orca.commands.register('deck.uninstall', async () => {
@@ -986,6 +1002,7 @@ export default async function activate(orca) {
     }
     armedAt = 0;
     recorder.stop('uninstall');
+    link.stop();
     bridge.stop();
     uninstalled = true;
     await removeDeckData(dir);
@@ -1026,7 +1043,7 @@ export default async function activate(orca) {
         : `status: no Stream Deck plugin link (discovery file ${bridge.discoveryPath})`,
     );
     log(
-      `status: agent events ${seen.status} (${seen.forwarded} forwarded), last ${ago(seen.lastAt)}; ${forwarder.size()} pane(s) tracked; workspace events ${seen.workspace}`,
+      `status: agent events ${seen.status} (${seen.forwarded} forwarded), last ${ago(seen.lastAt)}; ${forwarder.size()} pane(s) tracked`,
     );
     log(`status: log file ${logPath()}; also: orca plugin logs 1am.agent-deck`);
     // Orca's Logs pane never shows orca.log output, but it shows a returned string (max 200 chars)

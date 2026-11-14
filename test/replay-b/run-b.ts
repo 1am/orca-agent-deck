@@ -287,7 +287,7 @@ process.exit(r.status ?? 1);`,
       () => '',
     );
     sim = new BridgeSimulator(discovery);
-    await sim.connect();
+    await sim.connect({ minor: 4 });
   };
 
   /** The layout keys appear; a pane-slot key is pinned to its pane once B can see the pane. */
@@ -355,7 +355,7 @@ process.exit(r.status ?? 1);`,
       for (const st of group) await check(st, marks);
       if (wantFrames.length) {
         const own = (m: Frame) =>
-          !['challenge', 'proof', 'helloAck'].includes(String(m['type'])) ||
+          !['challenge', 'proof', 'helloAck', 'deckState'].includes(String(m['type'])) ||
           wantFrames.some((w) => w['type'] === m['type']);
         const got = () => (sim?.received ?? []).slice(marks.frames).filter(own);
         await until(

@@ -19,8 +19,6 @@ export interface SlotView {
   agent?: string | null;
   /** Short host name for remote panes. */
   host?: string | null;
-  /** Pairing mode: this free key shows its number large ("Assign here"). */
-  assign?: boolean;
   /** Orca has this pane selected (local panes only: Orca does not publish remote focus). */
   focused?: boolean;
 }
@@ -72,6 +70,8 @@ export interface PickerPane {
   /** Execution host id (tab and leaf ids repeat across hosts). */
   hostId: string;
   host: string;
+  /** The address behind a connection label, for searching; absent when `host` is already the address. */
+  hostAddress?: string;
   remote: boolean;
   repo: string;
   branch: string;
@@ -91,10 +91,17 @@ export interface PanelPane {
   detail: string;
   /** Host name of a remote pane, else absent. */
   host?: string;
+  /** The address behind a connection label (searchable), else absent. */
+  hostAddress?: string;
   agent: string | null;
   state: DeckState;
   remote: boolean;
   focused: boolean;
+  /**
+   * Orca shows a paired server, which reports no focus, and this is the pane last opened from the deck there:
+   * the panel's best guess for a pane to offer first.
+   */
+  lastPressed?: boolean;
   onKey?: number;
 }
 
@@ -115,8 +122,6 @@ export interface DeckOptions {
 }
 
 export type PressResult = 'focused' | 'failed' | 'unmapped';
-
-export type HoldResult = 'mapped' | 'replaced' | 'released' | 'failed';
 
 /** The pane's process crashed or exited non-zero: Orca lists it with no agent, but it needs a look. */
 const endedBadly = (p: PaneInfo): boolean => p.exitCause === 'crash' || p.exitCause === 'nonzero';
@@ -185,6 +190,7 @@ export class DeckController {
    * keeps that key highlighted until Orca reports the user in another pane.
    */
   private pressedKey: string | null = null;
+  private pressedHost: string | null = null;
   private snapshot: Snapshot = { panes: [], statuses: [], omittedHostIds: [] };
   private orcaRunning = false;
   /** Why the last snapshot could not be read while Orca was up (paths and codes only), else null. */
@@ -294,16 +300,6 @@ export class DeckController {
     if (!slot) return this.onPairingResult?.({ requestId, ok: false, reason: 'noSuchKey' });
     this.release(slot);
     this.onPairingResult?.({ requestId, ok: true, slot, action: 'unmapped' });
-  }
-
-  /** Unmaps every slot showing a pane (named, or the focused one); returns how many were cleared. */
-  async unmapPane(paneKey: string | null): Promise<number> {
-    const focused = paneKey ? null : await this.focusedPane();
-    const key = paneKey ?? focused?.paneKey;
-    if (!key) return 0;
-    const slots = this.store.slotsFor(key, focused?.hostId);
-    for (const s of slots) this.release(s);
-    return slots.length;
   }
 
   /** User-chosen short names per host id (Orca's `ssh:build-1` etc.); they win over Orca's own name. */
@@ -573,6 +569,7 @@ export class DeckController {
           paneKey: p.paneKey,
           hostId: p.hostId,
           host: this.hostName(p.hostId, p.hostName) ?? 'This machine',
+          ...(p.hostAddress ? { hostAddress: p.hostAddress } : {}),
           remote: !isLocalHost(p.hostId),
           repo: p.repo ?? '',
           branch: p.branch ?? '',
@@ -605,14 +602,16 @@ export class DeckController {
             .filter((s, i, all) => s && s !== where && all.indexOf(s) === i)
             .join(' · '),
           ...(p.remote ? { host: p.host } : {}),
+          ...(p.remote && p.hostAddress ? { hostAddress: p.hostAddress } : {}),
           agent: p.agent,
           state: p.state,
           remote: p.remote,
           focused: this.isFocused(p),
+          ...(this.isLastPressedRemote(p) ? { lastPressed: true } : {}),
           ...(onKey !== undefined ? { onKey } : {}),
         };
       })
-      .sort((a, b) => Number(b.focused) - Number(a.focused))
+      .sort((a, b) => Number(b.focused || !!b.lastPressed) - Number(a.focused || !!a.lastPressed))
       .slice(0, PANEL_PANES_MAX);
   }
 
@@ -659,6 +658,17 @@ export class DeckController {
       this.lastFocusedKey = null;
       this.lastFocusedHost = null;
     }
+  }
+
+  /** The pane last opened from the deck, while Orca shows a paired server with no focus to read. */
+  private isLastPressedRemote(pane: Pick<PaneInfo, 'paneKey' | 'hostId'>): boolean {
+    return (
+      !this.focusedKey &&
+      pane.paneKey === this.pressedKey &&
+      pane.hostId === this.pressedHost &&
+      parseHostId(pane.hostId).kind === 'env' &&
+      this.mayShowPairedServer()
+    );
   }
 
   /** No worktree is shown and Orca has paired-server panes: one of them may be the one on screen. */
@@ -721,20 +731,11 @@ export class DeckController {
   /** The pane focused in Orca right now (local runtime), or null when unknown. */
   private async focusedPane(): Promise<PaneInfo | null> {
     const key = await this.adapter.focusedPaneKey?.().catch(() => null);
-    this.focusUnreadable = !key;
     if (!key) {
       this.noteFocus(null);
-      const note = this.adapter.focusNote || 'no detail';
-      this.holdError = `cannot read the focused pane (${note}): use the picker`;
-      // Orca marks no local worktree active while it shows a paired server.
-      this.holdHint =
-        note.includes('no-active-worktree') || note.includes('remote-worktree')
-          ? 'Remote pane: use the picker'
-          : 'No pane selected in Orca';
       return null;
     }
     this.noteFocus(key);
-    this.holdHint = 'Pane not found';
     const find = () => this.snapshot.panes.find((p) => this.isFocusedAt(p, key, this.focusedHost));
     let pane = find();
     if (!pane) {
@@ -743,45 +744,9 @@ export class DeckController {
       this.registry.update(this.snapshot.panes);
       pane = find();
     }
-    if (!pane) this.holdError = `focused pane ${key} is not in the pane list`;
-    else if (pane.orphaned) this.holdError = `focused pane ${key} is orphaned`;
     return pane && !pane.orphaned ? pane : null;
   }
 
-  /** Why the last hold failed, for the plugin log. */
-  holdError = '';
-  /** The same, short enough to show on the key for a moment. */
-  holdHint = '';
-  /** The last focus read found no pane (a paired server or SSH host is shown, or nothing is). */
-  private focusUnreadable = false;
-
-  /**
-   * Hold: one gesture, three outcomes. The slot shows the focused pane already
-   * -> release it (the slot stays empty, no auto-fill); otherwise pin the focused pane here.
-   */
-  async hold(slot: string): Promise<HoldResult> {
-    const pane = await this.focusedPane();
-    if (!pane) {
-      // Orca does not publish the focus of a remote pane, so a pane on a remote host can be pinned
-      // from the picker but never matched against the focus. Holding a key that shows a pane then
-      // releases it, instead of a failure the user cannot act on.
-      const cur = this.store.get(slot);
-      if (this.focusUnreadable && cur?.pane) {
-        this.release(slot);
-        return 'released';
-      }
-      return 'failed';
-    }
-    if (this.store.get(slot)?.pane?.paneKey === pane.paneKey) {
-      this.release(slot);
-      return 'released';
-    }
-    const had = !!this.store.get(slot)?.pane;
-    this.configure(slot, { paneKey: pane.paneKey, hostId: pane.hostId });
-    return had ? 'replaced' : 'mapped';
-  }
-
-  /** Number of Pane slots holding a pane (for the Setup doctor). */
   /** A key appeared at `pos`: remember it, and inherit the mapping a key at that position had before. */
   locateSlot(slot: string, pos: SlotPosition, live: ReadonlySet<string>): boolean {
     const inherited = this.store.locate(slot, pos, live, this.seenDevices);
@@ -887,8 +852,9 @@ export class DeckController {
   private async focus(pane: PaneInfo | undefined): Promise<PressResult> {
     if (!pane) return 'failed';
     // Highlight the key while the switch runs, so a refresh meanwhile does not drop it.
-    const before = this.pressedKey;
+    const before = { key: this.pressedKey, host: this.pressedHost };
     this.pressedKey = pane.paneKey;
+    this.pressedHost = pane.hostId;
     // Switch the pane and raise the window concurrently: both are slow subprocess calls.
     const focusPane = (p: PaneInfo) =>
       this.adapter.focus({
@@ -907,7 +873,10 @@ export class DeckController {
       const fresh = this.registry.get(pane.paneKey, pane.hostId);
       if (fresh && fresh.handle !== pane.handle) r = await focusPane(fresh);
     }
-    if (!r.ok && this.pressedKey === pane.paneKey) this.pressedKey = before;
+    if (!r.ok && this.pressedKey === pane.paneKey) {
+      this.pressedKey = before.key;
+      this.pressedHost = before.host;
+    }
     return r.ok ? 'focused' : 'failed';
   }
 

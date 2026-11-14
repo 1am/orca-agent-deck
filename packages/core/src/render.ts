@@ -15,8 +15,6 @@ export interface KeyModel {
   host?: string | null;
   /** Formatted key number (see formatKeyNumber), prefixed to the label as `5: title`. */
   keyNumber?: string | null;
-  /** Pairing mode: the key number drawn large, with the label as one small line below. */
-  bigNumber?: string | null;
   /** The pane Orca has selected right now: colours inverted, with a frame and a bold label. */
   focused?: boolean;
 }
@@ -301,21 +299,13 @@ export function renderKey(m: KeyModel, o: RenderOptions = {}): string {
   // from every other key at a glance and keeps its state colour in the frame.
   const pal = m.focused ? { bg: FOCUS_BG, fg: base.fg } : base;
   const { lines, size: fs } = layoutLabel(m.keyNumber ? `${m.keyNumber}: ${m.label}` : m.label);
-  // Pairing mode: a big number to find the key by and "Assign here" under it (a pane label cut to
-  // 14 characters said little; the pane is the one focused in Orca).
-  const big = m.bigNumber
-    ? `<text x="72" y="100" font-size="${m.bigNumber.length > 2 ? 56 : 72}" font-weight="700" text-anchor="middle">${esc(m.bigNumber)}</text>` +
-      `<text x="72" y="130" font-size="14" text-anchor="middle">Assign here</text>`
-    : '';
   // Pane name fills the box below the top line, top-aligned.
-  const text = m.bigNumber
-    ? big
-    : lines
-        .map(
-          (l, i) =>
-            `<text x="${MX}" y="${(BOX.top + CAP * fs + i * fs * LINE).toFixed(1)}" font-size="${fs}" font-weight="${m.focused ? 700 : 500}">${esc(l)}</text>`,
-        )
-        .join('');
+  const text = lines
+    .map(
+      (l, i) =>
+        `<text x="${MX}" y="${(BOX.top + CAP * fs + i * fs * LINE).toFixed(1)}" font-size="${fs}" font-weight="${m.focused ? 700 : 500}">${esc(l)}</text>`,
+    )
+    .join('');
   // A pane with no detected agent but a live mapping is a plain shell.
   // Orca's agent type, lower-cased once here for the pictogram and letter lookups.
   const kind = (m.agent ? m.agent : m.state === 'unmapped' ? '' : 'shell').toLowerCase();

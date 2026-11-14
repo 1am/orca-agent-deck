@@ -93,9 +93,11 @@ class FakeB {
     });
     server.on('hello', (info) => this.frames.push({ type: 'hello', ...info }));
     server.on('message', (m) => {
-      if (m.type === 'pairRequest') this.lastRequestId = m.requestId;
+      // A from before minor 4 still asks for the deck's own map mode; B no longer reads it.
+      const old = m as { type: string; requestId?: string };
+      if (old.type === 'pairRequest') this.lastRequestId = old.requestId ?? '';
       this.frames.push({ ...m });
-      if (m.type === 'pairRequest' && this.autoReply) this.send(this.autoReply);
+      if (old.type === 'pairRequest' && this.autoReply) this.send(this.autoReply);
       // This B has no runtime to open the panel with: A falls back to the deck-only mapping at once.
       if (m.type === 'openPanel')
         this.send({

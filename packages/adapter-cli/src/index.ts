@@ -29,6 +29,7 @@ import type { z } from 'zod';
 import { resolveOrcaBinCached } from './resolve-bin.ts';
 import { spawnPlan } from './spawn-plan.ts';
 import {
+  environmentListResponse,
   hostListResponse,
   tabTitles,
   activePaneKey,
@@ -132,6 +133,7 @@ export class CliAdapter implements OrcaAdapter {
   } | null = null;
   /** Last host list that answered: a failing `host list` must not make paired servers vanish. */
   private lastHosts: HostInfo[] = [];
+  private envLabels: { key: string; labels: Map<string, string> } | null = null;
   constructor(exec: Exec = makeExec(), now: () => number = Date.now) {
     this.exec = exec;
     this.now = now;
@@ -214,13 +216,16 @@ export class CliAdapter implements OrcaAdapter {
       hosts.flatMap(
         (h) =>
           [
-            [h.id, h.name],
-            [envHostId(h.id), h.name],
+            [h.id, h],
+            [envHostId(h.id), h],
           ] as const,
       ),
     );
     for (const pane of local.panes) {
-      if (!isLocalHost(pane.hostId)) pane.hostName = names.get(pane.hostId) ?? null;
+      if (isLocalHost(pane.hostId)) continue;
+      const h = names.get(pane.hostId);
+      pane.hostName = h ? (h.label ?? h.name) : null;
+      if (h?.label) pane.hostAddress = h.name;
     }
     return local;
   }
@@ -303,12 +308,43 @@ export class CliAdapter implements OrcaAdapter {
 
   async listHosts(): Promise<HostInfo[]> {
     const r = await this.call(hostListResponse, ['host', 'list']);
-    return r.result.hosts.map((h) => ({
-      id: h.id,
-      kind: h.kind,
-      name: h.name,
-      connected: h.kind === 'local' ? true : (h.connected ?? false),
-    }));
+    // A paired server Orca deployed onto an SSH target is named by its address; the target has the
+    // connection name the user knows. The runtime route says it in `label`; the plain CLI needs the
+    // environment list, read once per set of servers. Best effort: the list stands without it.
+    const labels = new Map<string, string>();
+    const envs = r.result.hosts.filter((h) => h.kind === 'environment');
+    for (const h of envs) if (h.label) labels.set(h.id, h.label);
+    if (envs.some((h) => !h.label)) {
+      const sshNames = new Map(
+        r.result.hosts.filter((h) => h.kind === 'ssh').map((h) => [h.id, h.name]),
+      );
+      const key = JSON.stringify([...envs.map((h) => h.id), ...sshNames]);
+      if (this.envLabels?.key !== key) {
+        const found = new Map<string, string>();
+        try {
+          const e = await this.call(environmentListResponse, ['environment', 'list']);
+          for (const env of e.result.environments) {
+            const label = sshNames.get(env.orcadDeployment?.sshTargetId ?? '');
+            if (label && label !== env.name) found.set(env.id, label);
+          }
+          this.envLabels = { key, labels: found };
+        } catch {
+          // keep the address; try again next time
+        }
+      }
+      for (const [id, label] of this.envLabels?.labels ?? [])
+        if (!labels.has(id)) labels.set(id, label);
+    }
+    return r.result.hosts.map((h) => {
+      const label = labels.get(h.id);
+      return {
+        id: h.id,
+        kind: h.kind,
+        name: h.name,
+        ...(label ? { label } : {}),
+        connected: h.kind === 'local' ? true : (h.connected ?? false),
+      };
+    });
   }
 
   /**

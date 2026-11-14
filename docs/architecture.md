@@ -6,8 +6,8 @@ As built, November 2026 (Orca 1.4.248, Elgato Stream Deck app). This page descri
 
 Two plugins, one per host app, plus Orca's own runtime:
 
-- **Plugin A** (`orca-plugin/main.mjs`) runs inside Orca as a lazy `trusted-worker`. Orca starts it on the first event and stops it after about 10 minutes without events. It only forwards agent status and workspace events to plugin B.
-- **Plugin B** (`packages/streamdeck-plugin`) is hosted by the Elgato Stream Deck app: the app spawns it as a child process on its own bundled Node 20 (`~/Library/Application Support/com.elgato.StreamDeck/NodeJS/20.x/node`), keeps it running while the app runs and restarts it on crash or `streamdeck restart`. B talks to the app over the SDK WebSocket. It owns the keys, the bridge server, the mapping store and all reads and focus calls into Orca.
+- **Plugin A** (`orca-plugin/main.mjs`) runs inside Orca as a lazy `trusted-worker`. Orca starts it on the first event and stops it after about 10 minutes without events. It only forwards agent status events to plugin B.
+- **Plugin B** (`packages/streamdeck-plugin`) is hosted by the Elgato Stream Deck or OpenDeck app: the app spawns it as a child process on its own bundled Node 20 (`~/Library/Application Support/com.elgato.StreamDeck/NodeJS/20.x/node`), keeps it running while the app runs and restarts it on crash or `streamdeck restart`. B talks to the app over the SDK WebSocket. It owns the keys, the bridge server, the mapping store and all reads and focus calls into Orca.
 - **Orca runtime** (in the Orca app) answers B over a unix socket, or a named pipe on Windows. **Paired Orca servers** (environments) are reachable only through the `orca --environment` CLI.
 
 ```mermaid
@@ -17,7 +17,7 @@ flowchart LR
       R["Runtime<br/>(panes, worktrees, focus)"]
       PH["Plugin host"]
       A["Plugin A worker<br/>orca-plugin/main.mjs<br/>(lazy Node worker)"]
-      PH -- "agent.status.changed<br/>workspace.created/removed" --> A
+      PH -- "agent.status.changed" --> A
     end
     CLI["orca CLI<br/>(spawned per call)"]
     subgraph SDApp["Elgato Stream Deck app"]
@@ -40,7 +40,7 @@ flowchart LR
   SSH["SSH hosts"]
   DEV["Stream Deck MK.2 (USB)"]
 
-  A -- "ws, HMAC handshake<br/>agentStatus, workspace" --> BS
+  A -- "ws, HMAC handshake<br/>agentStatus" --> BS
   A -. "reads" .-> DISC
   BS -. "writes on start" .-> DISC
   BS --> FEED --> BA
@@ -203,7 +203,11 @@ sequenceDiagram
   Note over A,B: ~10 min without events: Orca stops the worker, B keeps the last state ("asleep", not an error)
   B--xA: Elgato app restarts B: new port/token
   A->>D: re-read after a failed connect, backoff 1 s to 30 s
+  Note over A,D: connected: A re-reads bridge.json every 5 s; another pid/port/token (a newer B) drops the socket and A connects to it
+  Note over B: the host quits: B sees its parent pid change or vanish (checked every 2 s), closes the bridge, removes bridge.json only if it still names itself, exits
 ```
+
+Both Stream Deck apps swap freely: the SDK reports no closed host socket, so B polls its parent pid (`watchHost`, `packages/streamdeck-plugin/src/host-watch.ts`) and exits when the host is gone, instead of staying as an orphan on its bridge port. A newer B just overwrites `bridge.json`; the older one, once it exits, leaves that file alone (`BridgeServer.stop` checks pid and token).
 
 ## Slot mapping lifecycle
 

@@ -23,6 +23,8 @@ export interface PaneInfo extends PaneRef {
   environment?: string | null;
   /** Display name of a remote host (SSH target or paired server); absent for this machine. */
   hostName?: string | null;
+  /** Address Orca names the host by when `hostName` is a connection label; absent otherwise. */
+  hostAddress?: string | null;
   /** Orca marks terminals whose pane is gone. */
   orphaned?: boolean;
   /** paneKey this terminal was recorded under before a restart, when Orca reports it. */
@@ -52,6 +54,8 @@ export interface HostInfo {
   id: string;
   kind: 'local' | 'ssh' | 'environment';
   name: string;
+  /** The connection name the user gave it in Orca, when `name` is only its address (a paired server of an SSH target). */
+  label?: string;
   connected: boolean;
 }
 

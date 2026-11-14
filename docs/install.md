@@ -13,7 +13,7 @@ About 5 minutes. You need Orca, the Elgato Stream Deck app (or OpenDeck on Linux
    open 'orca://plugins/1am.agent-deck?catalog=https://github.com/1am/orca-agent-deck.git'
    ```
 
-   On Linux use `xdg-open` instead of `open`. Orca opens the plugin page. Read and accept the access consent: the plugin runs its own code, reads agent status and workspaces, and stores its own data. Orca updates it from the same catalog.
+   On Linux use `xdg-open` instead of `open`. Orca opens the plugin page. Read and accept the access consent: the plugin runs its own code, and reads agent status. It asks for nothing else. Orca updates it from the same catalog.
 
    Without the terminal: in Orca go to Settings, Plugins, Install from Git, and paste `https://github.com/1am/orca-agent-deck`. Orca installs the newest release tag.
 3. In Orca open the command palette and run "Agent Deck: Show status".

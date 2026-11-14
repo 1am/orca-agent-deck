@@ -1,4 +1,4 @@
-{"v":2,"name":"b-hosts-down","description":"Two hosts in use (an SSH host and a paired runtime, each with a pane) stop answering: the Status key counts them and the Setup list names them; a third host that is configured but shows nothing is down too and is not counted. The key and the list read the same check. Revert check: drop the hostsDown fact in doctorFacts (status.ts): the key says 'hosts down' without the count and the list has no Remote hosts row; count every down host (downHostsInUse in deck.ts returns all): the key says '3 hosts down'.","sides":["b"],"keys":{"1":"r","14":{"action":"status"}}}
+{"v":2,"name":"b-hosts-down","description":"Two hosts in use (an SSH host and a paired runtime, each with a pane) stop answering: the Status key counts them (the count is its value) and the Setup list names them; a third host that is configured but shows nothing is down too and is not counted. The key and the list read the same check. Revert check: drop the hostsDown fact in doctorFacts (status.ts): the key says 'hosts down' without the count and the list has no Remote hosts row; count every down host (downHostsInUse in deck.ts returns all): the key says '3 hosts down'.","sides":["b"],"keys":{"1":"r","14":{"action":"status"}}}
 {"at":0,"do":"orca.host.add","id":"ssh-1","kind":"ssh","name":"build box"}
 {"at":0,"do":"orca.host.add","id":"runtime:peer","kind":"runtime","name":"peer"}
 {"at":0,"do":"orca.host.add","id":"ssh-2","kind":"ssh","name":"spare"}
@@ -8,6 +8,6 @@
 {"at":500,"do":"orca.host.set","id":"runtime:peer","connected":false}
 {"at":500,"do":"orca.host.set","id":"ssh-2","connected":false}
 {"at":500,"do":"expect.key","key":1,"state":"unreachable"}
-{"at":500,"do":"expect.key","key":14,"state":"idle","label":"2 hosts down","line2":"!"}
+{"at":500,"do":"expect.key","key":14,"state":"idle","label":"2 hosts down","line2":"2"}
 {"at":600,"do":"deck.pi.open","key":14}
 {"at":600,"do":"expect.pi","key":14,"messages":[{"type":"checks","checks":[{"id":"remote-hosts","result":"warn","reason":"Not reachable: build box, peer. Their keys show the last known state","caption":"2 hosts down"}]}]}

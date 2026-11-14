@@ -1,0 +1,4 @@
+{"v":2,"name":"b-deck-layout","description":"deckState tells the panel what sits at every position of the deck: Pane keys, our Status and Attention keys, everything else as other. Revert check: drop layout from PaneSlot.deckState.","sides":["b"],"keys":{"1":"a","2":{"action":"status"},"3":{"action":"attention"}}}
+{"at":0,"do":"orca.pane.add","pane":"a"}
+{"at":100,"do":"bridge.frame","from":"a","frame":{"type":"panelSelect","on":false}}
+{"at":100,"do":"bridge.frame","from":"b","frame":{"type":"deckState","cols":5,"rows":3,"layout":[{"key":1,"kind":"pane"},{"key":2,"kind":"status"},{"key":3,"kind":"attention"},{"key":4,"kind":"other"},{"key":5,"kind":"other"},{"key":6,"kind":"other"},{"key":7,"kind":"other"},{"key":8,"kind":"other"},{"key":9,"kind":"other"},{"key":10,"kind":"other"},{"key":11,"kind":"other"},{"key":12,"kind":"other"},{"key":13,"kind":"other"},{"key":14,"kind":"other"},{"key":15,"kind":"other"}]}}

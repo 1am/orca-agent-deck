@@ -15,16 +15,13 @@ const fromA = [
   },
   { v: 1, type: 'workspace', event: 'created', workspaceId: 'w', path: '/p' },
   { v: 1, type: 'workspace', event: 'removed', workspaceId: 'w', path: '/p' },
-  { v: 1, type: 'pairRequest', requestId: 'r1', pane: null },
-  { v: 1, type: 'pairRequest', requestId: 'r2', pane: { paneKey: 'k', worktreeId: 'w' } },
-  { v: 1, type: 'unmapRequest', requestId: 'r3', pane: null },
-  { v: 1, type: 'pairCancel', requestId: 'r1' },
   { v: 1, type: 'hello', orcaVersion: 'api 1.0', pluginVersion: '0.3.0', minor: 1 },
   { v: 1, type: 'requestDeck' },
   { v: 1, type: 'assignKey', requestId: 'r4', key: 3, replace: false },
   { v: 1, type: 'assignKey', requestId: 'r6', key: 2, replace: true, paneKey: 'a:1' },
   { v: 1, type: 'unmapKey', requestId: 'r5', key: 3 },
   { v: 1, type: 'openPanel', requestId: 'r7', panelId: 'deck' },
+  { v: 1, type: 'panelSelect', on: true },
 ];
 
 const fromB = [
@@ -32,13 +29,7 @@ const fromB = [
   { v: 1, type: 'requestSnapshot' },
   { v: 1, type: 'openPanelResult', requestId: 'r7', ok: true },
   { v: 1, type: 'openPanelResult', requestId: 'r7', ok: false, reason: 'refused' },
-  {
-    v: 1,
-    type: 'pairState',
-    requestId: 'r1',
-    state: 'waitingForKey',
-    pane: { label: 'feature-login › claude' },
-  },
+  { v: 1, type: 'keyPicked', key: 3 },
   { v: 1, type: 'pairResult', requestId: 'r1', ok: true, slot: { page: 1, index: 5 } },
   { v: 1, type: 'pairResult', requestId: 'r1', ok: false, reason: 'timeout' },
   { v: 1, type: 'helloAck', deck: { connected: false, devices: [] }, minor: 1 },
@@ -63,6 +54,13 @@ const fromB = [
     keys: [
       { key: 1, label: 'agent-deck/main', state: 'working', mapped: true },
       { key: 2, label: '', state: 'unmapped', mapped: false },
+    ],
+    layout: [
+      { key: 1, kind: 'pane' },
+      { key: 2, kind: 'pane' },
+      { key: 3, kind: 'status' },
+      { key: 4, kind: 'attention' },
+      { key: 5, kind: 'other' },
     ],
     panes: [
       {

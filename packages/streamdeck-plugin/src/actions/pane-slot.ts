@@ -10,15 +10,16 @@ import streamDeck, {
 } from '@elgato/streamdeck';
 import {
   HoldGestures,
+  deckLayout,
   formatKeyNumber,
   keyNumber,
-  pairingSlotView,
   spinnerAdvances,
   renderKey,
   type DeckController,
+  type LayoutCell,
   type SlotView,
 } from '@orca-agent-deck/core';
-import { replyToPi } from './pi.ts';
+import { isCurrentPi, replyToPi } from './pi.ts';
 
 const image = (svg: string) => `data:image/svg+xml;charset=utf8,${encodeURIComponent(svg)}`;
 
@@ -36,6 +37,21 @@ interface Key {
   setImage(image: string): Promise<void>;
   setTitle(title: string): Promise<void>;
 }
+
+/**
+ * The Orca panel, the one place a key is mapped. While it is open for mapping `pick` hands it a tapped key
+ * (false: it could not be sent); `open` shows it at a held key's details (false: it could not be opened).
+ */
+export interface PanelPicker {
+  selecting(): boolean;
+  pick(key: number): boolean;
+  open(key: number): Promise<boolean>;
+}
+const NO_PANEL: PanelPicker = {
+  selecting: () => false,
+  pick: () => false,
+  open: () => Promise.resolve(false),
+};
 
 /** One key per slot; slot id = action context. State comes from the shared DeckController. */
 @action({ UUID: 'pl.1am.orca-agent-deck.pane' })
@@ -60,10 +76,12 @@ export class PaneSlot extends SingletonAction {
   /** Short text shown on a key for a moment after a failed hold. */
   private readonly hints = new Map<string, { text: string; until: number }>();
   private readonly gestures = new HoldGestures((slot) => void this.onHold(slot));
+  private readonly panel: PanelPicker;
 
-  constructor(create: () => Promise<DeckController>) {
+  constructor(create: () => Promise<DeckController>, panel: PanelPicker = NO_PANEL) {
     super();
     this.create = create;
+    this.panel = panel;
     setInterval(() => void this.refresh(), 2000);
     // Spinner advances an eighth turn per tick, or every other tick with more than 2 working keys.
     // A tick with nothing to animate does not repaint at all; keys that did not change are not re-sent.
@@ -73,9 +91,9 @@ export class PaneSlot extends SingletonAction {
     }, 250);
   }
 
-  /** Is anything on the deck changing with time: a spinner, the pairing blink, a hint about to expire? */
+  /** Is anything on the deck changing with time: a spinner, a hint about to expire? */
   private animating(): boolean {
-    if (this.hints.size > 0 || this.ctl?.pairing.state?.phase === 'waitingForKey') return true;
+    if (this.hints.size > 0) return true;
     for (const id of this.keys.keys()) if (this.views.get(id)?.state === 'working') return true;
     return false;
   }
@@ -137,9 +155,10 @@ export class PaneSlot extends SingletonAction {
     if (!this.gestures.keyUp(ev.action.id)) return;
     const id = ev.action.id;
     const c = await this.controller();
-    // Pairing mode: the next press binds the slot instead of focusing.
-    if (c.pairing.press(id, 'tap')) {
-      await this.refresh();
+    // With the Orca panel open for mapping a tap selects the key there (its details open).
+    const key = this.panel.selecting() ? this.keyOfSlot(id) : null;
+    if (key !== null && this.panel.pick(key)) {
+      streamDeck.logger.info(`press slot=${id.slice(0, 6)} -> key ${key} opened in the Orca panel`);
       return;
     }
     // A paired-server pane takes over a second to switch: mark the key focused at once so the
@@ -159,29 +178,18 @@ export class PaneSlot extends SingletonAction {
     void this.refresh();
   }
 
-  /** Hold fires: assign / re-assign the focused pane, or release it when already shown here. */
+  /** Hold fires: the Orca panel opens at this key's details (mapping happens there, never from the deck). */
   private async onHold(slot: string): Promise<void> {
-    const found = this.actions.find((a) => a.id === slot);
-    const key = found?.isKey() ? found : undefined;
-    const c = await this.controller();
-    if (c.pairing.press(slot, 'hold')) {
-      await this.refresh();
-      return;
-    }
+    const key = this.keyOfSlot(slot);
     const t0 = Date.now();
-    const r = await c.hold(slot);
+    const opened = key !== null && (await this.panel.open(key));
     streamDeck.logger.info(
-      `hold slot=${slot.slice(0, 6)} -> ${r} ${Date.now() - t0}ms ${r === 'failed' ? c.holdError : ''}`,
+      `hold slot=${slot.slice(0, 6)} -> ${opened ? 'panel opened' : 'panel not opened'} ${Date.now() - t0}ms`,
     );
-    if (r === 'failed') {
-      await key?.showAlert();
-      // Say why on the key itself (a paired-server pane cannot be read from Orca).
-      this.hints.set(slot, { text: c.holdHint, until: Date.now() + HINT_MS });
-      void this.repaint();
-      return;
-    }
-    await this.refresh();
-    await key?.showOk();
+    if (opened) return;
+    // Orca closed, the Orca plugin missing or an old Orca: say where else a key is mapped, long enough to read.
+    this.hints.set(slot, { text: 'Map in Orca', until: Date.now() + HINT_MS });
+    void this.repaint();
   }
 
   /** The PI asks for its state on load and sends `configure` to pin, relabel or unmap. */
@@ -197,17 +205,34 @@ export class PaneSlot extends SingletonAction {
         paneKey: m.paneKey ?? null,
       });
       await this.refresh();
+    } else {
+      // A `load` can arrive before the first snapshot is in (the app opens the inspector as the plugin starts).
+      await this.refresh();
     }
-    await replyToPi(ev.action.id, {
-      type: 'state',
-      panes: c.listPanes(),
-      config: c.slotConfig(ev.action.id),
-    });
+    if (isCurrentPi(ev.action.id)) this.piOpen = ev.action.id;
+    await this.replyState(c, ev.action.id);
+  }
+
+  /** The slot whose inspector is open: it gets the pane list again when a refresh changes it. */
+  private piOpen: string | null = null;
+  private piSent = '';
+
+  private async replyState(c: DeckController, id: string, force = true): Promise<void> {
+    const payload = { type: 'state', panes: c.listPanes(), config: c.slotConfig(id) };
+    const sig = JSON.stringify(payload);
+    if (!force && sig === this.piSent) return;
+    this.piSent = sig;
+    await replyToPi(id, payload);
   }
 
   override async onPropertyInspectorDidAppear(ev: PropertyInspectorDidAppearEvent): Promise<void> {
+    this.piOpen = ev.action.id;
     await this.refresh();
     await this.onSendToPlugin({ action: ev.action, payload: { type: 'load' } } as never);
+  }
+
+  override onPropertyInspectorDidDisappear(ev: { action: { id: string } }): void {
+    if (this.piOpen === ev.action.id) this.piOpen = null;
   }
 
   /** Redraw from the last views at once (pairing mode changes what keys show; no Orca round trip). */
@@ -237,6 +262,12 @@ export class PaneSlot extends SingletonAction {
     return null;
   }
 
+  /** The Status and Attention actions, so the panel's grid can show what else of ours sits on the deck. */
+  private infoKeys: { kind: 'status' | 'attention'; source: SingletonAction }[] = [];
+  setInfoKeys(keys: { kind: 'status' | 'attention'; source: SingletonAction }[]): void {
+    this.infoKeys = keys;
+  }
+
   /** The deck as the Orca panel draws it (the `deckState` frame without its envelope). */
   deckState(): {
     connected: boolean;
@@ -244,10 +275,11 @@ export class PaneSlot extends SingletonAction {
     cols: number;
     rows: number;
     keys: { key: number; label: string; state: string; mapped: boolean }[];
+    layout: LayoutCell[];
   } {
     const id = this.shownDevice();
     const dev = streamDeck.devices.find((d) => d.id === id);
-    if (!dev) return { connected: false, model: null, cols: 0, rows: 0, keys: [] };
+    if (!dev) return { connected: false, model: null, cols: 0, rows: 0, keys: [], layout: [] };
     const keys = this.actions
       .filter((a) => a.device.id === id && this.indexes.has(a.id))
       .toArray()
@@ -268,6 +300,18 @@ export class PaneSlot extends SingletonAction {
       cols: dev.size.columns,
       rows: dev.size.rows,
       keys,
+      layout: deckLayout(dev.size.columns, dev.size.rows, [
+        ...this.actions
+          .filter((a) => a.device.id === id && a.isKey() && !!a.coordinates)
+          .toArray()
+          .map((a) => ({ kind: 'pane' as const, coordinates: a.coordinates! })),
+        ...this.infoKeys.flatMap(({ kind, source }) =>
+          source.actions
+            .filter((a) => a.device.id === id && a.isKey() && !!a.coordinates)
+            .toArray()
+            .map((a) => ({ kind, coordinates: a.coordinates! })),
+        ),
+      ]),
     };
   }
 
@@ -292,6 +336,7 @@ export class PaneSlot extends SingletonAction {
           const views = await (await this.controller()).refresh([...this.keys.keys()]);
           for (const [id, v] of views) this.views.set(id, v);
           await this.repaint();
+          if (this.piOpen && this.ctl) await this.replyState(this.ctl, this.piOpen, false);
         } while (this.again);
       } finally {
         this.running = null;
@@ -308,19 +353,7 @@ export class PaneSlot extends SingletonAction {
     await Promise.all(
       [...this.keys].map(async ([id, k]) => {
         const base = this.views.get(id);
-        const waiting = this.ctl?.pairing.state;
-        const v =
-          waiting?.phase === 'waitingForKey'
-            ? pairingSlotView(
-                waiting,
-                id,
-                base,
-                waiting.pane.lastKnown.paneTitle ??
-                  waiting.pane.lastKnown.title ??
-                  waiting.pane.paneKey,
-                this.tick % 4 < 2,
-              )
-            : base;
+        const v = base;
         if (!v) return;
         const hint = this.hints.get(id);
         if (hint && hint.until <= now) this.hints.delete(id);
@@ -330,7 +363,6 @@ export class PaneSlot extends SingletonAction {
             {
               ...shown,
               keyNumber: this.numbers.get(id),
-              bigNumber: shown.assign ? (this.numbers.get(id) ?? null) : null,
             },
             { size: 144, spin: this.spin },
           ),

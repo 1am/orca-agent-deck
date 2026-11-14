@@ -5,12 +5,7 @@ import {
   type WillAppearEvent,
   type WillDisappearEvent,
 } from '@elgato/streamdeck';
-import {
-  pairingCancelInfo,
-  renderInfoKey,
-  type DeckController,
-  type InfoModel,
-} from '@orca-agent-deck/core';
+import { renderInfoKey, type DeckController, type InfoModel } from '@orca-agent-deck/core';
 
 const image = (svg: string) => `data:image/svg+xml;charset=utf8,${encodeURIComponent(svg)}`;
 
@@ -56,8 +51,6 @@ export abstract class InfoKey extends SingletonAction {
 
   override async onKeyDown(ev: KeyDownEvent): Promise<void> {
     const c = await this.create();
-    // While pairing mode waits these keys are Cancel.
-    if (c.pairing.state.phase === 'waitingForKey') return c.pairing.cancel();
     if ((await this.press(c)) === 'failed') await ev.action.showAlert();
   }
 
@@ -65,8 +58,7 @@ export abstract class InfoKey extends SingletonAction {
     if (this.keys.size === 0) return;
     const c = await this.create();
     await c.refresh([]);
-    const p = c.pairing.state;
-    const model = p.phase === 'waitingForKey' ? pairingCancelInfo('Mapping pane') : this.model(c);
+    const model = this.model(c);
     const svg = renderInfoKey(model, { size: 144 });
     const img = image(svg);
     await Promise.all(

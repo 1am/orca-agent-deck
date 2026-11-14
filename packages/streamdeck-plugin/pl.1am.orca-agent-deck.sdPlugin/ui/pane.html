@@ -85,7 +85,8 @@
           const path = [p.remote ? `Remote: ${p.host}` : p.host, p.repo, p.branch]
             .filter(Boolean)
             .join(' > ');
-          const text = `${path} ${p.tab} ${p.title} ${p.agent ?? 'shell'}`.toLowerCase();
+          const text =
+            `${path} ${p.hostAddress ?? ''} ${p.tab} ${p.title} ${p.agent ?? 'shell'}`.toLowerCase();
           if (!words.every((w) => text.includes(w))) continue;
           if (!groups.has(path)) groups.set(path, []);
           groups.get(path).push(p);

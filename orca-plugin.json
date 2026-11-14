@@ -24,24 +24,13 @@
   "capabilities": [
     {
       "kind": "agent:read"
-    },
-    {
-      "kind": "workspace:read"
-    },
-    {
-      "kind": "storage:own"
     }
   ],
   "contributes": {
     "commands": [
       {
         "id": "deck.map",
-        "title": "Agent Deck: Map pane to key",
-        "when": "global"
-      },
-      {
-        "id": "deck.unmap",
-        "title": "Agent Deck: Unmap pane",
+        "title": "Agent Deck: Open panel",
         "when": "global"
       },
       {
@@ -74,7 +63,7 @@
         "id": "deck",
         "icon": "link",
         "text": "Agent Deck",
-        "tooltip": "Agent Deck: open the panel to map the last focused terminal pane to a Stream Deck key",
+        "tooltip": "Open Agent Deck: the panel to map terminal panes to Stream Deck keys",
         "command": "deck.map"
       }
     ],
@@ -82,21 +71,11 @@
       {
         "command": "deck.map",
         "key": "Mod+Alt+K"
-      },
-      {
-        "command": "deck.unmap",
-        "key": "Mod+Alt+Shift+K"
       }
     ],
     "events": [
       {
         "on": "agent.status.changed"
-      },
-      {
-        "on": "workspace.created"
-      },
-      {
-        "on": "workspace.removed"
       }
     ]
   }

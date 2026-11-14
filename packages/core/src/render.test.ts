@@ -189,21 +189,6 @@ it('draws the host badge for a remote pane, ellipsized to 7 characters', () => {
   expect(renderKey({ state: 'working', label: 'x', line2: '' })).not.toContain('text-anchor="end"');
 });
 
-it('pairing mode draws the key number large with Assign here under it', () => {
-  const svg = renderKey({
-    state: 'unmapped',
-    label: 'Assign here: feature-login > claude',
-    line2: '',
-    bigNumber: '5',
-    keyNumber: '5',
-  });
-  expect(svg).toContain('font-size="72"');
-  expect(svg).toContain('>5</text>');
-  expect(svg).not.toContain('5: Assign');
-  expect(svg).toContain('>Assign here</text>');
-  expect(svg).not.toContain('>Assign here: ');
-});
-
 describe('decodeKey', () => {
   it('reads back what the key says, including escaped text and the info key mapping', () => {
     const svg = renderKey({

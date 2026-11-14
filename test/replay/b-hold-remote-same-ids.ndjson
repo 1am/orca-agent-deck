@@ -1,9 +1,0 @@
-{"v":2,"name":"b-hold-remote-same-ids","description":"The focused SSH pane has the same tab and leaf ids as the first local pane (ids are only unique per host): holding a free key pins the remote one. Revert check: DeckController.focusedPane (and isFocused) matching the pane key without the host: the key shows the local pane.","sides":["b"],"keys":{}}
-{"at":0,"do":"orca.host.add","id":"ssh-1","kind":"ssh","name":"remote"}
-{"at":0,"do":"orca.pane.add","pane":"r","host":"ssh-1","title":"Remote build","tab":"tab-1","leaf":"leaf-1"}
-{"at":0,"do":"orca.pane.add","pane":"a","title":"Local build","tab":"tab-1","leaf":"leaf-1"}
-{"at":0,"do":"orca.focus","pane":"r"}
-{"at":0,"do":"deck.appear","key":1}
-{"at":100,"do":"deck.down","key":1}
-{"at":1300,"do":"deck.up","key":1}
-{"at":1300,"do":"expect.key","key":1,"state":"completed","label":"Remote build"}

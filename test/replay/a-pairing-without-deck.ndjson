@@ -1,5 +1,0 @@
-{"v":2,"name":"a-pairing-without-deck","description":"Map pane while no Stream Deck is connected: a toast, and no pairRequest goes out. Revert check: remove the deck?.connected guard in sendPairing.","sides":["a"],"keys":{}}
-{"at":0,"do":"orca.activate"}
-{"at":0,"do":"bridge.frame","from":"a","frame":{"type":"hello"}}
-{"at":100,"do":"orca.command","id":"deck.map","result":"Stream Deck not connected"}
-{"at":100,"do":"bridge.frame","from":"a","frame":{"type":"openPanel","panelId":"deck"}}
