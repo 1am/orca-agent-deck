@@ -222,6 +222,9 @@ export class DeckController {
   /** Execution host of the worktree shown at the last focus read: tab and leaf ids repeat across hosts. */
   private focusedHost: string | null = null;
   private lastFocusedHost: string | null = null;
+  /** The focus read behind `focusedKey` / `lastFocusedKey` was a guess (see `OrcaAdapter.focusGuessed`). */
+  private focusedGuess = false;
+  private lastFocusGuess = false;
   /**
    * Pane the deck focused last. Orca reports no focus while it shows a paired server, so this
    * keeps that key highlighted until Orca reports the user in another pane.
@@ -657,13 +660,19 @@ export class DeckController {
           agent: p.agent,
           state: p.state,
           remote: p.remote,
-          focused: this.isFocused(p),
+          // A guessed focus still serves the deck's own taps and holds, but the panel must not offer it as the focus.
+          focused: this.isFocused(p) && !this.focusIsGuess(),
           ...(this.isLastPressedRemote(p) ? { lastPressed: true } : {}),
           ...(onKey !== undefined ? { onKey } : {}),
         };
       })
       .sort((a, b) => Number(b.focused || !!b.lastPressed) - Number(a.focused || !!a.lastPressed))
       .slice(0, PANEL_PANES_MAX);
+  }
+
+  /** Whether `currentFocusKey()` comes from a guess. */
+  private focusIsGuess(): boolean {
+    return this.focusedKey ? this.focusedGuess : this.lastFocusGuess;
   }
 
   /** The pane key focused in Orca at the last poll, else the last one that was. */
@@ -699,8 +708,10 @@ export class DeckController {
    */
   private noteFocus(key: string | null): void {
     this.focusedHost = this.adapter.focusHostId ?? null;
+    this.focusedGuess = !!key && (this.adapter.focusGuessed ?? false);
     if (key) {
       this.lastFocusedKey = key;
+      this.lastFocusGuess = this.focusedGuess;
       this.lastFocusedHost = this.focusedHost;
     } else if (
       (this.focusedHost && !isLocalHost(this.focusedHost)) ||

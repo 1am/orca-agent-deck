@@ -309,6 +309,20 @@ it('focusedPaneKey falls back to terminal show when the layout has no active tab
   expect(await new CliAdapter(exec).focusedPaneKey()).toBe('t1:l1');
 });
 
+it('focusedPaneKey says when its answer is the terminal-show guess, and not when a layout names the pane', async () => {
+  const show = JSON.stringify({ ok: true, result: { terminal: { tabId: 't1', leafId: 'l1' } } });
+  const guess = new CliAdapter(async (args) =>
+    args[0] === 'worktree' ? ps(true) : args[1] === 'list' ? terms() : show,
+  );
+  expect(await guess.focusedPaneKey()).toBe('t1:l1');
+  expect(guess.focusGuessed).toBe(true);
+  const known = new CliAdapter(async (args) =>
+    args[0] === 'worktree' ? ps(true) : terms(layout('t2')),
+  );
+  await known.focusedPaneKey();
+  expect(known.focusGuessed).toBe(false);
+});
+
 it('focusedPaneKey refuses to guess when no local worktree is active', async () => {
   expect(await new CliAdapter(async () => ps(false)).focusedPaneKey()).toBeNull();
 });

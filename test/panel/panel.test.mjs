@@ -320,6 +320,22 @@ test('a panel that stays in view renews its panelSelect so B keeps it; a hide st
   assert.deepEqual(view.errors, []);
 });
 
+test('opened with no focus (a paired server): the pane the deck last opened stands in for it', async () => {
+  const paired = {
+    ...deck,
+    panes: [
+      { ...deck.panes[0], focused: false },
+      { ...deck.panes[1], focused: false, lastPressed: true, onKey: 4 },
+    ],
+  };
+  const view = await mount(panel, {
+    host: mockHost({ requests: { 'deck.get': () => ({ status: 'ok', deck: paired }) } }),
+  });
+  await view.settled();
+  assert.ok(view.find({ text: 'Key 4' }), "the last opened pane's key opens");
+  await view.unmount();
+});
+
 test('opened for the focused pane: its key opens, else the bare grid; there is no map mode', async () => {
   const noKey = deck;
   let current = noKey;
@@ -579,7 +595,7 @@ test('the list is grouped host > repo > branch like the key settings, each row h
     'the key being edited is ringed like a selected key',
   );
   assert.equal(
-    (tree.match(/"height":28/g) ?? []).length,
+    (tree.match(/"height":24/g) ?? []).length,
     2,
     'the two free panes are empty squares',
   );

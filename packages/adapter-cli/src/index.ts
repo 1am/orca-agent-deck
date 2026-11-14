@@ -359,6 +359,9 @@ export class CliAdapter implements OrcaAdapter {
   /** Execution host of the worktree the last focus read found shown, null when none was. */
   focusHostId: string | null = null;
 
+  /** The last focus read was a guess (`terminal show` names the local runtime's last pane), not what is focused. */
+  focusGuessed = false;
+
   /**
    * Focus local panes through `terminal.reveal` too. Unlike `terminal.focus`, reveal brings Orca's
    * window to the front, with Orca's own workarounds for the Windows foreground lock. For hosts
@@ -367,6 +370,7 @@ export class CliAdapter implements OrcaAdapter {
   revealLocal = false;
 
   async focusedPaneKey(maxAgeMs = 0): Promise<string | null> {
+    this.focusGuessed = false;
     try {
       const cached =
         this.localRead && this.now() - this.localRead.at < maxAgeMs ? this.localRead : null;
@@ -395,6 +399,7 @@ export class CliAdapter implements OrcaAdapter {
         return null;
       }
       const r = await this.call(terminalShowResponse, ['terminal', 'show']);
+      this.focusGuessed = true;
       return paneKey(r.result.terminal.tabId, r.result.terminal.leafId);
     } catch (e) {
       this.focusHostId = null;

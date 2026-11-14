@@ -45,9 +45,11 @@ const plugin = (await import(pluginPath.href)) as {
     get: () => Promise<Record<string, unknown>>;
     select: (on: boolean) => { ok: true };
     resync: () => void;
+    fresh: (waitMs?: number) => Promise<number | null>;
     onMessage: (msg: object) => void;
   };
   hideRightSidebar: (orca: unknown, log?: (m: string) => void) => Promise<boolean>;
+  focusedKeyOf: (deck: unknown) => number | null;
   default: (orca: unknown) => Promise<void>;
 };
 
@@ -70,6 +72,8 @@ function fakeUserDirs(): void {
 beforeEach(async () => {
   dir = await mkdtemp(join(tmpdir(), 'bridge-'));
   discoveryPath = join(dir, 'bridge.json');
+  // Plugin A logs to the home dir's plugin-a.log: never the real one.
+  fakeUserDirs();
   server = new BridgeServer({
     discoveryPath,
     ports: [0],
@@ -77,8 +81,10 @@ beforeEach(async () => {
   });
 });
 afterEach(async () => {
-  vi.unstubAllEnvs();
   await server.stop();
+  // Plugin A logs the dropped connection a moment later: that must still land in the temp home.
+  await new Promise((r) => setTimeout(r, 150));
+  vi.unstubAllEnvs();
   await rm(dir, { recursive: true, force: true });
 });
 
@@ -808,7 +814,7 @@ describe('plugin A activate() and the Show status command', () => {
 
   it.each([
     [false, 'Stream Deck not connected', []],
-    [true, 'Agent Deck panel', ['openPanel']],
+    [true, 'Agent Deck panel', ['openPanel', 'requestDeck']],
   ])('Open panel with the deck connected=%s', async (deckUp, toast, sent) => {
     const connected = { value: deckUp };
     server = new BridgeServer({
@@ -1192,6 +1198,51 @@ describe('panel api: deck taps select keys in the panel', () => {
     api.onMessage({ type: 'keyPicked', key: 3 });
     expect(await api.get()).toMatchObject({ status: 'ok', picked: 3 });
     expect(await api.get(), 'handed over once').not.toHaveProperty('picked');
+  });
+
+  it('fresh() asks B for the deck and answers with the focused pane key of the new one, not the old', async () => {
+    const b = fakeBridge(5);
+    const api = plugin.createPanelApi(b.bridge);
+    const deck = (key: number) => ({
+      type: 'deckState',
+      connected: true,
+      cols: 3,
+      rows: 2,
+      keys: [],
+      panes: [{ paneKey: 'p', focused: true, onKey: key }],
+    });
+    api.onMessage(deck(1)); // what B last pushed: the focus has moved since
+    setTimeout(() => api.onMessage(deck(4)), 80);
+    expect(await api.fresh(1000)).toBe(4);
+    expect(b.sent).toContainEqual({ v: 1, type: 'requestDeck' });
+    // B does not answer: the last deck is used after the wait
+    expect(await api.fresh(120)).toBe(4);
+  });
+
+  it("the key to open is the focused pane's, local or remote, else the last one the deck opened", () => {
+    const k = plugin.focusedKeyOf;
+    expect(
+      k({
+        panes: [
+          { focused: false, onKey: 9 },
+          { focused: true, remote: true, onKey: 2 },
+        ],
+      }),
+    ).toBe(2);
+    expect(
+      k({
+        panes: [
+          { focused: false, onKey: 9 },
+          { lastPressed: true, remote: true, onKey: 4 },
+        ],
+      }),
+    ).toBe(4);
+    expect(
+      k({ panes: [{ focused: true }, { lastPressed: true, onKey: 4 }] }),
+      'focused wins',
+    ).toBeNull();
+    expect(k({ panes: [] })).toBeNull();
+    expect(k(null)).toBeNull();
   });
 
   it('answers a hold with what the worker decided: hide the sidebar or show the panel', async () => {

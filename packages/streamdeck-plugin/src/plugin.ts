@@ -189,7 +189,13 @@ bridgeServer.on('hello', () => {
 // A worker that went away cannot clear it: the deck presses go back to focusing.
 bridgeServer.on('disconnect', () => (panelSelecting = false));
 bridgeServer.on('message', (m) => {
-  if (m.type === 'requestDeck') return void pushDeck(true).catch(logFailure('deck push'));
+  // A read now, not the last poll's: the focus may have moved since (A asks when the panel opens).
+  if (m.type === 'requestDeck')
+    return void paneSlot
+      .nudge()
+      .catch(logFailure('key refresh'))
+      .then(() => pushDeck(true))
+      .catch(logFailure('deck push'));
   if (m.type === 'holdResult') return void holdWaits.get(m.requestId)?.(m.action);
   if (m.type === 'panelSelect') {
     panelSelecting = m.on;

@@ -11,7 +11,7 @@ import { dirname, join, posix, win32 } from 'node:path';
 export const PROTOCOL_VERSION = 1;
 /** Additive features of this major: 1 = the deck grid for the sidebar panel, 2 = B opens that panel for us, 3 = a deck press selects the key in that panel (see docs/bridge-protocol.md). */
 export const PROTOCOL_MINOR = 5;
-export const PLUGIN_VERSION = '0.2.2';
+export const PLUGIN_VERSION = '0.3.0';
 const GUID = '258EAFA5-E914-47DA-95CA-C5AB0DC85B11';
 
 const here = () => ({ platform: process.platform, env: process.env, homedir: homedir() });
@@ -421,12 +421,14 @@ export function createForwarder(bridge, { maxPanes = 500 } = {}) {
 const logPath = () => join(deckDataDir(here()), 'plugin-a.log');
 // After "Uninstall" nothing may write the data dir again.
 let uninstalled = false;
-const fileLog = (msg) =>
-  uninstalled
-    ? Promise.resolve()
-    : mkdir(dirname(logPath()), { recursive: true })
-        .then(() => appendFile(logPath(), `${new Date().toISOString()} ${msg}\n`))
-        .catch(() => {});
+const fileLog = (msg) => {
+  if (uninstalled) return Promise.resolve();
+  // One path for the mkdir and the append: the home dir must not change between the two.
+  const path = logPath();
+  return mkdir(dirname(path), { recursive: true })
+    .then(() => appendFile(path, `${new Date().toISOString()} ${msg}\n`))
+    .catch(() => {});
+};
 
 /**
  * Removes the Agent Deck for Orca data dir (bridge.json, mappings.json, this plugin's log) and nothing else: the target must be
@@ -728,6 +730,8 @@ const DECK_WAIT_MS = 2000;
 const RESULT_WAIT_MS = 10_000;
 /** B answers `openPanel` once Orca did, or failed to. */
 const OPEN_WAIT_MS = 3000;
+/** How long a panel opening waits for a fresh deck from B. */
+const FRESH_WAIT_MS = 1000;
 /** The panel renews its in-view report every 2 s; silence for this long means it is hidden (it may not run then). */
 const PANEL_VIEW_TTL_MS = 5000;
 
@@ -761,6 +765,15 @@ export async function hideRightSidebar(orca, log = () => {}) {
  * here). The deck is B's: this only asks for its state and forwards clicks as `assignKey` / `unmapKey`, and
  * B checks the key and resolves the focused pane. `deckState` and `pairResult` arrive through `onMessage`.
  */
+/**
+ * The key to open when the panel is asked for: the focused pane's, else (a paired server shows no focus to read) the
+ * pane the deck last opened, when it is on a key.
+ */
+export function focusedKeyOf(deck) {
+  const panes = deck?.panes ?? [];
+  return (panes.find((p) => p.focused) ?? panes.find((p) => p.lastPressed))?.onKey ?? null;
+}
+
 export function createPanelApi(
   bridge,
   {
@@ -787,6 +800,8 @@ export function createPanelApi(
   let viewAt = 0;
   const PICKED_FRESH_MS = 5000;
   let deckNow = null;
+  /** When `deckNow` arrived. */
+  let deckAt = 0;
   let deckSession = -1;
   const pending = new Map();
   const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -853,6 +868,21 @@ export function createPanelApi(
     open: (panelId) => click({ type: 'openPanel', panelId }, openWaitMs, 2),
     /** The panel was asked for (status bar, shortcut, palette): it shows the focused pane's key, if it has one. */
     opened: () => onOpened(),
+    /**
+     * Asks B for a deck read now and waits for it (at most `waitMs`): what B last pushed can be up to two seconds
+     * behind the focus, which a shortcut pressed right after a click on a pane would miss. Resolves to the key of the
+     * focused pane in the deck at hand, or null.
+     */
+    fresh: async (waitMs = FRESH_WAIT_MS) => {
+      const { state, minor } = bridge.status();
+      if (state === 'connected' && minor >= 1) {
+        const before = deckAt;
+        bridge.send({ v: PROTOCOL_VERSION, type: 'requestDeck' });
+        const end = Date.now() + waitMs;
+        while (deckAt === before && Date.now() < end) await sleep(50);
+      }
+      return focusedKeyOf(current());
+    },
     /** The panel says whether deck taps should select keys in it. */
     select: (on) => {
       selecting = on === true;
@@ -868,6 +898,8 @@ export function createPanelApi(
     inView: () => viewAt > 0 && Date.now() - viewAt < PANEL_VIEW_TTL_MS,
     /** Milliseconds since the panel last said it is in view, null when it never did (or said it is hidden). */
     viewAge: () => (viewAt > 0 ? Date.now() - viewAt : null),
+    /** The deck as the panel would get it now. */
+    deck: () => current(),
     /** Forgets the report, so the next press shows the panel again. */
     forgetView: () => {
       viewAt = 0;
@@ -884,6 +916,7 @@ export function createPanelApi(
       if (msg.type === 'deckState') {
         const state = omit(msg, ['type', 'v']);
         deckNow = state;
+        deckAt = Date.now();
         deckSession = bridge.status().session;
         onDeck(state);
       } else if (
@@ -1060,6 +1093,17 @@ export default async function activate(orca) {
       log(`panel not opened (${opened.reason})`);
       return 'Could not open the Agent Deck panel: open it from the sidebar';
     }
+    const focusedKey = await panelApi.fresh();
+    const shown = panelApi.deck()?.panes ?? [];
+    const via = shown.find((p) => p.focused)
+      ? 'focused'
+      : shown.some((p) => p.lastPressed)
+        ? 'last opened'
+        : 'none';
+    const remote = (shown.find((p) => p.focused) ?? shown.find((p) => p.lastPressed))?.remote;
+    log(
+      `panel shown, key ${focusedKey ?? 'none'} (pane: ${via}${remote === undefined ? '' : remote ? ', remote' : ', local'})`,
+    );
     panelApi.opened();
     return 'Agent Deck panel';
   });

@@ -955,6 +955,40 @@ describe('focus on a remote host', () => {
     expect(marked.map((p) => p.remote)).toEqual([true]);
   });
 
+  it('the panel does not offer a guessed focus, but the deck still resolves it for taps and holds', async () => {
+    const focus = { current: { key: 'a:1' as string | null, host: 'local' as string | null } };
+    const d = world([pane('a:1'), remote('r:1')], focus);
+    let guessed = true;
+    Object.defineProperty((d as never as { adapter: object }).adapter, 'focusGuessed', {
+      get: () => guessed,
+    });
+    await d.refresh([]);
+    expect(
+      d.panelPanes(() => null).some((p) => p.focused),
+      'a guess is no focus',
+    ).toBe(false);
+    expect(d.currentFocusKey()).toBe('a:1');
+    expect((await d.pairingTarget(null))?.paneKey).toBe('a:1');
+    guessed = false;
+    await d.refresh([], { force: true });
+    expect(d.panelPanes(() => null).find((p) => p.focused)?.paneKey).toBe('a:1');
+  });
+
+  it('the focused remote pane reports its own key when a local pane has the same pane key on another key', async () => {
+    const focus = { current: { key: 't:1' as string | null, host: 'ssh:box' as string | null } };
+    const d = world([pane('t:1'), remote('t:1')], focus);
+    await d.refresh([]);
+    d.configure('s1', { paneKey: 't:1', hostId: 'local' });
+    d.configure('s2', { paneKey: 't:1', hostId: 'ssh:box' });
+    const keyOf = (slot: string) => ({ s1: 1, s2: 2 })[slot as 's1' | 's2'] ?? null;
+    const panes = d.panelPanes(keyOf);
+    expect(panes.find((p) => p.focused)).toMatchObject({ remote: true, onKey: 2 });
+    expect(panes.find((p) => !p.remote)).toMatchObject({ focused: false, onKey: 1 });
+    focus.current = { key: 't:1', host: 'local' };
+    await d.refresh([], { force: true });
+    expect(d.panelPanes(keyOf).find((p) => p.focused)).toMatchObject({ remote: false, onKey: 1 });
+  });
+
   it('a remote host shown with no readable pane drops the last local focus', async () => {
     const focus = { current: { key: 'a:1' as string | null, host: 'local' as string | null } };
     const d = world([pane('a:1'), remote('r:1')], focus);

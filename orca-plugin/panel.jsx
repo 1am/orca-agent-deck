@@ -67,6 +67,10 @@ const modelName = (m) => MODELS[m] ?? (m && Number.isNaN(Number(m)) ? m : 'Strea
 
 /** The panel fits the sidebar and only the pane list scrolls: it takes the free height, down to this floor. */
 const PANE_LIST_MIN_PX = 120;
+/** A row's key badge: a small grid key, as wide as an xs button is tall plus a third (about 5:4), like the grid's keys. */
+const KEY_BADGE_W = 30;
+/** An xs Button's height, which the filled badge takes; the empty one matches it. */
+const KEY_BADGE_H = 24;
 /** A two-line row's height, and the list height a sidebar usually leaves: the box height itself is not readable. */
 const PANE_ROW_PX = 48;
 const PANE_LIST_TYPICAL_PX = 400;
@@ -107,8 +111,11 @@ async function refresh() {
 async function showFocusedKey() {
   const v = await refresh();
   if (v?.status !== 'ok') return;
-  // A key B asked for (a hold) wins over the focused pane's key.
-  const key = Number.isInteger(v.picked) ? v.picked : v.deck.panes?.find((p) => p.focused)?.onKey;
+  // A key B asked for (a hold) wins over the focused pane's key; a paired server shows no focus, so the pane the
+  // deck last opened stands in for it.
+  const key = Number.isInteger(v.picked)
+    ? v.picked
+    : (v.deck.panes?.find((p) => p.focused) ?? v.deck.panes?.find((p) => p.lastPressed))?.onKey;
   if (key) {
     openKey(key);
   }
@@ -344,7 +351,7 @@ function PaneRow({ p, k, working }) {
     <Box direction="row" gap="xs" align="start">
       {/* A small copy of a grid key: filled in its state's colour when the pane is on a key (ringed when it is the
           key being edited), an empty square when it is on none. */}
-      <Box width={36} shrink={false} align="stretch">
+      <Box width={KEY_BADGE_W} shrink={false} align="stretch">
         {p.onKey ? (
           <Box align="stretch" border={here ? 'accent' : false} radius="md">
             <Button size="xs" variant="solid" tone={TONES[p.state] ?? 'neutral'}>
@@ -352,7 +359,7 @@ function PaneRow({ p, k, working }) {
             </Button>
           </Box>
         ) : (
-          <Box height={28} border radius="md" />
+          <Box height={KEY_BADGE_H} border radius="md" />
         )}
       </Box>
       <Box grow width={0} minWidth={0}>

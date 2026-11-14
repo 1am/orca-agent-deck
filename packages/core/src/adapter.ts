@@ -116,6 +116,8 @@ export interface OrcaAdapter {
   readonly focusNote?: string;
   /** Execution host of the worktree shown in the last focus read (ids repeat across hosts), null when none was. */
   readonly focusHostId?: string | null;
+  /** The last `focusedPaneKey` answer was a guess, not a pane Orca reports as focused. */
+  readonly focusGuessed?: boolean;
   /** Clears Orca's unread dot for a worktree (`isUnread`), so reading in the deck clears it in Orca too. */
   markWorktreeRead?(worktreeId: string): Promise<void>;
 }

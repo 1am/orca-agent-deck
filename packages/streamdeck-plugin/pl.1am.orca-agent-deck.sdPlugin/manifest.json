@@ -2,7 +2,7 @@
   "$schema": "https://schemas.elgato.com/streamdeck/plugins/manifest.json",
   "UUID": "pl.1am.orca-agent-deck",
   "Name": "Agent Deck for Orca",
-  "Version": "0.2.2.0",
+  "Version": "0.3.0.0",
   "Author": "1am",
   "Description": "Show the state of Orca terminals and agents on your keys and focus them with one press.",
   "Category": "Agent Deck for Orca",

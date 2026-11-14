@@ -3,7 +3,7 @@
   "execution": "trusted-worker",
   "id": "agent-deck",
   "name": "Agent Deck for Orca",
-  "version": "0.2.2",
+  "version": "0.3.0",
   "description": "Shows Orca agent status on a Stream Deck and focuses panes from it.",
   "icon": "images/icon.png",
   "cover": {

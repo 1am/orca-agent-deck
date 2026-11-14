@@ -152,6 +152,10 @@ export class BridgedAdapter implements OrcaAdapter {
   get focusNote(): string {
     return this.base.focusNote ?? '';
   }
+  get focusGuessed(): boolean {
+    return this.base.focusGuessed ?? false;
+  }
+
   get focusHostId(): string | null {
     return this.base.focusHostId ?? null;
   }
