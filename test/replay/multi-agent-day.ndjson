@@ -1,0 +1,13 @@
+{"v":2,"name":"multi-agent-day","description":"Three agents (one Codex) working, one asking for input, all finishing","sides":["sim"],"keys":{"1":"a","2":"b","3":"c"}}
+{"at":0,"do":"orca.pane.add","pane":"a"}
+{"at":0,"do":"orca.pane.add","pane":"b"}
+{"at":0,"do":"orca.pane.add","pane":"c","agent":"codex","title":"Codex"}
+{"at":500,"do":"orca.agent","pane":"a","state":"working"}
+{"at":1000,"do":"orca.agent","pane":"b","state":"working"}
+{"at":3000,"do":"orca.agent","pane":"b","state":"waiting"}
+{"at":3000,"do":"expect.key","key":2,"state":"needs_input"}
+{"at":4000,"do":"orca.agent","pane":"c","state":"working"}
+{"at":7000,"do":"orca.agent","pane":"a","state":"done","outcome":"success"}
+{"at":9000,"do":"orca.agent","pane":"b","state":"done","outcome":"success"}
+{"at":10000,"do":"orca.agent","pane":"c","state":"done","outcome":"success"}
+{"at":10000,"do":"expect.key","key":3,"state":"completed"}

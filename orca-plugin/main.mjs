@@ -4,7 +4,7 @@
 // Never log tokens or terminal content.
 import net from 'node:net';
 import { createHash, createHmac, randomBytes, timingSafeEqual } from 'node:crypto';
-import { appendFile, lstat, mkdir, readFile, rm } from 'node:fs/promises';
+import { appendFile, chmod, lstat, mkdir, readFile, rm, stat, writeFile } from 'node:fs/promises';
 import { homedir } from 'node:os';
 import { dirname, join, posix, win32 } from 'node:path';
 
@@ -457,6 +457,220 @@ export const uninstallText = (dir) =>
     200,
   );
 
+/**
+ * "Record events": an opt-in capture of what Orca sends this plugin and what crosses the bridge, in the input format of
+ * `pnpm replay:record` (docs/replay.md). Sanitized before anything is written: fields that carry terminal content or
+ * credentials are dropped by name and secret-looking strings are replaced, so none of it is ever on disk. The two
+ * lists mirror `DROP_KEYS` in packages/fake-orca/src/replay/record.ts; a test keeps them equal.
+ */
+export const RECORD_DROP_KEYS = [
+  'lastassistantmessage',
+  'lastmessage',
+  'message',
+  'preview',
+  'content',
+  'text',
+  'output',
+  'prompt',
+  'title',
+  'path',
+  'authtoken',
+  'token',
+  'secret',
+  'password',
+  'nonce',
+  'mac',
+];
+/** 32 or more hex characters, or a long base64-ish run. */
+export const RECORD_SECRET_LIKE = /^(?:[0-9a-f]{32,}|[A-Za-z0-9+/_-]{40,}={0,2})$/i;
+
+export function sanitizeForRecording(value) {
+  if (Array.isArray(value)) return value.map(sanitizeForRecording);
+  if (value && typeof value === 'object') {
+    const out = {};
+    for (const [k, v] of Object.entries(value))
+      if (!RECORD_DROP_KEYS.includes(k.toLowerCase())) out[k] = sanitizeForRecording(v);
+    return out;
+  }
+  return typeof value === 'string' && RECORD_SECRET_LIKE.test(value) ? '<redacted>' : value;
+}
+
+/**
+ * What is written is an allow-list, the drop pass above is the second line of defence. The fields are the ones the
+ * plugin itself reads (`toAgentStatus`) and the replay schema needs; anything else Orca adds (a
+ * branch name, a terminal handle, a title, a path) never reaches the file. A value is kept only when it is a
+ * string, number, boolean or null; a spec of `1` means "this field", an object means "these fields of it".
+ */
+export const RECORD_EVENT_FIELDS = {
+  'agent.status.changed': {
+    workspaceId: 1,
+    paneKey: 1,
+    state: 1,
+    receivedAt: 1,
+    agentType: 1,
+    mainAgent: { state: 1, outcome: 1, stateStartedAt: 1, agentType: 1 },
+  },
+};
+/** Per frame type of the bridge; a type not listed keeps only `v` and `type`. */
+export const RECORD_FRAME_FIELDS = {
+  agentStatus: {
+    v: 1,
+    type: 1,
+    paneKey: 1,
+    workspaceId: 1,
+    state: 1,
+    outcome: 1,
+    stateStartedAt: 1,
+    receivedAt: 1,
+    agentType: 1,
+  },
+  requestSnapshot: { v: 1, type: 1 },
+  pairResult: {
+    v: 1,
+    type: 1,
+    requestId: 1,
+    ok: 1,
+    reason: 1,
+    action: 1,
+    slot: { index: 1, page: 1 },
+  },
+  assignKey: { v: 1, type: 1, requestId: 1, key: 1, replace: 1, paneKey: 1 },
+  unmapKey: { v: 1, type: 1, requestId: 1, key: 1 },
+  openPanel: { v: 1, type: 1, requestId: 1, panelId: 1 },
+  openPanelResult: { v: 1, type: 1, requestId: 1, ok: 1, reason: 1 },
+  panelSelect: { v: 1, type: 1, on: 1 },
+  keyPicked: { v: 1, type: 1, key: 1 },
+  holdKey: { v: 1, type: 1, requestId: 1, key: 1 },
+  holdResult: { v: 1, type: 1, requestId: 1, action: 1 },
+  // No labels: they are pane names.
+  deckState: { v: 1, type: 1, connected: 1, cols: 1, rows: 1 },
+};
+const RECORD_FRAME_DEFAULT = { v: 1, type: 1 };
+
+export function pickFields(value, spec) {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return {};
+  const out = {};
+  for (const [k, want] of Object.entries(spec)) {
+    const v = value[k];
+    if (v === undefined) continue;
+    if (want === 1) {
+      if (v === null || ['string', 'number', 'boolean'].includes(typeof v)) out[k] = v;
+    } else if (v && typeof v === 'object') out[k] = pickFields(v, want);
+  }
+  return out;
+}
+
+/** A recording stops by itself after this long or this many bytes. */
+export const RECORD_MAX_MS = 10 * 60 * 1000;
+export const RECORD_MAX_BYTES = 5 * 1024 * 1024;
+
+/** The recordings folder of the data dir; files are named by the start time. */
+export const recordingsDir = (h = here()) => join(deckDataDir(h), 'recordings');
+
+export function createRecorder({
+  dir = recordingsDir(),
+  now = Date.now,
+  maxMs = RECORD_MAX_MS,
+  maxBytes = RECORD_MAX_BYTES,
+  onStop = () => {},
+} = {}) {
+  let file = null;
+  let bytes = 0;
+  let timer = null;
+  let queue = Promise.resolve();
+  // Orca kills an idle worker and starts a new one for the next event: what is recording survives in this file, so
+  // the next worker keeps appending (within the same limits) and the toggle still knows a recording runs.
+  const statePath = join(dir, '.active.json');
+  const NAME = /^[0-9T-]+Z\.ndjson$/;
+  const arm = (ms) => {
+    clearTimeout(timer);
+    timer = setTimeout(() => stop('time limit reached'), ms);
+    timer.unref?.();
+  };
+  const add = (entry) => {
+    if (!file) return;
+    const line = `${JSON.stringify({ ts: now(), ...sanitizeForRecording(entry) })}\n`;
+    bytes += Buffer.byteLength(line);
+    const target = file;
+    queue = queue.then(() => appendFile(target, line, { mode: 0o600 })).catch(() => {});
+    if (bytes >= maxBytes) stop('size limit reached');
+  };
+  function stop(why = 'stopped') {
+    if (!file) return null;
+    const done = file;
+    file = null;
+    clearTimeout(timer);
+    queue = queue.then(() => rm(statePath, { force: true })).catch(() => {});
+    onStop(done, why);
+    return done;
+  }
+  return {
+    get active() {
+      return file !== null;
+    },
+    async start() {
+      await mkdir(dir, { recursive: true, mode: 0o700 });
+      await chmod(dir, 0o700).catch(() => {});
+      file = join(dir, `${new Date(now()).toISOString().replace(/[:.]/g, '-')}.ndjson`);
+      bytes = 0;
+      queue = Promise.resolve();
+      const startedAt = now();
+      arm(maxMs);
+      await writeFile(statePath, JSON.stringify({ active: true, path: file, startedAt, bytes }), {
+        mode: 0o600,
+      });
+      return file;
+    },
+    /**
+     * Picks up the recording of the worker that went before, when its file is ours, young and small enough; otherwise
+     * clears the note. Resolves to the file, or null.
+     */
+    async resume() {
+      if (file) return file;
+      let st;
+      try {
+        st = JSON.parse(await readFile(statePath, 'utf8'));
+      } catch {
+        return null;
+      }
+      const left = typeof st?.startedAt === 'number' ? st.startedAt + maxMs - now() : 0;
+      let size = Infinity;
+      // Only a file this recorder names, inside its own folder: the note is just a file and may be edited.
+      const ok =
+        typeof st?.path === 'string' && NAME.test(posix.basename(st.path.replaceAll('\\', '/')));
+      const path = ok ? join(dir, posix.basename(st.path.replaceAll('\\', '/'))) : '';
+      if (ok)
+        size = await stat(path).then(
+          (x) => x.size,
+          () => Infinity,
+        );
+      if (!ok || left <= 0 || size >= maxBytes) {
+        await rm(statePath, { force: true }).catch(() => {});
+        return null;
+      }
+      file = path;
+      bytes = size;
+      arm(left);
+      return file;
+    },
+    stop,
+    event: (name, payload) =>
+      add({
+        kind: 'orca.event',
+        name,
+        payload: pickFields(payload, RECORD_EVENT_FIELDS[name] ?? {}),
+      }),
+    frame: (from, frame) =>
+      add({
+        kind: 'bridge.frame',
+        from,
+        frame: pickFields(frame, RECORD_FRAME_FIELDS[frame?.type] ?? RECORD_FRAME_DEFAULT),
+      }),
+    /** Resolves once every accepted line is on disk. */
+    flush: () => queue,
+  };
+}
+
 const label = {
   connected: 'Orca plugin connected',
   connecting: 'Connecting to the Stream Deck plugin',
@@ -740,6 +954,11 @@ export default async function activate(orca) {
   };
   // The worker idles out and is restarted by the next event: reconnect on every activate.
   let forwarder;
+  const recorder = createRecorder({
+    onStop: (file, why) => log(`record: ${why}, recording is in ${file}`),
+  });
+  const resumed = await recorder.resume();
+  if (resumed) log(`record: resumed after a restart of this worker, writing to ${resumed}`);
   // activate() gets no app version, only the plugin API version; B reads the app version itself.
   // The panel's calls are registered once the bridge exists; its messages arrive before that only if B is fast.
   let panelApi = { onMessage: () => {}, resync: () => {} };
@@ -774,6 +993,7 @@ export default async function activate(orca) {
       link.change();
     },
     onMessage: (msg) => {
+      recorder.frame('b', msg);
       panelApi.onMessage(msg);
       if (msg.type === 'deckState') {
         lastDeck = { session: bridge.status().session, connected: msg.connected === true };
@@ -786,6 +1006,12 @@ export default async function activate(orca) {
     bridge,
     post: (payload) => orca.panels?.post?.('deck.changed', payload),
   });
+  // Frames A sends are recorded where they leave (the handshake does not pass here).
+  const sendRaw = bridge.send;
+  bridge.send = (msg) => {
+    recorder.frame('a', msg);
+    return sendRaw(msg);
+  };
   forwarder = createForwarder(bridge);
   panelApi = createPanelApi(bridge, {
     onDeck: (state) => orca.panels?.post?.('deck.changed', { status: 'ok', deck: state }),
@@ -804,6 +1030,7 @@ export default async function activate(orca) {
   orca.events.on('agent.status.changed', async (ev) => {
     seen.status++;
     seen.lastAt = Date.now();
+    recorder.event('agent.status.changed', ev);
     if (forwarder.onStatus(ev)) seen.forwarded++;
     await bridge.ensure();
   });
@@ -842,12 +1069,13 @@ export default async function activate(orca) {
     const dir = deckDataDir(here());
     if (Date.now() - armedAt > UNINSTALL_CONFIRM_MS) {
       armedAt = Date.now();
-      return `Run Agent Deck: Uninstall again within ${UNINSTALL_CONFIRM_MS / 1000} s to remove ${dir} (bridge file, key mappings, this plugin's log).`.slice(
+      return `Run Agent Deck: Uninstall again within ${UNINSTALL_CONFIRM_MS / 1000} s to remove ${dir} (bridge file, key mappings, recordings, this plugin's log).`.slice(
         0,
         200,
       );
     }
     armedAt = 0;
+    recorder.stop('uninstall');
     link.stop();
     bridge.stop();
     uninstalled = true;
@@ -856,6 +1084,20 @@ export default async function activate(orca) {
       `uninstall: removed ${dir}; remove the Stream Deck plugin in the Elgato app or OpenDeck, then this plugin in Orca`,
     );
     return uninstallText(dir);
+  });
+  // A toggle: the first run starts a recording, the second stops it and says where the file is.
+  orca.commands.register('deck.record', async () => {
+    if (recorder.active) {
+      const file = recorder.stop('stopped by the command');
+      await recorder.flush();
+      return `Recording stopped: ${file}`.slice(0, 200);
+    }
+    const file = await recorder.start();
+    log(`record: started, writing to ${file}`);
+    return `Recording events to ${file}. Run Agent Deck: Record events again to stop (it stops by itself after 10 min or 5 MB).`.slice(
+      0,
+      200,
+    );
   });
   orca.commands.register('deck.status', async () => {
     await bridge.ensure();

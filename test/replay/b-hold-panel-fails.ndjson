@@ -1,0 +1,11 @@
+{"v":2,"name":"b-hold-panel-fails","description":"A hold that cannot open the panel says why in the Stream Deck plugin log: 'open panel: refused' when Orca has no such plugin, 'open panel: unavailable' when the panel opened but the Orca plugin is not connected to B. Revert check: drop the warn after bridgeServer.send in plugin.ts (second line), or the catch's warn (first).","sides":["b"],"keys":{}}
+{"at":0,"do":"orca.pane.add","pane":"a"}
+{"at":0,"do":"orca.plugin","key":"1am.agent-deck","status":"absent"}
+{"at":0,"do":"deck.appear","key":1}
+{"at":100,"do":"deck.down","key":1}
+{"at":1300,"do":"deck.up","key":1}
+{"at":1500,"do":"expect.log","contains":"open panel: refused"}
+{"at":1600,"do":"orca.plugin","key":"1am.agent-deck","status":"enabled"}
+{"at":1700,"do":"deck.down","key":1}
+{"at":2900,"do":"deck.up","key":1}
+{"at":3100,"do":"expect.log","contains":"open panel: unavailable"}

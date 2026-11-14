@@ -73,4 +73,4 @@ If your agents run inside tmux, read `docs/working-with-tmux.md` first. The refe
 
 ## Uninstall
 
-Elgato app: Preferences, Plugins, remove Agent Deck for Orca. Orca: Settings, Plugins, remove Agent Deck for Orca. Remove the Stream Deck plugin first: while it runs it recreates `mappings.json`. "Agent Deck: Uninstall" in Orca's command palette (run it twice within 10 seconds) deletes the data folder `~/.orca-deck/` (`%APPDATA%\orca-deck` on Windows): the bridge file, key mappings and the plugin log. Or delete that folder by hand.
+Elgato app: Preferences, Plugins, remove Agent Deck for Orca. Orca: Settings, Plugins, remove Agent Deck for Orca. Remove the Stream Deck plugin first: while it runs it recreates `mappings.json`. "Agent Deck: Uninstall" in Orca's command palette (run it twice within 10 seconds) deletes the data folder `~/.orca-deck/` (`%APPDATA%\orca-deck` on Windows): the bridge file, key mappings, recordings and the plugin log. Or delete that folder by hand.

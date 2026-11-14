@@ -1,0 +1,11 @@
+{"v":2,"name":"a-dedupe-and-snapshot","description":"Orca sends the same transition 2-3 times: only the first is forwarded; a requestSnapshot replays the tracked panes. Revert check: remove the prev.state/stateStartedAt early return in createForwarder.onStatus.","sides":["a"],"keys":{}}
+{"at":0,"do":"orca.activate"}
+{"at":0,"do":"bridge.frame","from":"a","frame":{"type":"hello"}}
+{"at":100,"do":"orca.event","name":"agent.status.changed","payload":{"workspaceId":"w1","paneKey":"t:a","state":"working","receivedAt":1800000000000,"mainAgent":{"state":"working","stateStartedAt":1000}}}
+{"at":100,"do":"bridge.frame","from":"a","frame":{"type":"agentStatus","paneKey":"t:a","state":"working","stateStartedAt":1000,"workspaceId":"w1"}}
+{"at":200,"do":"orca.event","name":"agent.status.changed","payload":{"workspaceId":"w1","paneKey":"t:a","state":"working","receivedAt":1800000000000,"mainAgent":{"state":"working","stateStartedAt":1000}}}
+{"at":200,"do":"orca.event","name":"agent.status.changed","payload":{"workspaceId":"w1","paneKey":"t:a","state":"working","receivedAt":1800000000000,"mainAgent":{"state":"working","stateStartedAt":1000}}}
+{"at":300,"do":"orca.event","name":"agent.status.changed","payload":{"workspaceId":"w1","paneKey":"t:a","state":"done","receivedAt":1800000000000,"mainAgent":{"state":"done","stateStartedAt":2000}}}
+{"at":300,"do":"bridge.frame","from":"a","frame":{"type":"agentStatus","paneKey":"t:a","state":"done","stateStartedAt":2000}}
+{"at":400,"do":"bridge.frame","from":"b","frame":{"v":1,"type":"requestSnapshot"}}
+{"at":400,"do":"bridge.frame","from":"a","frame":{"type":"agentStatus","paneKey":"t:a","state":"done","stateStartedAt":2000}}

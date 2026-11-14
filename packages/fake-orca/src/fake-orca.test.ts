@@ -1,13 +1,13 @@
 import { execFileSync } from 'node:child_process';
-import { mkdtempSync, readFileSync } from 'node:fs';
+import { mkdtempSync, readdirSync, readFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { expect, it } from 'vitest';
 import { z } from 'zod';
 import {
-  runScenario,
-  scenarios,
+  loadScenario,
+  play,
   terminalList,
   worktreePs,
   restart,
@@ -53,9 +53,16 @@ it('restart rotates handles', () => {
   expect(s.panes[0]?.handle).not.toBe(before);
 });
 
-it.each(scenarios.map((x) => x.name))('scenario %s is deterministic', (name) => {
-  expect(runScenario(name).log).toEqual(runScenario(name).log);
-});
+const SCENARIOS = fileURLToPath(new URL('../../../test/replay/', import.meta.url));
+const runScenario = (name: string) => play(loadScenario(`${SCENARIOS}${name}.ndjson`));
+
+it.each(readdirSync(SCENARIOS).filter((f) => f.endsWith('.ndjson')))(
+  'scenario %s is deterministic',
+  (file) => {
+    const name = file.replace('.ndjson', '');
+    expect(runScenario(name).log).toEqual(runScenario(name).log);
+  },
+);
 
 it('permission-approve-success log snapshot', () => {
   expect(runScenario('permission-approve-success').log).toMatchInlineSnapshot(`

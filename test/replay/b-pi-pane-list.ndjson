@@ -1,0 +1,9 @@
+{"v":2,"name":"b-pi-pane-list","description":"The Pane key inspector lists every pane Orca has, local and remote with their host, and gets panes that appear while it is open without reopening. Revert check: drop the refresh before the load reply (first reply is empty) or the push after refresh in PaneSlot.","sides":["b"],"keys":{}}
+{"at":0,"do":"orca.host.add","id":"ssh-1","kind":"ssh","name":"remote"}
+{"at":0,"do":"orca.pane.add","pane":"l"}
+{"at":0,"do":"orca.pane.add","pane":"r","host":"ssh-1"}
+{"at":0,"do":"deck.appear","key":1}
+{"at":500,"do":"deck.pi.open","key":1}
+{"at":500,"do":"expect.pi","key":1,"messages":[{"type":"state","panes":[{"paneKey":"tab-1:leaf-l","host":"This machine","remote":false},{"paneKey":"tab-1:leaf-r","hostId":"ssh-1","host":"remote","remote":true}]}]}
+{"at":1000,"do":"orca.pane.add","pane":"n","title":"New"}
+{"at":3500,"do":"expect.pi","key":1,"messages":[{"type":"state","panes":[{"paneKey":"tab-1:leaf-l"},{"paneKey":"tab-1:leaf-r"},{"paneKey":"tab-1:leaf-n"}]}]}

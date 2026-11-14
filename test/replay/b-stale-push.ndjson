@@ -1,0 +1,6 @@
+{"v":2,"name":"b-stale-push","description":"a pushed done for a pane Orca has no agent row for (an agent inside tmux that Orca dropped) must not stay on the key: it expires after two polls. Revert check: never expire a pushed status in BridgedAdapter.snapshot.","sides":["b"],"keys":{"1":"a"}}
+{"at":0,"do":"orca.pane.add","pane":"a","agent":null}
+{"at":0,"do":"expect.key","key":1,"state":"idle"}
+{"at":100,"do":"bridge.frame","from":"a","frame":{"type":"agentStatus","paneKey":"tab-1:leaf-a","workspaceId":"w1","state":"done","outcome":"success","agentType":"claude","stateStartedAt":1800000000100,"receivedAt":1800000000100}}
+{"at":100,"do":"expect.key","key":1,"state":"completed"}
+{"at":200,"do":"expect.key","key":1,"state":"idle"}

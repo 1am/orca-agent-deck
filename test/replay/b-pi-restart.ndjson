@@ -1,0 +1,7 @@
+{"v":2,"name":"b-pi-restart","description":"The plugin restarts while a Setup inspector is open: the app does not announce the inspector again, yet its next load (Check again) is answered, to that inspector only. Revert check: drop the no-announced-inspector branch in replyToPi (pi.ts): the load after the restart gets no reply.","sides":["b"],"keys":{"1":"a","14":{"action":"status"}}}
+{"at":0,"do":"orca.pane.add","pane":"a"}
+{"at":100,"do":"deck.pi.open","key":14}
+{"at":100,"do":"expect.pi","key":14,"messages":[{"type":"checks"}]}
+{"at":200,"do":"deck.restart"}
+{"at":300,"do":"deck.pi.send","key":14,"message":{"type":"load"}}
+{"at":300,"do":"expect.pi","key":14,"messages":[{"type":"checks"}]}

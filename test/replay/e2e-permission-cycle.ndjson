@@ -1,0 +1,10 @@
+{"v":2,"name":"e2e-permission-cycle","description":"The whole loop with both shipped plugins: Orca tells plugin A an agent is working, then waits for a permission; A pushes it over the bridge to plugin B, the key shows it, a press focuses the pane through the runtime socket. Orca's own state is not changed, so only the push can move the key. Revert check: drop the workspace/agent forwarding in plugin A (createForwarder.onStatus).","sides":["e2e"],"keys":{"1":"a"}}
+{"at":0,"do":"orca.pane.add","pane":"a"}
+{"at":0,"do":"expect.key","key":1,"state":"completed","label":"Claude Code"}
+{"at":100,"do":"orca.event","name":"agent.status.changed","payload":{"workspaceId":"w1","paneKey":"tab-1:leaf-a","state":"working","receivedAt":1800000000100,"mainAgent":{"state":"working","stateStartedAt":1800000000100}}}
+{"at":100,"do":"expect.key","key":1,"state":"working"}
+{"at":200,"do":"orca.event","name":"agent.status.changed","payload":{"workspaceId":"w1","paneKey":"tab-1:leaf-a","state":"waiting","receivedAt":1800000000200,"mainAgent":{"state":"waiting","stateStartedAt":1800000000200}}}
+{"at":200,"do":"expect.key","key":1,"state":"needs_input","line2":"needs you"}
+{"at":300,"do":"deck.down","key":1}
+{"at":300,"do":"deck.up","key":1}
+{"at":300,"do":"expect.focus","pane":"a"}

@@ -1,0 +1,7 @@
+{"v":2,"name":"b-only-no-a","description":"Only the Stream Deck plugin is installed: Orca says plugin A is absent, no discovery file exists. The Status key says Install the Orca plugin and the Setup tab offers the install link; the panes still work from the runtime. Revert check: keep the old missing caption and no fix in doctor.ts.","sides":["b"],"keys":{"1":"a","14":{"action":"status"}}}
+{"at":0,"do":"orca.pane.add","pane":"a"}
+{"at":0,"do":"orca.plugin","key":"1am.agent-deck","status":"absent"}
+{"at":0,"do":"expect.key","key":1,"state":"completed","label":"Claude Code"}
+{"at":0,"do":"expect.key","key":14,"state":"idle","label":"Install the Orca plugin","line2":"!"}
+{"at":100,"do":"deck.pi.open","key":14}
+{"at":100,"do":"expect.pi","key":14,"messages":[{"type":"checks","checks":[{"id":"orca-plugin","result":"warn","caption":"Install the Orca plugin","fix":{"action":"open-url","label":"Install the Orca plugin","url":"orca://plugins/1am.agent-deck?catalog=https://github.com/1am/orca-agent-deck.git"}}]}]}

@@ -1,0 +1,7 @@
+{"v":2,"name":"b-needs-input-label","description":"The same needs-input state reads the same whether it arrives from the runtime poll (which knows the tool) or from the push (which does not): no flip when the second path catches up. Revert check: put the toolName back into lineTwo (status.ts) so the poll reads permission.","sides":["b"],"keys":{"1":"a"}}
+{"at":0,"do":"orca.pane.add","pane":"a"}
+{"at":0,"do":"expect.key","key":1,"state":"completed"}
+{"at":100,"do":"orca.agent","pane":"a","state":"waiting","toolName":"Bash"}
+{"at":100,"do":"expect.key","key":1,"state":"needs_input","line2":"needs you"}
+{"at":200,"do":"bridge.frame","from":"a","frame":{"type":"agentStatus","paneKey":"tab-1:leaf-a","workspaceId":"w1","state":"waiting","outcome":null,"stateStartedAt":1800000000200,"receivedAt":1800000000200}}
+{"at":200,"do":"expect.key","key":1,"state":"needs_input","line2":"needs you"}

@@ -1,0 +1,5 @@
+{"v":2,"name":"a-stale-discovery-file","description":"The discovery file is left behind by a crashed B: A keeps retrying and connects once B is back. Revert check: remove the schedule() call after deck = null in createBridge's onClose (shared with a-b-restart).","sides":["a"],"keys":{}}
+{"at":0,"do":"deck.restart","up":false}
+{"at":0,"do":"orca.activate"}
+{"at":100,"do":"deck.restart"}
+{"at":100,"do":"bridge.frame","from":"a","frame":{"type":"hello"}}

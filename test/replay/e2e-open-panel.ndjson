@@ -1,0 +1,12 @@
+{"v":2,"name":"e2e-open-panel","description":"The status bar button and the shortcut run Open panel through both shipped plugins: A asks B to show the panel, B calls Orca's plugins.open and answers, and no map mode starts (the deck keeps focusing; a click in the panel assigns). When Orca refuses to open the panel, the toast says so. Revert check: drop the openPanel send in the deck.map command (main.mjs): Orca is never asked.","sides":["e2e"],"keys":{}}
+{"at":0,"do":"orca.pane.add","pane":"a"}
+{"at":0,"do":"orca.focus","pane":"a"}
+{"at":0,"do":"deck.appear","key":1}
+{"at":0,"do":"deck.appear","key":2}
+{"at":100,"do":"expect.panel","request":"deck.get","result":{"status":"ok","deck":{"connected":true}}}
+{"at":200,"do":"orca.command","id":"deck.map","result":"Agent Deck panel"}
+{"at":200,"do":"expect.runtime","method":"plugins.open","params":{"pluginKey":"1am.agent-deck","panelId":"deck"}}
+{"at":400,"do":"expect.panel","request":"deck.assign","input":{"key":2,"replace":false},"result":{"ok":true,"action":"mapped"}}
+{"at":400,"do":"expect.key","key":2,"state":"completed","label":"Claude Code"}
+{"at":600,"do":"orca.plugin","key":"1am.agent-deck","status":"absent"}
+{"at":700,"do":"orca.command","id":"deck.map","result":"Could not open the Agent Deck panel: open it from the sidebar"}

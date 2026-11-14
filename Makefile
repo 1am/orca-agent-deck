@@ -4,7 +4,7 @@ SD_PKG   := dist/orca-agent-deck-$(VERSION).streamDeckPlugin
 ORCA_DIR := orca-plugin
 ORCA_PKG := dist/orca-agent-deck-orca-plugin-$(VERSION).zip
 
-.PHONY: all build package package-sd package-orca test contract check clean
+.PHONY: all build package package-sd package-orca test contract replay replay-a replay-b replay-e2e check clean
 
 all: build
 
@@ -24,6 +24,23 @@ test:
 
 contract:
 	pnpm test:contract
+
+# Replay scenarios in test/replay (see docs/replay.md); ARGS="--update" rewrites snapshots.
+replay:
+	pnpm replay $(ARGS)
+
+# Plugin A scenarios on Orca's own test kit: local only, needs Orca >= 1.4.251 installed.
+replay-a:
+	pnpm replay-a
+
+# Plugin B (the built bin/plugin.js) in a fake Stream Deck host, per host profile that can run on this OS; no Orca needed.
+replay-b: 
+	pnpm sd:build
+	REPLAY_NODE="$(NODE)" pnpm replay-b
+
+replay-e2e:
+	pnpm sd:build
+	pnpm replay-e2e
 
 check:
 	pnpm typecheck
