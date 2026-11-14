@@ -128,6 +128,12 @@
           add('', c.label, head);
           add('reason', c.reason);
           if (c.result !== 'ok' && c.hint) add('hint', 'Fix: ' + c.hint);
+          if (c.result !== 'ok' && c.fix && c.fix.url) {
+            const b = document.createElement('button');
+            b.textContent = c.fix.label;
+            b.onclick = () => send.openUrl(c.fix.url);
+            el.appendChild(b);
+          }
           root.appendChild(el);
         }
       }
