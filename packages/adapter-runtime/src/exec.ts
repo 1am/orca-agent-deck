@@ -40,11 +40,16 @@ export function makeRuntimeExec(opts: RuntimeExecOptions): Exec {
   const envInterval = opts.environmentPollMs ?? 5000;
   const envCache = new Map<string, { at: number; out?: string; error?: unknown }>();
   const refreshing = new Set<string>();
-  let envList: { mtime: number; hosts: Array<{ id: string; name: string }> } | null = null;
+  let envList: {
+    mtime: number;
+    hosts: Array<{ id: string; name: string; sshTargetId?: string }>;
+  } | null = null;
   /** Why the socket is unusable, or null while it answers; every poll fails the same way while Orca is down. */
   let degraded: string | null = null;
 
-  async function environments(): Promise<Array<{ id: string; name: string }>> {
+  async function environments(): Promise<
+    Array<{ id: string; name: string; sshTargetId?: string }>
+  > {
     let mtime = 0;
     try {
       mtime = (await stat(opts.environmentsFile ?? '')).mtimeMs;
@@ -54,9 +59,19 @@ export function makeRuntimeExec(opts: RuntimeExecOptions): Exec {
     if (envList && envList.mtime === mtime) return envList.hosts;
     const out = await opts.fallback(['environment', 'list', '--json']);
     const parsed = JSON.parse(out) as {
-      result?: { environments?: Array<{ id: string; name: string }> };
+      result?: {
+        environments?: Array<{
+          id: string;
+          name: string;
+          orcadDeployment?: { sshTargetId?: string };
+        }>;
+      };
     };
-    const hosts = (parsed.result?.environments ?? []).map((e) => ({ id: e.id, name: e.name }));
+    const hosts = (parsed.result?.environments ?? []).map((e) => ({
+      id: e.id,
+      name: e.name,
+      sshTargetId: e.orcadDeployment?.sshTargetId,
+    }));
     envList = { mtime, hosts };
     return hosts;
   }
@@ -101,6 +116,17 @@ export function makeRuntimeExec(opts: RuntimeExecOptions): Exec {
       if (!worktree) return null;
       return envelope(await c.call('worktree.set', { worktree, isUnread: w.includes('--unread') }));
     }
+    if (a === 'environment' && b === 'list') {
+      // The adapter's label lookup: answered from the list cached by the environments file's mtime.
+      const envs = await environments();
+      return envelope({
+        environments: envs.map((e) => ({
+          id: e.id,
+          name: e.name,
+          orcadDeployment: { sshTargetId: e.sshTargetId },
+        })),
+      });
+    }
     if (a === 'host' && b === 'list') {
       const { targets } = await c.call<{
         targets: Array<{ id: string; label: string; connected: boolean }>;
@@ -110,7 +136,15 @@ export function makeRuntimeExec(opts: RuntimeExecOptions): Exec {
         hosts: [
           { kind: 'local', name: 'this machine', id: 'local' },
           ...targets.map((t) => ({ kind: 'ssh', name: t.label, id: t.id, connected: t.connected })),
-          ...envs.map((e) => ({ kind: 'environment', name: e.name, id: e.id })),
+          ...envs.map((e) => {
+            const label = targets.find((t) => t.id === e.sshTargetId)?.label;
+            return {
+              kind: 'environment',
+              name: e.name,
+              id: e.id,
+              ...(label && label !== e.name ? { label } : {}),
+            };
+          }),
         ],
       });
     }

@@ -173,3 +173,48 @@ describe('locate (mapping survives a changed action context)', () => {
     expect(m.get('new')?.pane).toBeUndefined();
   });
 });
+
+describe('a pane is on one key only', () => {
+  const binding = (paneKey: string) => ({
+    paneKey,
+    worktreeId: 'w',
+    tabId: 't',
+    leafId: 'l',
+    lastKnown: {},
+  });
+
+  it('loading a file with a pane on two keys keeps the most recently assigned', () => {
+    const st = new MemoryStorage();
+    st.save({
+      key1: { mode: 'pinned', pane: binding('p1'), assignedAt: 100 },
+      key8: { mode: 'pinned', pane: binding('p1'), assignedAt: 200 },
+      key3: { mode: 'pinned', pane: binding('p2'), assignedAt: 50 },
+    });
+    const m = new MappingStore(st);
+    expect(m.slotsFor('p1')).toEqual(['key8']);
+    expect(m.get('key3')?.pane?.paneKey).toBe('p2');
+    expect(m.dedupedOnLoad).toEqual([{ paneKey: 'p1', kept: 'key8', removed: ['key1'] }]);
+    // Cleaned on disk too, so the next load has nothing to report.
+    expect(new MappingStore(st).dedupedOnLoad).toEqual([]);
+  });
+
+  it('a file from before assignedAt keeps the later key of the file', () => {
+    const st = new MemoryStorage();
+    st.save({
+      a: { mode: 'pinned', pane: binding('p1') },
+      b: { mode: 'pinned', pane: binding('p1') },
+    });
+    expect(new MappingStore(st).slotsFor('p1')).toEqual(['b']);
+  });
+
+  it('assignedAt is set on assignment and kept while the same pane stays', () => {
+    let t = 10;
+    const m = new MappingStore(new MemoryStorage(), () => t);
+    m.set('s', { mode: 'pinned', pane: binding('p1') });
+    t = 99;
+    m.set('s', { ...m.get('s')!, mode: 'pinned' });
+    expect(m.get('s')?.assignedAt).toBe(10);
+    m.set('s', { mode: 'pinned', pane: binding('p2') });
+    expect(m.get('s')?.assignedAt).toBe(99);
+  });
+});

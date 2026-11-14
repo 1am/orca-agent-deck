@@ -27,7 +27,9 @@ import {
 } from '@orca-agent-deck/core';
 import type { z } from 'zod';
 import { resolveOrcaBinCached } from './resolve-bin.ts';
+import { spawnPlan } from './spawn-plan.ts';
 import {
+  environmentListResponse,
   hostListResponse,
   tabTitles,
   activePaneKey,
@@ -43,6 +45,7 @@ import {
 
 export * from './schemas.ts';
 export * from './resolve-bin.ts';
+export * from './spawn-plan.ts';
 
 /** Runs `orca <args>` and returns stdout. Injectable for tests. */
 export type Exec = (args: string[]) => Promise<string>;
@@ -55,10 +58,21 @@ export function makeExec(bin?: string, timeoutMs = 5000): Exec {
     const resolved = bin ?? (await resolveOrcaBinCached()).bin;
     return new Promise((resolve, reject) => {
       const path = [process.env['PATH'], ...EXTRA_PATH].filter(Boolean).join(delimiter);
+      let plan;
+      try {
+        plan = spawnPlan(resolved, args, process.platform);
+      } catch (e) {
+        return reject(e);
+      }
       execFile(
-        resolved,
-        args,
-        { timeout: timeoutMs, maxBuffer: 16 * 1024 * 1024, env: { ...process.env, PATH: path } },
+        plan.file,
+        plan.args,
+        {
+          timeout: timeoutMs,
+          maxBuffer: 16 * 1024 * 1024,
+          env: { ...process.env, PATH: path },
+          windowsVerbatimArguments: plan.verbatim,
+        },
         (err, stdout) => (err ? reject(err) : resolve(stdout)),
       );
     });
@@ -119,6 +133,7 @@ export class CliAdapter implements OrcaAdapter {
   } | null = null;
   /** Last host list that answered: a failing `host list` must not make paired servers vanish. */
   private lastHosts: HostInfo[] = [];
+  private envLabels: { key: string; labels: Map<string, string> } | null = null;
   constructor(exec: Exec = makeExec(), now: () => number = Date.now) {
     this.exec = exec;
     this.now = now;
@@ -201,13 +216,16 @@ export class CliAdapter implements OrcaAdapter {
       hosts.flatMap(
         (h) =>
           [
-            [h.id, h.name],
-            [envHostId(h.id), h.name],
+            [h.id, h],
+            [envHostId(h.id), h],
           ] as const,
       ),
     );
     for (const pane of local.panes) {
-      if (!isLocalHost(pane.hostId)) pane.hostName = names.get(pane.hostId) ?? null;
+      if (isLocalHost(pane.hostId)) continue;
+      const h = names.get(pane.hostId);
+      pane.hostName = h ? (h.label ?? h.name) : null;
+      if (h?.label) pane.hostAddress = h.name;
     }
     return local;
   }
@@ -290,12 +308,43 @@ export class CliAdapter implements OrcaAdapter {
 
   async listHosts(): Promise<HostInfo[]> {
     const r = await this.call(hostListResponse, ['host', 'list']);
-    return r.result.hosts.map((h) => ({
-      id: h.id,
-      kind: h.kind,
-      name: h.name,
-      connected: h.kind === 'local' ? true : (h.connected ?? false),
-    }));
+    // A paired server Orca deployed onto an SSH target is named by its address; the target has the
+    // connection name the user knows. The runtime route says it in `label`; the plain CLI needs the
+    // environment list, read once per set of servers. Best effort: the list stands without it.
+    const labels = new Map<string, string>();
+    const envs = r.result.hosts.filter((h) => h.kind === 'environment');
+    for (const h of envs) if (h.label) labels.set(h.id, h.label);
+    if (envs.some((h) => !h.label)) {
+      const sshNames = new Map(
+        r.result.hosts.filter((h) => h.kind === 'ssh').map((h) => [h.id, h.name]),
+      );
+      const key = JSON.stringify([...envs.map((h) => h.id), ...sshNames]);
+      if (this.envLabels?.key !== key) {
+        const found = new Map<string, string>();
+        try {
+          const e = await this.call(environmentListResponse, ['environment', 'list']);
+          for (const env of e.result.environments) {
+            const label = sshNames.get(env.orcadDeployment?.sshTargetId ?? '');
+            if (label && label !== env.name) found.set(env.id, label);
+          }
+          this.envLabels = { key, labels: found };
+        } catch {
+          // keep the address; try again next time
+        }
+      }
+      for (const [id, label] of this.envLabels?.labels ?? [])
+        if (!labels.has(id)) labels.set(id, label);
+    }
+    return r.result.hosts.map((h) => {
+      const label = labels.get(h.id);
+      return {
+        id: h.id,
+        kind: h.kind,
+        name: h.name,
+        ...(label ? { label } : {}),
+        connected: h.kind === 'local' ? true : (h.connected ?? false),
+      };
+    });
   }
 
   /**
@@ -306,6 +355,16 @@ export class CliAdapter implements OrcaAdapter {
    */
   /** Why the last focus read had no answer (counts only), for the plugin log. */
   focusNote = '';
+
+  /** Execution host of the worktree the last focus read found shown, null when none was. */
+  focusHostId: string | null = null;
+
+  /**
+   * Focus local panes through `terminal.reveal` too. Unlike `terminal.focus`, reveal brings Orca's
+   * window to the front, with Orca's own workarounds for the Windows foreground lock. For hosts
+   * where the plugin cannot raise Orca itself (Windows).
+   */
+  revealLocal = false;
 
   async focusedPaneKey(maxAgeMs = 0): Promise<string | null> {
     try {
@@ -319,6 +378,7 @@ export class CliAdapter implements OrcaAdapter {
         (await this.call(terminalListResponse, ['terminal', 'list', '--include-visual-layouts']));
       const layouts = terms.result.visualLayouts ?? [];
       this.focusNote = `worktrees=${ps.result.worktrees.length} active=${active ? 1 : 0} layouts=${layouts.length}`;
+      this.focusHostId = active ? active.hostId : null;
       if (!active) {
         // Orca marks no worktree active (a paired server may be the one shown). Guessing from the
         // layouts could pin a pane that is not on screen, so the answer stays unknown.
@@ -328,9 +388,16 @@ export class CliAdapter implements OrcaAdapter {
       const fromLayout = activePaneKey(layouts, active.worktreeId);
       if (fromLayout) return fromLayout;
       this.focusNote += ' active-worktree-has-no-layout';
+      if (!isLocalHost(active.hostId)) {
+        // `terminal show` answers for the local runtime only: on a remote host's worktree it would
+        // name a local pane. The answer stays unknown.
+        this.focusNote += ' remote-worktree';
+        return null;
+      }
       const r = await this.call(terminalShowResponse, ['terminal', 'show']);
       return paneKey(r.result.terminal.tabId, r.result.terminal.leafId);
     } catch (e) {
+      this.focusHostId = null;
       this.focusNote = `focus read failed: ${(e as Error).message.slice(0, 80)}`;
       return null;
     }
@@ -345,10 +412,11 @@ export class CliAdapter implements OrcaAdapter {
     pane: PaneRef & { handle: string; environment?: string | null; worktreeId?: string },
   ): Promise<FocusResult> {
     const { tabId, leafId } = splitPaneKey(pane.paneKey);
-    if (pane.environment && pane.worktreeId && tabId && leafId) {
+    if ((pane.environment || this.revealLocal) && pane.worktreeId && tabId && leafId) {
       // A paired server has no window: the CLI asks it about the pane (a new remote connection
       // per call, 1.3-3.4 s) and then has this Orca reveal it. We know the pane already, so we
       // ask this Orca directly (`terminal.reveal`, as the CLI does in its last step).
+      const host = pane.environment ? ['--execution-host', runtimeHostId(pane.environment)] : [];
       try {
         const r = await this.call(revealResponse, [
           'terminal',
@@ -359,8 +427,7 @@ export class CliAdapter implements OrcaAdapter {
           tabId,
           '--leaf',
           leafId,
-          '--execution-host',
-          runtimeHostId(pane.environment),
+          ...host,
         ]);
         if (r.result.reveal.navigated) return { ok: true };
       } catch {

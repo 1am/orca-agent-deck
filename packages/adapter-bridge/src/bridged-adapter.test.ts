@@ -147,16 +147,18 @@ describe('agentStatus protocol', () => {
  */
 describe('nothing A sends drives Orca', () => {
   const v = 1;
-  const pick = { paneKey: 'p:1', worktreeId: 'w' };
   // One sample per message type A may send. The test below fails when a type is added without a row.
   const samples: Record<string, object> = {
     hello: { v, type: 'hello', token: 't', orcaVersion: '1', pluginVersion: '1' },
     auth: { v, type: 'auth', nonce: 'n', mac: 'm' },
     agentStatus: push('p:1', 'working', 1),
     workspace: { v, type: 'workspace', event: 'created', workspaceId: 'w', path: '/x' },
-    pairRequest: { v, type: 'pairRequest', requestId: 'r', pane: pick },
-    unmapRequest: { v, type: 'unmapRequest', requestId: 'r', pane: pick },
-    pairCancel: { v, type: 'pairCancel', requestId: 'r' },
+    requestDeck: { v, type: 'requestDeck' },
+    assignKey: { v, type: 'assignKey', requestId: 'r', key: 1, replace: true },
+    unmapKey: { v, type: 'unmapKey', requestId: 'r', key: 1 },
+    openPanel: { v, type: 'openPanel', requestId: 'r', panelId: 'deck' },
+    panelSelect: { v, type: 'panelSelect', on: true },
+    holdResult: { v, type: 'holdResult', requestId: 'r', action: 'hidden' },
   };
   // Hostile variants: fields that look like commands must stay inert data.
   const hostile = [

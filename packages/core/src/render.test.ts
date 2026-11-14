@@ -188,32 +188,6 @@ it('draws the host badge for a remote pane, ellipsized to 7 characters', () => {
   expect(renderKey({ state: 'working', label: 'x', line2: '' })).not.toContain('text-anchor="end"');
 });
 
-it('pairing mode draws the key number large and the label as one short line', () => {
-  const svg = renderKey({
-    state: 'unmapped',
-    label: 'Assign here: feature-login > claude',
-    line2: '',
-    bigNumber: '5',
-    keyNumber: '5',
-  });
-  expect(svg).toContain('font-size="72"');
-  expect(svg).toContain('>5</text>');
-  expect(svg).not.toContain('5: Assign');
-});
-
-it('statusInfo says the Orca response was unexpected, not that Orca is down', async () => {
-  const { statusInfo } = await import('./render.ts');
-  expect(
-    statusInfo({
-      mode: 'degraded',
-      version: '1.4.256',
-      unsupported: false,
-      badResponse: true,
-      hostsDown: 0,
-    }),
-  ).toEqual({ tone: 'error', value: '!', caption: 'unexpected Orca response' });
-});
-
 describe('Orca agent icons', () => {
   const m: KeyModel = { state: 'idle', label: 'a', line2: 'b' };
 
@@ -241,4 +215,30 @@ describe('Orca agent icons', () => {
     expect(renderKey({ ...m, agent: 'claude' })).toContain('M12 5v14');
     expect(renderKey({ ...m, agent: 'zzz-unknown' })).toContain('>Z</text>');
   });
+});
+
+it('statusInfo says the Orca response was unexpected, not that Orca is down', async () => {
+  const { statusInfo } = await import('./render.ts');
+  expect(
+    statusInfo({
+      mode: 'degraded',
+      version: '1.4.256',
+      unsupported: false,
+      badResponse: true,
+      hostsDown: 0,
+    }),
+  ).toEqual({ tone: 'error', value: '!', caption: 'unexpected Orca response' });
+});
+
+it('statusInfo says the Orca response was unexpected, not that Orca is down', async () => {
+  const { statusInfo } = await import('./render.ts');
+  expect(
+    statusInfo({
+      mode: 'degraded',
+      version: '1.4.256',
+      unsupported: false,
+      badResponse: true,
+      hostsDown: 0,
+    }),
+  ).toEqual({ tone: 'error', value: '!', caption: 'unexpected Orca response' });
 });

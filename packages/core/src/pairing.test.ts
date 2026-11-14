@@ -59,24 +59,23 @@ describe('Pairing', () => {
     expect(p.state).toMatchObject({ existing: ['s9'] });
   });
 
-  it('tap on a pane pinned elsewhere adds a copy', () => {
+  it.each(['tap', 'hold'] as const)('a %s on a pane mapped elsewhere moves it', (gesture) => {
     const { mapping, p, results } = setup();
     mapping.set('s9', { mode: 'pinned', pane: pane('a:b') });
     p.start('r1', pane('a:b'), true);
-    p.press('s1', 'tap');
-    expect(mapping.slotsFor('a:b').sort()).toEqual(['s1', 's9']);
-    expect(results[0]).toMatchObject({ ok: true, action: 'copied' });
-  });
-
-  it('hold on a pane pinned elsewhere moves it and frees the old slot to auto', () => {
-    const { mapping, p, results } = setup();
-    mapping.set('s9', { mode: 'pinned', pane: pane('a:b') });
-    p.start('r1', pane('a:b'), true);
-    p.press('s1', 'hold');
+    p.press('s1', gesture);
     expect(mapping.slotsFor('a:b')).toEqual(['s1']);
     expect(mapping.get('s9')).toMatchObject({ mode: 'auto' });
     expect(mapping.get('s9')?.pane).toBeUndefined();
     expect(results[0]).toMatchObject({ ok: true, action: 'moved' });
+  });
+
+  it('moves a pane that auto-fill put on another key too', () => {
+    const { mapping, p } = setup();
+    mapping.set('s9', { mode: 'auto', pane: pane('a:b') });
+    p.start('r1', pane('a:b'), true);
+    p.press('s1', 'tap');
+    expect(mapping.slotsFor('a:b')).toEqual(['s1']);
   });
 
   it('pressing the slot that already shows the pane is a plain map', () => {

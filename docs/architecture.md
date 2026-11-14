@@ -6,8 +6,8 @@ As built, November 2026 (Orca 1.4.248, Elgato Stream Deck app). This page descri
 
 Two plugins, one per host app, plus Orca's own runtime:
 
-- **Plugin A** (`orca-plugin/main.mjs`) runs inside Orca as a lazy `trusted-worker`. Orca starts it on the first event and stops it after about 10 minutes without events. It only forwards agent status and workspace events to plugin B.
-- **Plugin B** (`packages/streamdeck-plugin`) is hosted by the Elgato Stream Deck app: the app spawns it as a child process on its own bundled Node 20 (`~/Library/Application Support/com.elgato.StreamDeck/NodeJS/20.x/node`), keeps it running while the app runs and restarts it on crash or `streamdeck restart`. B talks to the app over the SDK WebSocket. It owns the keys, the bridge server, the mapping store and all reads and focus calls into Orca.
+- **Plugin A** (`orca-plugin/main.mjs`) runs inside Orca as a lazy `trusted-worker`. Orca starts it on the first event and stops it after about 10 minutes without events. It only forwards agent status events to plugin B.
+- **Plugin B** (`packages/streamdeck-plugin`) is hosted by the Elgato Stream Deck or OpenDeck app: the app spawns it as a child process on its own bundled Node 20 (`~/Library/Application Support/com.elgato.StreamDeck/NodeJS/20.x/node`), keeps it running while the app runs and restarts it on crash or `streamdeck restart`. B talks to the app over the SDK WebSocket. It owns the keys, the bridge server, the mapping store and all reads and focus calls into Orca.
 - **Orca runtime** (in the Orca app) answers B over a unix socket, or a named pipe on Windows. **Paired Orca servers** (environments) are reachable only through the `orca --environment` CLI.
 
 ```mermaid
@@ -17,7 +17,7 @@ flowchart LR
       R["Runtime<br/>(panes, worktrees, focus)"]
       PH["Plugin host"]
       A["Plugin A worker<br/>orca-plugin/main.mjs<br/>(lazy Node worker)"]
-      PH -- "agent.status.changed<br/>workspace.created/removed" --> A
+      PH -- "agent.status.changed" --> A
     end
     CLI["orca CLI<br/>(spawned per call)"]
     subgraph SDApp["Elgato Stream Deck app"]
@@ -40,7 +40,7 @@ flowchart LR
   SSH["SSH hosts"]
   DEV["Stream Deck MK.2 (USB)"]
 
-  A -- "ws, HMAC handshake<br/>agentStatus, workspace" --> BS
+  A -- "ws, HMAC handshake<br/>agentStatus" --> BS
   A -. "reads" .-> DISC
   BS -. "writes on start" .-> DISC
   BS --> FEED --> BA
@@ -67,6 +67,7 @@ Layering inside B: `packages/core` is pure logic (no `@elgato/*`), every Orca ca
 Plugin A cannot be the only path between Orca and B:
 
 - **A's host API has no pane calls.** A trusted worker gets events plus `notifications`, `storage`, `terminal.sendText` and `workspace.*` host calls. Orca exposes no host call to list panes, read the focused pane or focus one. Those exist only on the runtime socket, so A would have to open the same socket and proxy it: one more hop, same dependency.
+- **A cannot show its own panel.** Orca has no host call for it either. The "Agent Deck" status bar button and the shortcut therefore send B an `openPanel` frame, and B calls the runtime's `plugins.open` (`{ pluginKey, panelId }`, what `orca plugin open` does; the local runtime token is the owner's, so it needs no extra grant). B tries `1am.agent-deck`, then `local.agent-deck`, because the install decides the key. If that fails A keeps the deck-side mapping.
 - **A is not always running.** Orca starts the worker on an event and stops it after about 10 minutes without events. Nothing outside Orca can start it, so a key press or the 2 s poll after a quiet period would have nobody to answer. B must work while A sleeps; A only makes status changes arrive sooner.
 - **A is optional.** With A missing or disabled the deck still works from polling (the Status key's "slow updates").
 
@@ -80,7 +81,7 @@ Everything listens on loopback or is a local file/socket. Nothing accepts traffi
 
 | Endpoint | Owner | Bind / path | Who connects | Auth |
 |---|---|---|---|---|
-| Bridge WebSocket | Plugin B (`packages/adapter-bridge/src/server.ts`) | `127.0.0.1`, first free port of 47800-47809 | Plugin A only | 32-byte token from `bridge.json` (0600 in a 0700 dir, rotated per start; refused when a symlink, foreign-owned or readable by others. On Windows, which has no mode bits, only the symlink check applies and the user profile's ACL keeps it private), never sent: A and B prove it to each other with HMAC-SHA256 over two 16-byte nonces and a direction label before A sends anything; upgrades with an `Origin` header (browsers), a `Host` other than `127.0.0.1:<port>` (DNS rebinding) or from a non-loopback address are refused (401); frames over 256 KiB close the socket on both sides; 2 s to finish the handshake, at most 2 pending connections (a new one evicts the oldest) |
+| Bridge WebSocket | Plugin B (`packages/adapter-bridge/src/server.ts`) | `127.0.0.1`, first free port of 47800-47809 (`ORCA_DECK_BRIDGE_PORTS`, a comma list where `0` means any free port, replaces the range for tests; a malformed value is ignored with one log line) | Plugin A only | 32-byte token from `bridge.json` (0600 in a 0700 dir, rotated per start; refused when a symlink, foreign-owned or readable by others. On Windows, which has no mode bits, only the symlink check applies and the user profile's ACL keeps it private), never sent: A and B prove it to each other with HMAC-SHA256 over two 16-byte nonces and a direction label before A sends anything; upgrades with an `Origin` header (browsers), a `Host` other than `127.0.0.1:<port>` (DNS rebinding) or from a non-loopback address are refused (401); frames over 256 KiB close the socket on both sides; 2 s to finish the handshake, at most 2 pending connections (a new one evicts the oldest) |
 | Orca runtime socket | Orca | unix socket `o-<pid>-<id>.sock` (0600); named pipe `\\.\pipe\orca-<pid>-<id>` on Windows | Plugin B, `orca` CLI | `authToken` from `orca-runtime.json` (0600) in every request; rotated on each Orca start. Never logged. Windows pipe names are visible to every local account, so with Orca stopped and a stale `orca-runtime.json` another account could open the old name and receive a token that no longer works. |
 | Orca paired-device WebSocket | Orca | `ws://127.0.0.1:6768` | Not used by us (needs an E2EE handshake) | Orca's |
 | Stream Deck SDK WebSocket | Elgato app | `127.0.0.1`, port passed to B at launch | Plugin B (client) | Registration UUID from the app |
@@ -202,7 +203,11 @@ sequenceDiagram
   Note over A,B: ~10 min without events: Orca stops the worker, B keeps the last state ("asleep", not an error)
   B--xA: Elgato app restarts B: new port/token
   A->>D: re-read after a failed connect, backoff 1 s to 30 s
+  Note over A,D: connected: A re-reads bridge.json every 5 s; another pid/port/token (a newer B) drops the socket and A connects to it
+  Note over B: the host quits: B sees its parent pid change or vanish (checked every 2 s), closes the bridge, removes bridge.json only if it still names itself, exits
 ```
+
+Both Stream Deck apps swap freely: the SDK reports no closed host socket, so B polls its parent pid (`watchHost`, `packages/streamdeck-plugin/src/host-watch.ts`) and exits when the host is gone, instead of staying as an orphan on its bridge port. A newer B just overwrites `bridge.json`; the older one, once it exits, leaves that file alone (`BridgeServer.stop` checks pid and token).
 
 ## Slot mapping lifecycle
 
@@ -242,8 +247,22 @@ stateDiagram-v2
 | First read after wake | ~1.8 s | Socket health call while Orca wakes |
 | Paired-server status age | up to ~7 s | 5 s cache plus the 2 s poll, unless plugin A pushes it |
 
+## Platform decisions (macOS, Windows, Linux)
+
+One helper per concern, all pure and tested with `path.win32`/`path.posix` (`packages/core/src/paths.ts`); `main.mjs` mirrors the two it needs and a test keeps the mirror equal.
+
+| Concern | Decision |
+|---|---|
+| Own files (`bridge.json`, `mappings.json`, plugin A's log) | `deckDataDir`: `%APPDATA%\orca-deck` on Windows, `~/.orca-deck` elsewhere; the same for plugin B, plugin A and the diagnostics script |
+| File trust | `isPrivateStat`: owner and mode 0600 checked on POSIX, not on Windows (modes mean nothing; the profile folder is the user's). One implementation for the bridge file, the mappings file and Orca's runtime file |
+| Orca runtime socket | Taken from the transports Orca writes into `orca-runtime.json`: `unix` on macOS and Linux, `named-pipe` (`\\.\pipe\orca-<id>-<kind>`) on Windows (Orca's `runtime-rpc-socket-metadata`). The folder of that file on Windows (`%APPDATA%\orca`) is device only |
+| Orca CLI | Launcher name per platform: `orca.cmd`, `orca-ide` (Linux desktops), `orca` (`orcaCliName`). Node refuses to run a `.cmd` without a shell, so `spawnPlan` runs it through `cmd.exe` with an allowlist for the program path and every argument (no quotes or `& | < > ^ % !`), and throws otherwise; everything else is spawned directly. The CLI is only the degraded fallback and the plugin probe. Device only: where Windows installs `orca.cmd` (`ORCA_BIN` or the PATH entry from Orca's "register CLI") |
+| PATH | Joined with `path.delimiter`; the Unix fallback dirs are not added on Windows |
+| Window raise | macOS `open -b`, Linux X11 tools; Windows (#175) and Wayland are a no-op that reports why, and the plugin logs it once |
+| Test shims | `orca` and `open` are node scripts everywhere; Windows runs them through a `.cmd` launcher |
+
 ## Logs
 
 - Plugin B: `~/Library/Application Support/com.elgato.StreamDeck/Plugins/pl.1am.orca-agent-deck.sdPlugin/logs/pl.1am.orca-agent-deck.0.log` (newest). Press lines read `press slot=<id> -> <result> <ms> (local|ssh|env)`.
-- Plugin A: `~/.orca-deck/plugin-a.log`; "Agent Deck: Show status" in Orca's command palette writes a status summary there. See `docs/install.md` for the full list.
+- Plugin A: `~/.orca-deck/plugin-a.log` (Windows `%APPDATA%\orca-deck\plugin-a.log`); "Agent Deck: Show status" in Orca's command palette writes a status summary there. See `docs/install.md` for the full list.
 - Neither log ever contains terminal content, pane previews or tokens.

@@ -296,7 +296,15 @@ describe('runtime exec mapped onto CliAdapter', () => {
   const fallback: Exec = async (args) => {
     cliCalls.push(args);
     if (args[0] === 'environment') {
-      return JSON.stringify({ ok: true, result: { environments: [{ id: 'env1', name: 'box' }] } });
+      return JSON.stringify({
+        ok: true,
+        result: {
+          environments: [
+            { id: 'env1', name: 'box' },
+            { id: 'env2', name: '192.168.1.12', orcadDeployment: { sshTargetId: 'ssh-1' } },
+          ],
+        },
+      });
     }
     if (args.includes('--environment')) {
       const k = args.slice(0, 2).join(' ');
@@ -430,6 +438,16 @@ describe('runtime exec mapped onto CliAdapter', () => {
     await utimes(f, 2000, 2000);
     await a.listHosts();
     expect(cliCalls.filter((c) => c[0] === 'environment')).toHaveLength(2);
+  });
+
+  it('names a paired server after the SSH target it runs on, keeping the address', async () => {
+    await writeFile(join(dir, 'orca-environments.json'), '{}');
+    const hosts = await new CliAdapter(mk()).listHosts();
+    expect(hosts.find((h) => h.id === 'env2')).toMatchObject({
+      name: '192.168.1.12',
+      label: 'dev box',
+    });
+    expect(hosts.find((h) => h.id === 'env1')?.label).toBeUndefined();
   });
 
   it('polls a paired server through the CLI at most once per interval', async () => {

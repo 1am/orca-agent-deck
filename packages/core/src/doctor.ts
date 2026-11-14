@@ -191,7 +191,7 @@ export function runChecks(f: DoctorFacts): Check[] {
       reason:
         'Reading Orca through the orca CLI, which is slow (the runtime socket is not answering); see the plugin log for the reason',
       caption: 'slow link (CLI)',
-      hint: 'Restart Orca, or check that Orca 1.4.246+ is running as the same user',
+      hint: 'Restart Orca, or check that Orca 1.4.248+ is running as the same user',
     });
   } else if (f.liveLink === 'socket') {
     checks.push({
@@ -240,7 +240,7 @@ export function runChecks(f: DoctorFacts): Check[] {
       reason:
         'The Agent Deck for Orca plugin is not installed (or is disabled) in Orca; the deck works with slower, polled status',
       caption: 'Install the Orca plugin',
-      hint: 'Install it in Orca with the link, accept its access consent, then run "Agent Deck for Orca: Show status"',
+      hint: 'Install it in Orca with the link, accept its access consent, then run "Agent Deck: Show status"',
       fix: { action: 'open-url', label: 'Install the Orca plugin', url: ORCA_PLUGIN_INSTALL_URL },
     });
   } else if (f.orcaPlugin === 'connected' || f.orcaPlugin === 'asleep') {
@@ -411,7 +411,9 @@ export function doctorInfo(
   if (w) {
     const tone: DeckState =
       w.id === 'orca-running' ? 'offline' : w.result === 'fail' ? 'error' : 'idle';
-    return { tone, value: w.id === 'orca-running' ? 'OFF' : '!', caption: w.caption };
+    const value =
+      w.id === 'orca-running' ? 'OFF' : w.id === 'remote-hosts' ? String(ok.hostsDown) : '!';
+    return { tone, value, caption: w.caption };
   }
   if (ok.hostsDown > 0) {
     return {

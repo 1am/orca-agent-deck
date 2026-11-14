@@ -216,6 +216,7 @@ function rootManifestText(): string {
     icon?: string;
     cover?: { path: string };
     screenshots?: Array<{ path: string }>;
+    contributes?: { panels?: Array<{ entry: string }> };
   };
   const under = (path: string): string => `orca-plugin/${path}`;
   const copy = {
@@ -225,6 +226,12 @@ function rootManifestText(): string {
     ...(orca.cover && { cover: { ...orca.cover, path: under(orca.cover.path) } }),
     ...(orca.screenshots && {
       screenshots: orca.screenshots.map((s) => ({ ...s, path: under(s.path) })),
+    }),
+    ...(orca.contributes?.panels && {
+      contributes: {
+        ...orca.contributes,
+        panels: orca.contributes.panels.map((p) => ({ ...p, entry: under(p.entry) })),
+      },
     }),
   };
   return JSON.stringify(copy, null, 2) + '\n';
