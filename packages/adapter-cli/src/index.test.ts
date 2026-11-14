@@ -81,6 +81,25 @@ it('keeps the union of omissions for state, and counts only hosts no listing rea
   expect(s.downHostIds).toEqual(['runtime:peer']);
 });
 
+it('reports the hosts a read shows a worktree or terminal on as busy', async () => {
+  const exec: Exec = async (args) => {
+    const k = args.slice(0, 2).join(' ');
+    if (k === 'host list') return JSON.stringify({ ok: true, result: { hosts: [] } });
+    if (k === 'worktree ps')
+      return JSON.stringify({
+        ok: true,
+        result: {
+          worktrees: [{ worktreeId: 'w', hostId: 'ssh:box', agents: [] }],
+          hostScope: { hostIds: ['local', 'ssh:box', 'ssh:idle'], omittedHostIds: [] },
+        },
+      });
+    if (k === 'terminal list') return JSON.stringify({ ok: true, result: { terminals: [] } });
+    throw new Error(`unexpected ${k}`);
+  };
+  const s = await new CliAdapter(exec).snapshot();
+  expect(s.busyHostIds).toEqual(['ssh:box']);
+});
+
 it('health is down when orca is unreachable', async () => {
   const bad: Exec = async () => {
     throw new Error('ECONNREFUSED');
@@ -154,6 +173,8 @@ it('queries paired environments with --environment and focuses with it', async (
   expect(remote[0]?.hostId).toBe('env:E1');
   expect(s.omittedHostIds).toEqual([]);
   expect(s.downHostIds).toEqual([]);
+  // The server's own `local` rows are the server's.
+  expect(s.busyHostIds).toContain('env:E1');
   await a.focus(remote[0]!);
   expect(calls.at(-1)).toContain('E1');
 });

@@ -119,6 +119,73 @@ it('names a down host by alias, then Orca name, then its id', async () => {
   expect(d.overview().hostsDownNames).toEqual(['build box', 'silver', 'gone 1']);
 });
 
+it('counts a down host only when it showed something the last time it answered', async () => {
+  const snap: Snapshot = {
+    panes: [],
+    statuses: [],
+    omittedHostIds: [],
+    downHostIds: [],
+    // ssh:busy has a worktree but no terminal; ssh:idle is configured and answered with nothing.
+    busyHostIds: ['local', 'ssh:busy'],
+  };
+  const d = new DeckController(fake(snap).a, new MappingStore());
+  await d.refresh(['s']);
+  snap.omittedHostIds = ['ssh:busy', 'ssh:idle', 'ssh:never'];
+  snap.downHostIds = ['ssh:busy', 'ssh:idle', 'ssh:never'];
+  snap.busyHostIds = ['local'];
+  await d.refresh(['s']);
+  expect(d.overview().hostsDownNames).toEqual(['busy']);
+  // Still down on later reads: it keeps its mark.
+  await d.refresh(['s']);
+  expect(d.overview().hostsDown).toBe(1);
+
+  // Back with nothing on it, then down again: no longer counted.
+  snap.omittedHostIds = [];
+  snap.downHostIds = [];
+  await d.refresh(['s']);
+  snap.omittedHostIds = ['ssh:busy'];
+  snap.downHostIds = ['ssh:busy'];
+  await d.refresh(['s']);
+  expect(d.overview().hostsDown).toBe(0);
+});
+
+it('counts a down host a key is mapped to, even when it was never seen up', async () => {
+  const store = new MappingStore();
+  store.set('s1', {
+    mode: 'pinned',
+    pane: {
+      paneKey: 'a:1',
+      worktreeId: 'w',
+      tabId: 'a',
+      leafId: '1',
+      executionHostId: 'ssh:x',
+      lastKnown: {},
+    },
+  });
+  const snap: Snapshot = {
+    panes: [],
+    statuses: [],
+    omittedHostIds: ['ssh:x', 'ssh:y'],
+    downHostIds: ['ssh:x', 'ssh:y'],
+    busyHostIds: ['local'],
+  };
+  const d = new DeckController(fake(snap).a, store);
+  await d.refresh(['s1']);
+  expect(d.overview().hostsDownNames).toEqual(['x']);
+});
+
+it('counts every down host for an adapter that does not report busy hosts', async () => {
+  const snap: Snapshot = {
+    panes: [],
+    statuses: [],
+    omittedHostIds: ['ssh:y'],
+    downHostIds: ['ssh:y'],
+  };
+  const d = new DeckController(fake(snap).a, new MappingStore());
+  await d.refresh(['s']);
+  expect(d.overview().hostsDown).toBe(1);
+});
+
 it('press focuses the mapped pane and reports failures', async () => {
   const snap: Snapshot = {
     panes: [pane('a:1'), pane('b:1', { handle: 'bad' })],

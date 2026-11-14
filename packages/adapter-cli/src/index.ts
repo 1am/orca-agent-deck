@@ -168,10 +168,10 @@ export class CliAdapter implements OrcaAdapter {
       hosts = this.lastHosts;
       hostsKnown = false;
     }
-    const paired: { id: string; census: HostCensus | null }[] = [];
+    const paired: { id: string; census: HostCensus | null; busy: string[] }[] = [];
     for (const env of hosts.filter((h) => h.kind === 'environment')) {
       if (!hostsKnown) {
-        paired.push({ id: env.id, census: null });
+        paired.push({ id: env.id, census: null, busy: [] });
         continue;
       }
       try {
@@ -181,9 +181,10 @@ export class CliAdapter implements OrcaAdapter {
         paired.push({
           id: env.id,
           census: { omitted: r.omittedHostIds, down: r.downHostIds ?? [] },
+          busy: r.busyHostIds ?? [],
         });
       } catch {
-        paired.push({ id: env.id, census: null });
+        paired.push({ id: env.id, census: null, busy: [] });
       }
     }
     const merged = mergeHostCensus(
@@ -192,6 +193,9 @@ export class CliAdapter implements OrcaAdapter {
     );
     local.omittedHostIds = [...merged.omitted];
     local.downHostIds = [...merged.down];
+    local.busyHostIds = [
+      ...new Set([...(local.busyHostIds ?? []), ...paired.flatMap((p) => p.busy)]),
+    ];
     // Remote panes carry the host's display name; the raw host id means nothing to the user.
     const names = new Map(
       hosts.flatMap(
@@ -270,11 +274,17 @@ export class CliAdapter implements OrcaAdapter {
     ]);
     // Orca answering means its own host is up; it was seen flapping into omittedHostIds.
     omitted.delete(LOCAL_HOST);
+    // On a paired server every row is that server's: its own worktrees say `local`.
+    const busy = new Set([
+      ...panes.map((p) => p.hostId),
+      ...ps.result.worktrees.map((w) => (environment ? envHostId(environment) : w.hostId)),
+    ]);
     return {
       panes,
       statuses,
       omittedHostIds: [...omitted],
       downHostIds: unreachableHostIds(termScope, psScope),
+      busyHostIds: [...busy],
     };
   }
 

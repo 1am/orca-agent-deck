@@ -82,6 +82,11 @@ export interface Snapshot {
    * `omittedHostIds`.
    */
   downHostIds?: string[];
+  /**
+   * Hosts this read shows anything on (a worktree, a terminal, an agent): what Orca's left sidebar
+   * lists. Only these count as down once they stop answering. Unset: every down host counts.
+   */
+  busyHostIds?: string[];
 }
 
 export interface OrcaAdapter {
