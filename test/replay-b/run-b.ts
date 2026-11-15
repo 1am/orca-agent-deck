@@ -298,6 +298,15 @@ process.exit(r.status ?? 1);`,
     host.connectDevice();
     for (const l of layout) host.appear(l.key, l.action);
   };
+  /** Inspector replies to the appear-time loads and configures are still on their way on a slow host: let them land before a step's window opens. */
+  const piQuiet = async () => {
+    let seenCount = -1;
+    while (seenCount !== host.piMessages.length) {
+      seenCount = host.piMessages.length;
+      failIfBroken();
+      await wait(PI_SETTLE_MS);
+    }
+  };
   const pinAll = async () => {
     for (const l of layout) {
       if (!l.pane || !handleOf(l.pane)) continue;
@@ -332,6 +341,7 @@ process.exit(r.status ?? 1);`,
     }
     appearAll();
     await pinAll();
+    await piQuiet();
     if (a) {
       await until(
         () => existsSync(discovery),
@@ -455,6 +465,7 @@ process.exit(r.status ?? 1);`,
         await host.start();
         // Not pinned again: the mappings must have survived the restart (and the host switch) by themselves.
         appearAll();
+        await piQuiet();
         return;
       }
       case 'orca.event':
