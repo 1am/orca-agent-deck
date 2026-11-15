@@ -2,7 +2,7 @@
 
 **Running several agents at once is like...**
 
-[![Running several agents at once is like...](https://media0.giphy.com/media/v1.Y2lkPTc5MGI3NjExNDZ5ODZkdjF0YWRtcjJzNmxjb2Vsd2pucnFrMzJzZDE5Ym92YXN4NSZlcD12MV9pbnRlcm5hbF9naWZfYnlfaWQmY3Q9Zw/bsoUDDuaSi2rV9T2F7/giphy.gif)
+[![Running several agents at once is like...](https://media.giphy.com/media/bsoUDDuaSi2rV9T2F7/giphy.gif)](https://giphy.com/gifs/BrabantinBeelden-connecting-plug-in-plugging-bsoUDDuaSi2rV9T2F7)
 
 Agent Deck for Orca shows the state of your agents and terminals running in [Orca](https://www.onorca.dev) on a Stream Deck, and focuses a pane when you press its key. Easy to see where and when your attention is needed.
 
