@@ -30,7 +30,7 @@ Versions and platforms that have been tested: [compatibility](compatibility.md).
 ## You need
 
 - Orca 1.4.248 or newer, with the `orca` shell command registered (Orca: Settings, register CLI).
-- The Elgato Stream Deck app 7.1 or newer (macOS, Windows) or [OpenDeck](https://github.com/nekename/opendeck) (Linux), and a Stream Deck.
+- The Elgato Stream Deck app 7.1 or newer (macOS, Windows) or [OpenDeck](https://github.com/nekename/opendeck) (Linux), and a Stream Deck. Other apps that run Stream Deck plugins may work; Fifine Control Deck is partly tested, see [compatibility.md](compatibility.md#fifine-control-deck-observed).
 - Linux only, to raise the Orca window on press: `xdotool` or `wmctrl` (`sudo apt install xdotool`), under an X11 session. Not available on Wayland.
 - macOS 13 or newer, Windows 10 or newer, or Linux (tested on Ubuntu 22.04). Pane raising on press works on macOS, and on Linux under X11 with `xdotool` or `wmctrl` installed.
 - Orca notifications can stay off. Agent Deck for Orca does not use them.

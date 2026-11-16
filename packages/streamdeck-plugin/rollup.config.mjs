@@ -22,11 +22,26 @@ const transpile = {
   },
 };
 
+// bin/plugin.js is an ES module. Node before 20.19 / 22.7 does not detect that from the syntax and needs a
+// package.json that says so next to it; Fifine Control Deck runs plugins on Node 20.8.1 (docs/compatibility.md).
+// In the repository the package's own package.json says it, but an installed plugin has nothing above it.
+const moduleType = {
+  name: 'module-type',
+  generateBundle() {
+    this.emitFile({
+      type: 'asset',
+      fileName: 'package.json',
+      source: JSON.stringify({ type: 'module' }) + '\n',
+    });
+  },
+};
+
 export default {
   context: 'globalThis',
   input: 'src/plugin.ts',
   output: { file: 'pl.1am.orca-agent-deck.sdPlugin/bin/plugin.js', format: 'es', sourcemap: true },
   plugins: [
+    moduleType,
     transpile,
     commonjs(),
     nodeResolve({

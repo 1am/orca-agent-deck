@@ -6,15 +6,16 @@ import {
   portsFromEnv,
 } from '@orca-agent-deck/adapter-bridge';
 import { makeExec } from '@orca-agent-deck/adapter-cli';
+import { isDeckConnected } from './devices.ts';
 
 /** `asleep` = A connected earlier and Orca idled its worker (normal). `missing` = never connected. */
 export type OrcaPluginState = 'connected' | 'asleep' | 'missing' | 'outdated';
 
 // Created up front so the adapter can read the feed before (or without) the server starting.
 const deckInfo = () => ({
-  connected: streamDeck.devices.some((d) => d.isConnected),
+  connected: streamDeck.devices.some(isDeckConnected),
   devices: [...streamDeck.devices]
-    .filter((d) => d.isConnected)
+    .filter(isDeckConnected)
     .map((d) => ({ model: String(d.type), keys: d.size.columns * d.size.rows })),
 });
 // `ORCA_DECK_BRIDGE_PORTS` replaces the default port range (see `portsFromEnv`); the replay suite uses it so test

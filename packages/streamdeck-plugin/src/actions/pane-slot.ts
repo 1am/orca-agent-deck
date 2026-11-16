@@ -20,6 +20,7 @@ import {
   type SlotView,
 } from '@orca-agent-deck/core';
 import { isCurrentPi, replyToPi } from './pi.ts';
+import { isDeckConnected } from '../devices.ts';
 
 const image = (svg: string) => `data:image/svg+xml;charset=utf8,${encodeURIComponent(svg)}`;
 
@@ -281,7 +282,7 @@ export class PaneSlot extends SingletonAction {
   /** The first connected device that has our keys on it: the one the Orca panel draws. */
   private shownDevice(): string | null {
     for (const d of streamDeck.devices)
-      if (d.isConnected && this.actions.some((a) => a.device.id === d.id)) return d.id;
+      if (isDeckConnected(d) && this.actions.some((a) => a.device.id === d.id)) return d.id;
     return null;
   }
 

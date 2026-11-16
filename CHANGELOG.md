@@ -2,6 +2,14 @@
 
 All notable changes to this project are documented here. Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), versioning: [SemVer](https://semver.org/).
 
+## [Unreleased]
+
+### Fixed
+
+- In OpenDeck, the Orca panel could say "The Stream Deck is not connected." while the deck worked, and keys could not be mapped from Orca. This happened when the plugin started after OpenDeck had already connected the deck, for example after installing, updating or reloading the plugin. The Elgato app is not affected.
+- Fifine Control Deck: the plugin did not start at all (no log), because the app runs plugins on Node 20.8.1, which needs to be told that the plugin is an ES module. The plugin now ships `bin/package.json` for that.
+- Fifine Control Deck: the Orca panel said "The Stream Deck is not connected." because the app never reports its decks as connected. In hosts other than the Elgato app and OpenDeck, a deck that shows Agent Deck keys now counts as connected.
+
 ## [0.3.0] - 2026-11-14
 
 Map keys from inside Orca, see at a glance which agent is on each key, and switch between the Elgato app and OpenDeck without losing your setup.

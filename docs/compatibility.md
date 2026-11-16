@@ -19,6 +19,7 @@
 | Stream Deck Neo hardware | Tested on Windows 11 with the Elgato Stream Deck app 7.4.2 |
 | Other Stream Deck hardware | Untested |
 | OpenDeck | Tested on Ubuntu 22.04 with Stream Deck MK.2; the plugin behaves the same as in the Elgato app. Each release is meant to pass the dual-host smoke checklist in both hosts; results go in the table below. |
+| Fifine Control Deck (HotSpot StreamDock) | Partly tested on Windows 10 with a Fifine D6: the plugin needs a release after 0.3.0 to start, see [Fifine Control Deck](#fifine-control-deck-observed) |
 | Other hosts | Untested |
 | Elgato Stream Deck app 7.1 or newer | Required |
 
@@ -85,6 +86,7 @@ Read from nekename/OpenDeck tag `v2.14.2` (commit `3ddecc1`, latest stable on 20
 | Settings | `setSettings`, `getSettings`, `setGlobalSettings`, `getGlobalSettings` supported; global settings only for the plugin's own UUID | `events/inbound/mod.rs:106-113` |
 | `keyDown` / `keyUp` timing | Forwarded as they arrive from the device, no debounce, so hold gestures work. The first press after a device sleep is swallowed (device sleep feature) | `events/outbound/keypad.rs:24-110`; `events/inbound/devices.rs:105-117` |
 | Devices | `deviceDidConnect` / `deviceDidDisconnect` and `systemDidWakeUp` are sent; there is no `deviceDidChange`. OpenDeck device ids are `sd-<serial>` | `events/outbound/devices.rs:21,36`; `events/outbound/misc.rs:11`; `elgato.rs:272` |
+| `deviceDidConnect` timing | Sent once, when a deck registers, to every folder in `plugins/` (queued for a plugin that has not registered yet). A plugin started later (installed, updated or reloaded while OpenDeck runs) gets the deck only in the registration info, which lists only registered decks. The SDK marks those "not connected" until a `deviceDidConnect`, so in OpenDeck B counts a registration deck as connected until `deviceDidDisconnect` (`src/devices.ts`) | `events/inbound/devices.rs:22-23,88-89`; `events/outbound/mod.rs:57-88`; `plugins/info_param.rs:103` |
 | `willAppear` payload | `coordinates` is computed from the key position and the device column count | `events/outbound/mod.rs:31-55` |
 | Bundled `Profiles`, `switchToProfile` | Not available: the manifest has no `Profiles` field, and `switchProfile` from a plugin is dropped unless its UUID is one of two hard-coded ones | `plugins/manifest.rs:17-69`; `events/inbound/mod.rs:114-119` |
 | PI lifecycle | One hidden iframe per action instance, all mounted at profile load. They load and send `sendToPlugin` at once; `propertyInspectorDidAppear` / `Disappear` go out only when the user selects another key. Nothing stops a hidden PI's message from reaching the plugin, and the SDK's `ui.sendToPropertyInspector` targets only the current PI (nekename/OpenDeck#449, closed as not planned). Handled in #169 | `src/components/PropertyInspectorView.svelte:199-205`; `src/lib/propertyInspector.ts:10-16`; `events/outbound/property_inspector.rs:56-70` |
@@ -95,6 +97,18 @@ Read from nekename/OpenDeck tag `v2.14.2` (commit `3ddecc1`, latest stable on 20
 **Manifest decision.** The manifest lists `{"Platform": "windows", "MinimumVersion": "10"}` in `OS`. Do not add a `linux` entry: it is not in the Stream Deck manifest schema (`streamdeck validate` would fail, see ChrisRegado/streamdeck-googlemeet#62), and OpenDeck on Linux already starts a `.js` plugin when `windows` is listed. If a device run shows that is not enough, ship `manifest.linux.json` with `{"OS":[{"Platform":"linux"}]}` instead; `validate` never reads it. Keep `SDKVersion` 2, `Nodejs` 20 and `Software.MinimumVersion` 7.1: OpenDeck ignores them.
 
 **Host marker.** There is nothing better than the registration values: no env var, argv flag or info field names OpenDeck. The strongest signals, all from `plugins/info_param.rs`: `application.version === "7.1.0"` (hard-coded, 3 parts), `devicePixelRatio === 0` (the Elgato app sends the real ratio), and `platform === "windows"` while `process.platform !== "win32"` (Node plugins are told `windows` on every OS, so the current "platform other than mac/windows means OpenDeck" rule never fires). `platformVersion === "10.0.19045.4474"` is a fourth. The Elgato side (4-part build version, real pixel ratio) is device only.
+
+## Fifine Control Deck (observed)
+
+The official Fifine Control Deck app for Windows runs Elgato SDK plugins (it is built on the HotSpot StreamDock engine). Nothing here was read from its source; it is what one user's machine showed (Windows 10, Fifine D6, 2026-11-16), from the plugin log and the registration info.
+
+| Question | Observed |
+|---|---|
+| Which node | Its own bundled Node 20.8.1 (`C:\Program Files (x86)\fifine Control Deck\node\node20.exe`). Node before 20.19 does not detect an ES module from its syntax, so `bin/plugin.js` failed with `SyntaxError: Cannot use import statement outside a module` and wrote no log until `bin/package.json` (`{"type":"module"}`) was added. The build writes that file after 0.3.0. The Elgato app (Node 20.20) and OpenDeck (system Node) were not affected |
+| How B sees the host | `host: unknown (none), app 7.1`: `application.version` is the manifest's `Software.MinimumVersion` echoed back, not the app's version, so the 7.1 floor says nothing here. Unknown hosts get the portable SDK subset (`src/host.ts`) |
+| Devices | The registration info lists the real decks (here D6, D6-Pro and a 5x3 D6), all with `isConnected: false`, and no `deviceDidConnect` follows for them. A `deviceDidConnect` does arrive for a 1x1 device named after the plugin's registration UUID, which has no keys. In hosts other than the Elgato app and OpenDeck, B counts a deck as connected when the SDK says so or when the host shows keys of ours on it (`willAppear`), so the Orca panel draws the deck with the keys. The 1x1 device counts as connected too, but the panel only picks a deck with our keys |
+| Unplug and replug | Not observed. B drops a deck when the host sends `willDisappear` for its keys or `deviceDidDisconnect` for it, and takes it back on `willAppear` or `deviceDidConnect` (`src/devices.ts`). A host that sends none of these keeps the deck counted as connected until the plugin restarts |
+| Keys, presses, property inspector, settings | The plugin starts and the bridge to Orca connects (plugin log). That the Orca panel then shows the deck, and the rest of the dual-host smoke checklist, is not confirmed on the device yet |
 
 ## Marketplace DRM (SDKVersion 3)
 

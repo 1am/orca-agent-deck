@@ -11,6 +11,7 @@ import {
 import { makeRaiser } from '@orca-agent-deck/window-raiser';
 import { currentHost } from './host.ts';
 import { watchHost } from './host-watch.ts';
+import { watchDevices } from './devices.ts';
 import { FileSlotStorage, defaultMappingsPath } from './mapping-file.ts';
 import { PaneSlot } from './actions/pane-slot.ts';
 import { StatusKey } from './actions/status.ts';
@@ -236,6 +237,7 @@ paneSlot.setInfoKeys([
 ]);
 streamDeck.actions.registerAction(statusKey);
 streamDeck.actions.registerAction(attentionKey);
+watchDevices();
 await streamDeck.connect();
 const host = currentHost();
 streamDeck.logger.info(

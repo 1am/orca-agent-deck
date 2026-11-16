@@ -11,6 +11,8 @@ import { detectHost, type DeckHostInfo } from '@orca-agent-deck/core';
 /** Portable subset: members of the `streamDeck` object used by B. `true` = fine in both hosts. */
 export const SDK_CALLS = {
   'actions.registerAction': true,
+  // A listener for willAppear, which every host sends (the actions' own onWillAppear relies on it too).
+  'actions.onWillAppear': true,
   connect: true,
   'logger.info': true,
   'logger.warn': true,
@@ -20,6 +22,8 @@ export const SDK_CALLS = {
   'ui.action': true,
   'ui.sendToPropertyInspector': true,
   devices: true,
+  // Both hosts send deviceDidDisconnect (OpenDeck: events/outbound/devices.rs:34-39).
+  'devices.onDeviceDidDisconnect': true,
   info: true,
 } as const satisfies Record<string, boolean>;
 
