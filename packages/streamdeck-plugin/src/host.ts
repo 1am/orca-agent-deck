@@ -20,6 +20,8 @@ export const SDK_CALLS = {
   'ui.action': true,
   'ui.sendToPropertyInspector': true,
   devices: true,
+  // Both hosts send deviceDidDisconnect (OpenDeck: events/outbound/devices.rs:34-39).
+  'devices.onDeviceDidDisconnect': true,
   info: true,
 } as const satisfies Record<string, boolean>;
 

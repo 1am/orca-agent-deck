@@ -2,6 +2,12 @@
 
 All notable changes to this project are documented here. Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), versioning: [SemVer](https://semver.org/).
 
+## [Unreleased]
+
+### Fixed
+
+- In OpenDeck, the Orca panel could say "The Stream Deck is not connected." while the deck worked, and keys could not be mapped from Orca. This happened when the plugin started after OpenDeck had already connected the deck, for example after installing, updating or reloading the plugin. The Elgato app is not affected.
+
 ## [0.3.0] - 2026-11-14
 
 Map keys from inside Orca, see at a glance which agent is on each key, and switch between the Elgato app and OpenDeck without losing your setup.
