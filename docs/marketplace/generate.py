@@ -50,6 +50,19 @@ def thumbnail(icon):
     img.save(OUT / "thumbnail-1920x960.png")
 
 
+def gallery_desk():
+    img = canvas()
+    d = ImageDraw.Draw(img)
+    photo = Image.open(SRC / "desk.jpg").convert("RGB")
+    photo = photo.resize((round(photo.width * 960 / photo.height), 960), Image.LANCZOS)
+    img.paste(photo, (0, 0))
+    x = photo.width + 90
+    d.text((x, 330), "Your agents,", font=font(BOLD, 80), fill=FG)
+    d.text((x, 430), "one glance away", font=font(BOLD, 80), fill=FG)
+    d.text((x + 4, 570), "Press a key to jump to its pane.", font=font(REGULAR, 40), fill=MUTED)
+    img.save(OUT / "gallery-1-desk-1920x960.png")
+
+
 def gallery_hero():
     img = canvas()
     d = ImageDraw.Draw(img)
@@ -57,7 +70,7 @@ def gallery_hero():
     centered(d, 250, "Working, done, waiting or failed, live on your Stream Deck", font(REGULAR, 46), MUTED)
     row = keys_row(1700)
     img.paste(row, ((1920 - row.width) // 2, 440))
-    img.save(OUT / "gallery-1-overview-1920x960.png")
+    img.save(OUT / "gallery-2-overview-1920x960.png")
 
 
 def gallery_deck():
@@ -66,7 +79,7 @@ def gallery_deck():
     h = 960
     deck = deck.resize((round(deck.width * h / deck.height), h), Image.LANCZOS)
     img.paste(deck, ((1920 - deck.width) // 2, 0))
-    img.save(OUT / "gallery-2-deck-1920x960.png")
+    img.save(OUT / "gallery-3-deck-1920x960.png")
 
 
 def gallery_features():
@@ -85,11 +98,12 @@ def gallery_features():
             d.text((cx - w / 2, y), text, font=f, fill=fill)
     row = keys_row(1500)
     img.paste(row, ((1920 - 1500) // 2, 320))
-    img.save(OUT / "gallery-3-actions-1920x960.png")
+    img.save(OUT / "gallery-4-actions-1920x960.png")
 
 
 if __name__ == "__main__":
     thumbnail(app_icon())
+    gallery_desk()
     gallery_hero()
     gallery_deck()
     gallery_features()

@@ -15,6 +15,11 @@
       "path": "images/deck.png",
       "alt": "A 5x3 Stream Deck grid of Orca pane keys with status icons",
       "caption": "Know which agent is working, done or waiting for you, without switching windows"
+    },
+    {
+      "path": "images/desk.jpg",
+      "alt": "A Stream Deck in front of a laptop, its keys lit with agent status colors and one key counting 1 agent that needs you",
+      "caption": "Your agents, one glance away"
     }
   ],
   "engines": {
