@@ -326,6 +326,82 @@
       "categories": [],
       "releases": [
         {
+          "version": "0.3.1",
+          "commit": "69c506ecf7e196dd52c017419b5eec013a75ce55",
+          "contentHash": "a78b971e9601ea18136c665c89fe3016268cf670aef2343f1aef9422d1dee88d",
+          "execution": "trusted-worker",
+          "minimumOrca": "1.4.248",
+          "name": "Agent Deck for Orca",
+          "contributes": [
+            {
+              "kind": "panels",
+              "name": "Agent Deck"
+            },
+            {
+              "kind": "commands",
+              "name": "Agent Deck: Open panel"
+            },
+            {
+              "kind": "commands",
+              "name": "Agent Deck: Show status"
+            },
+            {
+              "kind": "commands",
+              "name": "Agent Deck: Record events"
+            },
+            {
+              "kind": "commands",
+              "name": "Agent Deck: Uninstall"
+            },
+            {
+              "kind": "events",
+              "name": "agent.status.changed"
+            },
+            {
+              "kind": "keybindings",
+              "name": "Mod+Alt+K",
+              "detail": "deck.map"
+            },
+            {
+              "kind": "statusBarItems",
+              "name": "Agent Deck"
+            }
+          ],
+          "capabilities": ["agent:read", "workspace:write"],
+          "images": {
+            "icon": {
+              "path": "orca-plugin/images/icon.png",
+              "alt": "Agent Deck for Orca",
+              "sha256": "e9db045d1cf330937b3774c86cc6af156744f7580dfe05305e8f261f77c4e416",
+              "width": 512,
+              "height": 512
+            },
+            "cover": {
+              "path": "orca-plugin/images/cover.png",
+              "alt": "A Stream Deck showing Orca agent panes as colored keys: working, done, idle and empty",
+              "sha256": "b07fbe48c19bafb54ee1a71075d662e54158f015e5c17501610c96a3f630e0cd",
+              "width": 1600,
+              "height": 1000
+            },
+            "screenshots": [
+              {
+                "path": "orca-plugin/images/deck.png",
+                "alt": "A 5x3 Stream Deck grid of Orca pane keys with status icons",
+                "sha256": "1e88ece0ccdbc3afe5f9fb72db863ec73165c5b178fdcd86ebf28e801c4ed6e5",
+                "width": 1920,
+                "height": 1200
+              },
+              {
+                "path": "orca-plugin/images/desk.jpg",
+                "alt": "A Stream Deck in front of a laptop, its keys lit with agent status colors and one key counting 1 agent that needs you",
+                "sha256": "fee60629c40d439f2fb315ac3201c50a5b3ae3f19f4c8de4eabb9ad1dffb7494",
+                "width": 1920,
+                "height": 1656
+              }
+            ]
+          }
+        },
+        {
           "version": "0.3.0",
           "commit": "6f5d2d9b41c92865f11da52e1ba8f048b97bf0bb",
           "contentHash": "59e646f2304b931f2a22330b391cfc006479ae14e97f0a7347e5aff04398dbe8",
