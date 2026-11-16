@@ -2,6 +2,20 @@
 
 All notable changes to this project are documented here. Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), versioning: [SemVer](https://semver.org/).
 
+## [0.3.1] - 2026-11-16
+
+### Changed
+
+- **Orca catalog listing.** A clearer plugin description, a reworded caption and a new desk photo in the gallery.
+- **Marketplace materials.** Rewritten listing copy, an OpenDeck description, release notes and a renumbered gallery with the desk image first.
+- **Shorter README** with a new demo video.
+- **More stable replay tests.** The plugin B replay suite waits for inspector replies to settle before each step.
+- **Version 0.3.1** across the Stream Deck plugin, the Orca plugin and their manifests.
+
+### Fixed
+
+- **manifest:** switch to SDKVersion 3 for Marketplace DRM
+
 ## [0.3.0] - 2026-11-14
 
 Map keys from inside Orca, see at a glance which agent is on each key, and switch between the Elgato app and OpenDeck without losing your setup.

@@ -11,7 +11,7 @@ import { dirname, join, posix, win32 } from 'node:path';
 export const PROTOCOL_VERSION = 1;
 /** Additive features of this major: 1 = the deck grid for the sidebar panel, 2 = B opens that panel for us, 3 = a deck press selects the key in that panel (see docs/bridge-protocol.md). */
 export const PROTOCOL_MINOR = 5;
-export const PLUGIN_VERSION = '0.3.0';
+export const PLUGIN_VERSION = '0.3.1';
 const GUID = '258EAFA5-E914-47DA-95CA-C5AB0DC85B11';
 
 const here = () => ({ platform: process.platform, env: process.env, homedir: homedir() });
