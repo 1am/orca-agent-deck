@@ -203,66 +203,8 @@ sequenceDiagram
   Note over A,B: ~10 min without events: Orca stops the worker, B keeps the last state ("asleep", not an error)
   B--xA: Elgato app restarts B: new port/token
   A->>D: re-read after a failed connect, backoff 1 s to 30 s
-  Note over A,D: connected: A re-reads bridge.json every 5 s; another pid/port/token (a newer B) drops the socket and A connects to it
+  Note over A,D: connected: A re-reads bridge.json every 5 s - another pid/port/token (a newer B) drops the socket and A connects to it
   Note over B: the host quits: B sees its parent pid change or vanish (checked every 2 s), closes the bridge, removes bridge.json only if it still names itself, exits
 ```
 
 Both Stream Deck apps swap freely: the SDK reports no closed host socket, so B polls its parent pid (`watchHost`, `packages/streamdeck-plugin/src/host-watch.ts`) and exits when the host is gone, instead of staying as an orphan on its bridge port. A newer B just overwrites `bridge.json`; the older one, once it exits, leaves that file alone (`BridgeServer.stop` checks pid and token).
-
-## Slot mapping lifecycle
-
-Auto-fill is off in the Stream Deck plugin for now (`DeckController` option `autofill: false` in `packages/streamdeck-plugin/src/plugin.ts`): slots hold pinned panes only, an auto slot stays empty, and a pane an earlier version auto-filled is taken off. The diagram shows the full lifecycle with auto-fill on.
-
-A slot is one Pane key (Stream Deck action context). Mappings live in the plugin's global settings, keyed by `paneKey` (`<tabId>:<leafId>`, stable across Orca restarts). Terminal handles are looked up fresh on every refresh and never stored.
-
-```mermaid
-stateDiagram-v2
-  [*] --> AutoEmpty
-  AutoEmpty --> AutoFilled: auto-fill takes a free agent pane (sorted by paneKey)
-  AutoFilled --> AutoEmpty: pane gone for 60 s (grace)
-  AutoFilled --> Pinned: picker pick or hold on the focused pane
-  AutoEmpty --> Pinned: picker pick or hold on the focused pane
-  Pinned --> PinnedEmpty: hold on its own pane, or picker "clear" (the pane is kept off auto-fill)
-  AutoFilled --> PinnedEmpty: hold on its own pane
-  PinnedEmpty --> Pinned: picker pick or hold
-  Pinned --> AutoEmpty: picker "auto"
-  PinnedEmpty --> AutoEmpty: picker "auto"
-  Pinned --> PinnedEmpty: pane gone for 24 h (retention)
-  note right of Pinned
-    Host down (SSH, paired server): the pane is kept
-    and the key shows "unreachable". A failing host list
-    reuses the last good one, so paired-server panes count as down, not gone.
-  end note
-```
-
-## Latency budget (field log 2026-11-06)
-
-| Step | Measured | Notes |
-|---|---|---|
-| Window raise (`open -b`, macOS) | 35-100 ms | No permission needed |
-| Focus, local pane (socket) | 40-100 ms incl. raise | |
-| Focus, paired-server pane | ~20 ms via `terminal.reveal` (probe); 1.3-3.4 s on the CLI fallback | The CLI fallback is a spawn plus a new connection to the remote runtime |
-| Refresh, steady state | well under 1 s (not logged) | Slow refreshes (>1 s) are logged with a per-phase split |
-| First refresh after start | 2-5.7 s | Cold paired-server CLI calls; later ones are served from the cache |
-| First read after wake | ~1.8 s | Socket health call while Orca wakes |
-| Paired-server status age | up to ~7 s | 5 s cache plus the 2 s poll, unless plugin A pushes it |
-
-## Platform decisions (macOS, Windows, Linux)
-
-One helper per concern, all pure and tested with `path.win32`/`path.posix` (`packages/core/src/paths.ts`); `main.mjs` mirrors the two it needs and a test keeps the mirror equal.
-
-| Concern | Decision |
-|---|---|
-| Own files (`bridge.json`, `mappings.json`, plugin A's log) | `deckDataDir`: `%APPDATA%\orca-deck` on Windows, `~/.orca-deck` elsewhere; the same for plugin B, plugin A and the diagnostics script |
-| File trust | `isPrivateStat`: owner and mode 0600 checked on POSIX, not on Windows (modes mean nothing; the profile folder is the user's). One implementation for the bridge file, the mappings file and Orca's runtime file |
-| Orca runtime socket | Taken from the transports Orca writes into `orca-runtime.json`: `unix` on macOS and Linux, `named-pipe` (`\\.\pipe\orca-<id>-<kind>`) on Windows (Orca's `runtime-rpc-socket-metadata`). The folder of that file on Windows (`%APPDATA%\orca`) is device only |
-| Orca CLI | Launcher name per platform: `orca.cmd`, `orca-ide` (Linux desktops), `orca` (`orcaCliName`). Node refuses to run a `.cmd` without a shell, so `spawnPlan` runs it through `cmd.exe` with an allowlist for the program path and every argument (no quotes or `& | < > ^ % !`), and throws otherwise; everything else is spawned directly. The CLI is only the degraded fallback and the plugin probe. Device only: where Windows installs `orca.cmd` (`ORCA_BIN` or the PATH entry from Orca's "register CLI") |
-| PATH | Joined with `path.delimiter`; the Unix fallback dirs are not added on Windows |
-| Window raise | macOS `open -b`, Linux X11 tools; Windows (#175) and Wayland are a no-op that reports why, and the plugin logs it once |
-| Test shims | `orca` and `open` are node scripts everywhere; Windows runs them through a `.cmd` launcher |
-
-## Logs
-
-- Plugin B: `~/Library/Application Support/com.elgato.StreamDeck/Plugins/pl.1am.orca-agent-deck.sdPlugin/logs/pl.1am.orca-agent-deck.0.log` (newest). Press lines read `press slot=<id> -> <result> <ms> (local|ssh|env)`.
-- Plugin A: `~/.orca-deck/plugin-a.log` (Windows `%APPDATA%\orca-deck\plugin-a.log`); "Agent Deck: Show status" in Orca's command palette writes a status summary there. See `docs/install.md` for the full list.
-- Neither log ever contains terminal content, pane previews or tokens.
