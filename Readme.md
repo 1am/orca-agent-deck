@@ -8,6 +8,8 @@ Agent Deck for Orca shows the state of your agents and terminals running in [Orc
 
 https://github.com/user-attachments/assets/e582b431-699e-401b-8338-61762e6e8f5a
 
+**[Open in Orca's plugin directory](https://orca.dev/plugins/1am/orca-agent-deck)**
+
 ## What you get
 
 - **Pane keys** show each pane's state (working, needs input, awaiting reply, done, error, offline). Press one to focus that pane in Orca.
@@ -15,9 +17,6 @@ https://github.com/user-attachments/assets/e582b431-699e-401b-8338-61762e6e8f5a
 - **Status key** shows setup checks.
 - **Agent Deck panel** in Orca's right sidebar is where you map panes to keys. Open it by holding a key, clicking "Agent Deck" in Orca's status bar, or pressing Cmd+Alt+K (Ctrl+Alt+K on Windows and Linux).
 - Works locally and over SSH, and with tmux (see [Working with tmux](docs/working-with-tmux.md)).
-
-> [!WARNING]
-> Experimental, built for personal use, and at a very early stage. Expect breaking changes and rough edges. Use it at your own risk. What has been tested is listed in [Compatibility](docs/compatibility.md).
 
 ## Requirements
 
@@ -32,6 +31,9 @@ It has two parts and needs both: a **Stream Deck plugin** and an **Orca plugin**
 2. Install the Orca plugin: paste `https://github.com/1am/orca-agent-deck` into Orca's Settings, Plugins, Install from Git.
 
 Offline install, building from source and first steps: [Install and quick start](docs/install.md).
+
+> [!NOTE]
+> Early release, built for personal use: expect breaking changes and rough edges. Tested setups are listed in [Compatibility](docs/compatibility.md).
 
 ## Docs
 

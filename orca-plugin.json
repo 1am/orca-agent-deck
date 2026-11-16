@@ -4,7 +4,7 @@
   "id": "agent-deck",
   "name": "Agent Deck for Orca",
   "version": "0.3.0",
-  "description": "Shows Orca agent status on a Stream Deck and focuses panes from it.",
+  "description": "See at a glance which Orca agent needs you. Each pane gets a Stream Deck key that shows its state and focuses the pane when pressed.",
   "icon": "orca-plugin/images/icon.png",
   "cover": {
     "path": "orca-plugin/images/cover.png",
@@ -14,7 +14,7 @@
     {
       "path": "orca-plugin/images/deck.png",
       "alt": "A 5x3 Stream Deck grid of Orca pane keys with status icons",
-      "caption": "Pane keys mirror Orca agent status"
+      "caption": "Know which agent is working, done or waiting for you, without switching windows"
     }
   ],
   "engines": {

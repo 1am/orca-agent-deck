@@ -1,9 +1,9 @@
-Agent Deck for Orca shows the state of the agents and terminals running in Orca on your Stream Deck, and focuses a pane when you press its key. You see at a glance which agent is working, which one has finished and which one needs your attention, without switching windows.
+Running several coding agents at once? Agent Deck for Orca puts every agent and terminal pane from Orca on a Stream Deck key, so you see at a glance which one is working, which one has finished and which one is waiting for you. Press a key to jump straight to that pane, without hunting through windows.
 
 Features:
 - Pane keys show each pane's state: working, needs input, awaiting reply, done, error or offline
 - Press a key to focus that pane in Orca, hold it to assign the current pane (local only)
-- An attention key counts the panes that need you
+- An attention key counts the panes that need you and takes you to the most urgent one
 - A status key shows setup checks
 - Works with local panes and panes on SSH hosts, including tmux (one agent per tmux session)
 

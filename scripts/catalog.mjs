@@ -30,7 +30,8 @@ export function withRelease(catalog, { pluginKey, entry, sourcePath }) {
     plugin = {
       id: pluginKey,
       source,
-      description: 'Shows Orca agent status on a Stream Deck and focuses panes from it.',
+      description:
+        'See at a glance which Orca agent needs you. Each pane gets a Stream Deck key that shows its state and focuses the pane when pressed.',
       categories: [],
       releases: [],
     };
