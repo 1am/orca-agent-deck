@@ -11,6 +11,8 @@ import { detectHost, type DeckHostInfo } from '@orca-agent-deck/core';
 /** Portable subset: members of the `streamDeck` object used by B. `true` = fine in both hosts. */
 export const SDK_CALLS = {
   'actions.registerAction': true,
+  // A listener for willAppear, which every host sends (the actions' own onWillAppear relies on it too).
+  'actions.onWillAppear': true,
   connect: true,
   'logger.info': true,
   'logger.warn': true,
