@@ -7,23 +7,21 @@
  * OpenDeck lists only the decks it has registered (`plugins/info_param.rs:103`; a deck leaves the list on deregister,
  * `events/inbound/devices.rs:89`) and sends `deviceDidConnect` once, when the deck registers
  * (`events/inbound/devices.rs:22`). A plugin started after that (installed, updated or reloaded while OpenDeck runs)
- * never gets it, and the SDK keeps its decks "not connected". So in OpenDeck a deck B knows counts as connected
- * until OpenDeck says it went away. OpenDeck sends no `deviceDidChange`, the only other way a deck enters the list.
+ * never gets it, and the SDK keeps its decks "not connected". Fifine Control Deck (`unknown`, docs/compatibility.md)
+ * registers its decks with `isConnected: false`, never sends `deviceDidConnect` for them, and connects a 1x1 virtual
+ * device that has none of our keys.
  *
- * Any other host (`unknown`; seen: Fifine Control Deck, docs/compatibility.md) is not read from source, so B goes by
- * what the host shows rather than by what its list holds. Fifine was seen to register its decks with
- * `isConnected: false` and never send `deviceDidConnect` for them, while it does send `willAppear` for the keys on
- * them (it also connects a 1x1 virtual device that has none of our keys). A deck the host shows our keys on is in
- * use, so there such a deck counts as connected. Unplug was not observed on Fifine; this stays right if the host
- * sends either `willDisappear` for the keys (the SDK drops them from `device.actions`) or `deviceDidDisconnect`
- * (the deck is "gone"). A `willAppear` on a gone deck (keys shown again on replug) or `deviceDidConnect` (the SDK
- * flag) brings it back. A host that sends neither on unplug keeps the deck counted as connected until B restarts.
+ * So outside the Elgato app B goes by what the host shows, not by the SDK flag: a deck counts as connected while the
+ * host shows keys of ours on it and has not reported it gone. Unplug ends it through either `willDisappear` for the
+ * keys (the SDK drops them from `device.actions`) or `deviceDidDisconnect` (the deck is "gone"); `willAppear` or
+ * `deviceDidConnect` brings it back. A host that sends neither on unplug keeps the deck counted as connected until
+ * B restarts.
  */
 
 import streamDeck from '@elgato/streamdeck';
 import { currentHost } from './host.ts';
 
-/** Decks the host reported gone (`deviceDidDisconnect`) and showed no key on since. */
+/** Decks the host reported gone (`deviceDidDisconnect`) and has not shown or connected since. */
 const gone = new Set<string>();
 let watching = false;
 
@@ -33,6 +31,9 @@ export function watchDevices(): void {
   watching = true;
   streamDeck.devices.onDeviceDidDisconnect((ev) => {
     if (ev.device) gone.add(ev.device.id);
+  });
+  streamDeck.devices.onDeviceDidConnect((ev) => {
+    if (ev.device) gone.delete(ev.device.id);
   });
   streamDeck.actions.onWillAppear((ev) => {
     gone.delete(ev.action.device.id);
@@ -50,8 +51,6 @@ const showsActions = (d: DeckLike): boolean => !d.actions[Symbol.iterator]().nex
 
 /** Whether a deck of `streamDeck.devices` counts as connected (see the top of this file). */
 export function isDeckConnected(d: DeckLike): boolean {
-  if (d.isConnected) return true;
-  const { host } = currentHost();
-  if (host === 'elgato' || gone.has(d.id)) return false;
-  return host === 'opendeck' || showsActions(d);
+  if (currentHost().host === 'elgato') return d.isConnected;
+  return !gone.has(d.id) && showsActions(d);
 }
