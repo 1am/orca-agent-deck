@@ -9,7 +9,7 @@
   "CategoryIcon": "imgs/category",
   "Icon": "imgs/plugin",
   "CodePath": "bin/plugin.js",
-  "SDKVersion": 2,
+  "SDKVersion": 3,
   "Nodejs": {
     "Version": "20",
     "Debug": "enabled"
