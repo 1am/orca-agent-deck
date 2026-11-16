@@ -94,6 +94,20 @@ Find the symptom, check the cause, apply the fix. Status key captions come from 
 - **Cause.** Paired Orca servers are reachable only through the `orca --environment` CLI. Status can lag by about 7 s, and Orca publishes no focus for them.
 - **Fix.** Assign them from the picker, not by holding a key. Background and numbers: [known-issues.md](known-issues.md).
 
+## Other Stream Deck apps
+
+### The plugin never starts and writes no log (Fifine Control Deck)
+
+- **Cause.** The app runs plugins on its own Node 20.8.1, which loads `bin/plugin.js` as CommonJS unless `bin/package.json` says `"type": "module"`. 0.3.0 and older do not ship that file.
+- **Check.** Run the plugin by hand from its folder with the app's Node: `"C:\Program Files (x86)\fifine Control Deck\node\node20.exe" bin\plugin.js`. `SyntaxError: Cannot use import statement outside a module` is this problem.
+- **Fix.** Install a release after 0.3.0.
+
+### The Orca panel says "The Stream Deck is not connected." (Fifine Control Deck)
+
+- **Cause.** The app does not report its decks as connected. 0.3.0 and older wait for that.
+- **Check.** The Stream Deck plugin log has `host: unknown (none)` and `A connected`, and the keys on the deck show Orca panes.
+- **Fix.** Install a release after 0.3.0. The deck counts as connected once at least one Agent Deck key is on it.
+
 ## Orca plugin (development)
 
 ### Orca's plugin panel stays on "Loading plugin panel..." or its plugin list hangs
