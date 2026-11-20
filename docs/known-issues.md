@@ -17,6 +17,37 @@ Issues that affect Agent Deck for Orca but are not ours to fix, plus how the dec
 - **What.** On macOS and X11 the plugin raises the Orca window itself when a key tap selects a key in the panel or a hold opens the panel, as it does for a focus press. On Windows (and Wayland) it cannot raise another app's window; a focus press gets Orca forward through Orca's own `terminal.reveal`, which the panel paths do not call.
 - **Workaround.** Switch to Orca by hand. An Orca-side raise through the host API is a later follow-up.
 
+## Orca chats
+
+Checked: 2026-11-20 (Orca 1.4.265, macOS).
+
+Orca opens an agent as a chat (a structured agent session) instead of a terminal when its Chat | CLI setting is Chat. A chat has no terminal handle: `terminal list` never lists it, and its `paneKey` is `structured-agent-session-<sessionId>:<leafId>`. `worktree ps` and `agent list` report it (`address: orca_session_id:<sessionId>`, `kind: "chat"`) with the same `state` and `mainAgent` fields as a terminal agent.
+
+### Chats do not show on the deck
+
+- **What.** The deck builds its pane list from `terminal list`, so chats get no pane: no key, no entry in the pane list, and their status from `worktree ps` or plugin A matches no pane and is dropped. A workspace whose agents are all chats shows only its plain terminal tabs (a setup tab, a shell).
+- **Deck impact.** Agents started as chats are invisible to the deck.
+- **Workaround.** Set the agent to CLI in Orca (Chat | CLI) or start it with `orca agent launch --surface terminal`, so it runs in a terminal pane.
+- **Fix.** Ours: list the chats from `worktree ps` as panes. Pressing a chat key and highlighting the focused chat then still need the two Orca changes below.
+
+### No way to bring a chat tab to the front (stablyai/orca#39847, #42069)
+
+- **What.** No CLI command, runtime method or plugin host method selects a chat tab. `terminal switch` / `terminal.focus` with `structured-agent-session-<id>` answer `terminal_handle_stale`. `terminal.reveal { worktreeId, tabId, leafId }` with the chat's ids answers `navigated: true` but only opens the workspace and shows the tab already selected there (checked on three chats; stablyai/orca#37801 says it works for some chats, not seen here). `tab switch --page` handles browser tabs only (`browser_tab_not_found`), and `orca chat` has only `rename`.
+- **Deck impact.** Once chats are listed, a press on a chat key can open its workspace, not the chat itself.
+- **Upstream.** stablyai/orca#39847 and #42069 (open) ask for `agent.focus({ sessionId })` and `orca chat switch --session`; #42069 offers a PR. Either that or `terminal.reveal` selecting a structured tab would do. Related: #37801 (a public command to open a chat, from another Stream Deck integration).
+
+### No way to tell which chat is on screen (stablyai/orca#44947, #41553)
+
+- **What.** `terminal list --include-visual-layouts` lists terminal tabs only, so while a chat is on screen the layout still names a terminal tab as active. `terminal.resolveActive` answers the last focused terminal, also one in another workspace. `workspace.readContext` names no chat.
+- **Deck impact.** With a chat on screen the deck highlights a terminal's key instead, and the panel's "Use the focused pane" would map that terminal. Not yet checked live with a chat in front.
+- **Upstream.** stablyai/orca#44947 (open) proposes `activeSessionId` in `workspace.readContext` and `workspace.changed`, which would cover plugin A; #41553 (open) asks for `orca chat current`. Listing chat tabs in `visualLayouts` would cover the CLI and runtime path without a new command.
+
+### A new chat is not listed until its first turn (not reported upstream)
+
+- **What.** A chat started from the new-agent tab or `orca agent launch --surface chat` shows in Orca at once, but `agent list` and `worktree ps` report it only after its first turn finished.
+- **Deck impact.** A freshly opened chat cannot be shown or mapped until it has replied once.
+- **Upstream.** Needs Orca to list a chat as soon as its tab exists, idle like an idle terminal.
+
 ## Orca plugin tooling
 
 Checked: 2026-11-11.
