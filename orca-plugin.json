@@ -3,7 +3,7 @@
   "execution": "trusted-worker",
   "id": "agent-deck",
   "name": "Agent Deck for Orca",
-  "version": "0.3.1",
+  "version": "0.3.2",
   "description": "See at a glance which Orca agent needs you. Each pane gets a Stream Deck key that shows its state and focuses the pane when pressed.",
   "icon": "orca-plugin/images/icon.png",
   "cover": {
