@@ -174,21 +174,15 @@ export class CliAdapter implements OrcaAdapter {
     const local = await this.snapshotOne(null);
     // Paired Orca servers are separate runtimes reached with --environment; handles are per server.
     let hosts: HostInfo[];
-    let hostsKnown = true;
     try {
       hosts = this.lastHosts = await this.listHosts();
     } catch {
-      // Seen after wake: without the list the paired-server panes would drop out unmarked and
-      // their auto keys would be handed to other panes. Treat those servers as down instead.
+      // Seen after wake: without the list the paired-server panes would drop out unmarked. Read the
+      // servers of the last list instead; only one whose own read fails is down.
       hosts = this.lastHosts;
-      hostsKnown = false;
     }
     const paired: { id: string; census: HostCensus | null; busy: string[] }[] = [];
     for (const env of hosts.filter((h) => h.kind === 'environment')) {
-      if (!hostsKnown) {
-        paired.push({ id: env.id, census: null, busy: [] });
-        continue;
-      }
       try {
         const r = await this.snapshotOne(env.id);
         local.panes.push(...r.panes);

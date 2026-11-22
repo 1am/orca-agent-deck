@@ -112,8 +112,11 @@ let shared: Promise<DeckController> | undefined;
 const controller = () => (shared ??= createController());
 /** A's `panelSelect`: the Orca panel is in view and open for mapping, so a tap on a key selects it there. */
 let panelSelecting = false;
-/** A hidden panel cannot say so, so its `panelSelect` lapses unless A renews it (A does, every second, while in view). */
-const PANEL_SELECT_TTL_MS = 2500;
+/**
+ * A hidden panel cannot say so, so its `panelSelect` lapses unless A renews it (A does, every second, while in view).
+ * A hide that A runs sends an off at once; this covers the others (dragging the sidebar closed) and one missed renew.
+ */
+const PANEL_SELECT_TTL_MS = 1500;
 let panelSelectAt = 0;
 /** The Orca panel of plugin A (`orca-plugin.json`). */
 const PANEL_ID = 'deck';

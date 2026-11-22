@@ -40,10 +40,16 @@ const plugin = (await import(pluginPath.href)) as {
       onKeyPicked?: (key: number) => void;
       onHold?: (key: number) => Promise<'hidden' | 'show'>;
       deckWaitMs?: number;
+      log?: (m: string) => void;
     },
   ) => {
     get: () => Promise<Record<string, unknown>>;
     select: (on: boolean) => { ok: true };
+    view: (on: boolean) => { ok: true };
+    inView: () => boolean;
+    viewAge: () => number | null;
+    hidden: () => void;
+    panelLog: (event: unknown) => { ok: true };
     resync: () => void;
     onMessage: (msg: object) => void;
   };
@@ -1222,6 +1228,70 @@ describe('panel api: deck taps select keys in the panel', () => {
     b.down();
     plugin.createPanelApi(b.bridge).select(true);
     expect(b.sent).toEqual([]);
+  });
+});
+
+describe('panel api: is the panel in view', () => {
+  const fakeBridge = () => {
+    const sent: { type: string; on?: boolean }[] = [];
+    return {
+      sent,
+      bridge: {
+        status: () => ({ state: 'connected', minor: 5, session: 1 }),
+        send: (m: { type: string; on?: boolean }) => (sent.push(m), true),
+        ensure: async () => {},
+      },
+    };
+  };
+  afterEach(() => vi.useRealTimers());
+
+  it('stays in view while the panel goes quiet, until it says it is hidden', () => {
+    vi.useFakeTimers();
+    const logged: string[] = [];
+    const api = plugin.createPanelApi(fakeBridge().bridge, { log: (m) => logged.push(m) });
+    expect(api.inView()).toBe(false);
+    expect(api.viewAge()).toBeNull();
+    api.view(true);
+    // The panel's heartbeat can stall while it stays on screen: silence is not a hide.
+    vi.advanceTimersByTime(200_000);
+    expect(api.inView()).toBe(true);
+    expect(api.viewAge()).toBe(200_000);
+    expect(logged).toEqual([]);
+    api.view(true);
+    expect(logged, 'a renew after a long silence is logged').toEqual([
+      'panel view: renewed after 200000 ms of silence',
+    ]);
+    vi.advanceTimersByTime(1000);
+    api.view(true);
+    expect(logged, 'a timely renew is not').toHaveLength(1);
+    api.view(false);
+    expect(api.inView()).toBe(false);
+    expect(api.viewAge()).toBeNull();
+  });
+
+  it('a hide by A forgets the view and gives deck taps back to B at once', () => {
+    const b = fakeBridge();
+    const api = plugin.createPanelApi(b.bridge);
+    api.view(true);
+    api.select(true);
+    api.hidden();
+    expect(api.inView()).toBe(false);
+    expect(b.sent).toEqual([
+      { v: 1, type: 'panelSelect', on: true },
+      { v: 1, type: 'panelSelect', on: false },
+    ]);
+    api.hidden();
+    expect(b.sent, 'nothing to give back when not selecting').toHaveLength(2);
+  });
+
+  it('logs only the lifecycle events the panel may report', () => {
+    const logged: string[] = [];
+    const api = plugin.createPanelApi(fakeBridge().bridge, { log: (m) => logged.push(m) });
+    api.panelLog('setup');
+    api.panelLog('abort');
+    api.panelLog('some pane title');
+    api.panelLog(undefined);
+    expect(logged).toEqual(['panel: setup', 'panel: abort']);
   });
 });
 

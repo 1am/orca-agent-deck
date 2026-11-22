@@ -114,7 +114,7 @@ A merges at snapshot time (`BridgedAdapter.snapshot`): a push wins over the poll
 
 ## Refresh loop
 
-Pane keys refresh every 2 s and on every push; the Status and Attention keys repaint every 1 s. Refreshes are queued in `DeckController.refresh`, and a Status/Attention refresh rides on one that is running or ran in the last 1.5 s, so Orca sees one round at a time.
+Pane keys refresh every 2 s and on every push (a refresh that hangs past 10 s gives up and the keys keep their last view); the Status and Attention keys repaint every 1 s. Refreshes are queued in `DeckController.refresh`, and a Status/Attention refresh rides on one that is running or ran in the last 1.5 s, so Orca sees one round at a time.
 
 ```mermaid
 sequenceDiagram
@@ -135,7 +135,7 @@ sequenceDiagram
   end
   X->>R: ssh.listTargets (+ stat orca-environments.json)
   loop each paired server
-    X->>CLI: terminal list / worktree ps (served from a cache, refreshed in the background every 5 s)
+    X->>CLI: terminal list / worktree ps (served from a cache, refreshed in the background every 5 s, a failed read on the next poll)
   end
   BA-->>C: panes + statuses merged with pushes
   C->>C: shell activity, reconcile, auto-fill, refresh labels

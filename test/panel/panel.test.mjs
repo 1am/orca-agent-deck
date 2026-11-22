@@ -305,18 +305,45 @@ test('a panel that stays in view renews its panelSelect so B keeps it; a hide st
   const view = await mount(panel, { host });
   await view.post('deck.keyPicked', { key: 5 });
   await view.settled();
-  assert.deepEqual(selects, [true]);
+  assert.deepEqual(selects, [false, true], 'off on the first draw (no key open yet), then on');
   await new Promise((r) => globalThis.setTimeout(r, 1300));
   await view.settled();
-  assert.deepEqual(selects, [true, true], 'renewed every second while in view');
+  assert.deepEqual(selects, [false, true, true], 'renewed every second while in view');
   await view.setVisible(false);
   await new Promise((r) => globalThis.setTimeout(r, 700));
   await view.settled();
-  assert.deepEqual(selects, [true, true, false], 'hidden: off within a second');
+  assert.deepEqual(selects, [false, true, true, false], 'hidden: off within a second');
   await new Promise((r) => globalThis.setTimeout(r, 1300));
   await view.settled();
-  assert.deepEqual(selects, [true, true, false], 'and no renewals after');
+  assert.deepEqual(selects, [false, true, true, false], 'and no renewals after');
   await view.unmount();
+  assert.deepEqual(view.errors, []);
+});
+
+test('a hide reports the panel out of view on the redraw, with no timer tick; setup and close are logged', async () => {
+  const views = [];
+  const logs = [];
+  const host = mockHost({
+    requests: {
+      'deck.get': () => ({ status: 'ok', deck }),
+      'deck.panelView': (input) => (views.push(input.on), { ok: true }),
+      'deck.panelLog': (input) => (logs.push(input.event), { ok: true }),
+    },
+  });
+  const view = await mount(panel, { host });
+  await view.settled();
+  assert.deepEqual(views, [true]);
+  assert.deepEqual(logs, ['setup']);
+  // The worker keeps an on until an off, so the off must not wait for the heartbeat.
+  await view.setVisible(false);
+  await view.settled();
+  assert.deepEqual(views, [true, false]);
+  await view.setVisible(true);
+  await view.settled();
+  assert.deepEqual(views, [true, false, true]);
+  await view.unmount();
+  assert.equal(views.at(-1), false);
+  assert.deepEqual(logs, ['setup', 'abort']);
   assert.deepEqual(view.errors, []);
 });
 

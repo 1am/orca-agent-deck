@@ -40,6 +40,8 @@ function unreadableResponse(e: unknown): string | null {
 
 /** How old the snapshot's pane reads may be for the per-refresh focus check. */
 const FOCUS_FROM_SNAPSHOT_MS = 300;
+/** The longest a refresh may take; CLI calls time out after 5 s, so only a hung one gets here. */
+const REFRESH_DEADLINE_MS = 10_000;
 
 export type HealthMode = 'live' | 'degraded' | 'down';
 
@@ -256,6 +258,13 @@ export class DeckController {
   /** Refreshes run one at a time; `pending` counts the queued and running ones. */
   private queue: Promise<unknown> = Promise.resolve();
   private pending = 0;
+  /** Bumped when a refresh misses its deadline: the late one must not overwrite what newer ones read. */
+  private epoch = 0;
+  /**
+   * A refresh that takes longer than this (a call hung across sleep, a stuck CLI) gives up: the keys keep their last
+   * view and the next poll starts fresh instead of queueing behind it.
+   */
+  refreshDeadlineMs = REFRESH_DEADLINE_MS;
 
   private readonly adapter: OrcaAdapter;
   private readonly store: MappingStore;
@@ -374,14 +383,30 @@ export class DeckController {
     this.pending++;
     const run = this.queue.then(() => this.refreshNow(slots));
     this.queue = run.catch(() => {});
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const late = new Promise<null>((resolve) => {
+      timer = setTimeout(() => resolve(null), this.refreshDeadlineMs);
+      timer.unref?.();
+    });
     try {
-      return await run;
+      const done = await Promise.race([run, late]);
+      if (done) return done;
+      this.epoch++;
+      this.queue = Promise.resolve();
+      this.diag?.(`refresh gave up after ${this.refreshDeadlineMs}ms: keys keep their last view`);
+      return new Map(slots.map((s) => [s, this.view(s)]));
     } finally {
+      clearTimeout(timer);
       this.pending--;
     }
   }
 
   private async refreshNow(slots: string[]): Promise<Map<string, SlotView>> {
+    const epoch = this.epoch;
+    /** A refresh that missed its deadline stops here, before it writes what it read. */
+    const given = () => {
+      if (epoch !== this.epoch) throw new Error('refresh abandoned after its deadline');
+    };
     this.refreshedAt = Date.now();
     const started = this.refreshedAt;
     const phase = { health: 0, snapshot: 0, focus: 0 };
@@ -393,6 +418,7 @@ export class DeckController {
       try {
         this.polledAt = Date.now();
         const h = await this.adapter.health();
+        given();
         phase.health = Date.now() - started;
         this.orcaRunning = h.orcaRunning;
         this.health = {
@@ -401,10 +427,15 @@ export class DeckController {
           unsupported: h.unsupported ?? false,
           fast: h.fast ?? false,
         };
-        if (this.orcaRunning) this.snapshot = await this.adapter.snapshot();
+        if (this.orcaRunning) {
+          const snapshot = await this.adapter.snapshot();
+          given();
+          this.snapshot = snapshot;
+        }
         this.readFailure = null;
         phase.snapshot = Date.now() - started - phase.health;
       } catch (e) {
+        given();
         const bad = this.orcaRunning ? unreadableResponse(e) : null;
         // Orca answered but its reply did not parse: it is not down, and the last good snapshot stays.
         if (bad === null) this.orcaRunning = false;

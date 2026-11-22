@@ -1,4 +1,4 @@
-import { mkdtemp, rm } from 'node:fs/promises';
+import { mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
@@ -334,4 +334,70 @@ describe('acknowledgement through the runtime socket', () => {
     expect(sets[0]?.params).toMatchObject({ isUnread: false });
     expect(cliCalls).toEqual([]);
   });
+});
+
+describe('a paired Orca server that glitches', () => {
+  it('shows its keys unreachable only while its own read fails, and back at the next poll', async () => {
+    // The paired server is a second simulated Orca, reached only through the CLI with --environment.
+    const remote = newState();
+    addPane(remote, 'r', { tab: 'tab-9' });
+    let remoteFails = false;
+    let hostListFails = false;
+    const envCli: Exec = async (args) => {
+      if (args.includes('--environment')) {
+        if (remoteFails) throw new Error('remote_runtime_unavailable');
+        const [x, y] = args;
+        if (x === 'terminal' && y === 'list') return JSON.stringify(terminalList(remote));
+        if (x === 'worktree' && y === 'ps') return JSON.stringify(worktreePs(remote));
+      }
+      if (args[0] === 'environment' && args[1] === 'list')
+        return JSON.stringify({
+          ok: true,
+          result: { environments: [{ id: 'E1', name: 'remote' }] },
+        });
+      return cli(args);
+    };
+    const envsFile = join(dir, 'orca-environments.json');
+    await writeFile(envsFile, '{}');
+    const { createRuntimeAdapter } = await import('../../packages/adapter-runtime/src/index.ts');
+    const adapter = createRuntimeAdapter({
+      client: new RuntimeClient({ metaPath }),
+      fallback: envCli,
+      environmentsFile: envsFile,
+      environmentPollMs: 1000,
+    });
+    const listHosts = adapter.listHosts.bind(adapter);
+    adapter.listHosts = async () => {
+      if (hostListFails) throw new Error('timeout');
+      return listHosts();
+    };
+    const store = new MappingStore();
+    store.set('k1', {
+      mode: 'pinned',
+      pane: {
+        paneKey: 'tab-9:leaf-r',
+        worktreeId: 'fake-repo::/fake/agent-deck',
+        tabId: 'tab-9',
+        leafId: 'leaf-r',
+        executionHostId: 'env:E1',
+        lastKnown: {},
+      },
+    });
+    const d = new DeckController(adapter, store, undefined, { autofill: false });
+    const key = async () => (await d.refresh(['k1'])).get('k1')?.state;
+    expect(await key()).not.toBe('unreachable');
+    // A failed host list alone: the server of the last list is still read, nothing goes grey.
+    hostListFails = true;
+    expect(await key()).not.toBe('unreachable');
+    hostListFails = false;
+    // Its own read fails: the key shows the host unreachable and keeps its pane.
+    remoteFails = true;
+    await untilAsync(async () => (await key()) === 'unreachable');
+    expect(store.get('k1')?.pane?.paneKey).toBe('tab-9:leaf-r');
+    // The read works again: the failure is retried on the next poll, well inside the 1 s interval of a success.
+    remoteFails = false;
+    const back = Date.now();
+    await untilAsync(async () => (await key()) !== 'unreachable');
+    expect(Date.now() - back).toBeLessThan(500);
+  }, 15_000);
 });

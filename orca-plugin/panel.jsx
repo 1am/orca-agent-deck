@@ -153,7 +153,8 @@ let viewSent = null;
 
 /**
  * Tells the worker whether the panel is in view, so the status bar button and the shortcut can hide the right
- * sidebar instead of showing the panel again. The worker treats silence as not in view, so `renew` repeats an on.
+ * sidebar instead of showing the panel again. The worker keeps an on until an off; `renew` repeats it so the worker
+ * can log a stalled timer.
  */
 function reportView(on, renew = false) {
   if (on === viewSent && !(renew && on)) return;
@@ -181,8 +182,17 @@ function reportSelecting(on, renew = false) {
     .catch(() => (selectSent = null));
 }
 
+/** Tells the worker's log that the panel started or stopped (no content), to tell a stalled timer from a closed panel. */
+function logLifecycle(event) {
+  void plugin.request('deck.panelLog', { event }).catch(() => {});
+}
+
 export function setup(ctx) {
   visible = ctx.visible ?? null;
+  // A panel opened again may run in the same module: what an earlier run sent says nothing to this one.
+  viewSent = null;
+  selectSent = null;
+  logLifecycle('setup');
   let ticks = 0;
   const heartbeat = setInterval(() => {
     // Every tick sends a change at once; every second tick also renews an on.
@@ -191,7 +201,10 @@ export function setup(ctx) {
     reportView(inView(), renew);
   }, VISIBLE_POLL_MS);
   heartbeat.unref?.();
-  ctx.signal?.addEventListener('abort', () => clearInterval(heartbeat));
+  ctx.signal?.addEventListener('abort', () => {
+    clearInterval(heartbeat);
+    logLifecycle('abort');
+  });
   ctx.subscriptions.push(
     { dispose: () => clearInterval(heartbeat) },
     { dispose: () => void plugin.request('deck.panelSelect', { on: false }).catch(() => {}) },

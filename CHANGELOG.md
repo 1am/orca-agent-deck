@@ -2,6 +2,20 @@
 
 All notable changes to this project are documented here. Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), versioning: [SemVer](https://semver.org/).
 
+## [0.3.2] - unreleased
+
+Three fixes for the Agent Deck panel and for keys of paired servers.
+
+### Fixed
+
+- **Deck keys work again right after you hide the Agent Deck panel in Orca.** A tap no longer does nothing for a few seconds.
+- **Cmd+Option+K and the Agent Deck status bar button hide the panel again when it is open**, also after it has been on screen for a while.
+- **Keys of a paired server recover at the next refresh after a network hiccup, instead of staying grey.** One failed read no longer marks every paired server down, and a refresh that hangs no longer freezes the keys.
+
+### Changed
+
+- **Known issues:** a Codex reply that ends with a question shows as finished; the deck does not read message text to tell.
+
 ## [0.3.1] - 2026-11-16
 
 ### Changed

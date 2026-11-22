@@ -487,24 +487,36 @@ describe('runtime exec mapped onto CliAdapter', () => {
     expect(await exec(args)).toBe('{"second":true}');
   });
 
-  it('also throttles a paired server that fails, so an unreachable box costs one timeout per interval', async () => {
-    const failing: Exec = async (args) => {
+  it('serves a failed paired-server read from the cache but retries it on the next poll, so a glitch heals at once', async () => {
+    let fail = true;
+    const flaky: Exec = async (args) => {
       cliCalls.push(args);
-      throw new Error('unreachable');
+      if (fail) throw new Error('unreachable');
+      return '{"ok":true,"result":{}}';
     };
     const exec = makeRuntimeExec({
       client: new RuntimeClient({ metaPath }),
-      fallback: failing,
+      fallback: flaky,
       now: () => now,
     });
     const args = ['worktree', 'ps', '--environment', 'box', '--json'];
     await expect(exec(args)).rejects.toThrow('unreachable');
     now += 1000;
-    await expect(exec(args)).rejects.toThrow('unreachable');
-    expect(cliCalls).toHaveLength(1);
-    now += 5000;
+    // The poll does not wait for the CLI: the cached failure answers, a retry starts behind it.
     await expect(exec(args)).rejects.toThrow('unreachable');
     expect(cliCalls).toHaveLength(2);
+    await new Promise((r) => setTimeout(r, 0));
+    fail = false;
+    now += 1000;
+    await expect(exec(args)).rejects.toThrow('unreachable');
+    expect(cliCalls).toHaveLength(3);
+    await new Promise((r) => setTimeout(r, 0));
+    now += 1000;
+    expect(await exec(args)).toBe('{"ok":true,"result":{}}');
+    // A success is polled at the slow interval again.
+    now += 1000;
+    await exec(args);
+    expect(cliCalls).toHaveLength(3);
   });
 
   it('never caches or throttles a focus on a paired server', async () => {

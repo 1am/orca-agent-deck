@@ -728,8 +728,13 @@ const DECK_WAIT_MS = 2000;
 const RESULT_WAIT_MS = 10_000;
 /** B answers `openPanel` once Orca did, or failed to. */
 const OPEN_WAIT_MS = 3000;
-/** The panel renews its in-view report every 2 s; silence for this long means it is hidden (it may not run then). */
-const PANEL_VIEW_TTL_MS = 5000;
+/**
+ * The panel renews its in-view report every second. Its timer can stall while the panel stays on screen, so silence
+ * does not mean hidden: only an explicit `on: false` (or a hide by A) does. A renew after this much silence is logged.
+ */
+const PANEL_VIEW_GAP_MS = 5000;
+/** What the panel may ask A to log about its own lifecycle (never content). */
+const PANEL_LOG_EVENTS = new Set(['setup', 'abort']);
 
 /** Orca objects that were already logged as lacking the host API. */
 const missingLogged = new WeakSet();
@@ -771,6 +776,7 @@ export function createPanelApi(
     deckWaitMs = DECK_WAIT_MS,
     resultWaitMs = RESULT_WAIT_MS,
     openWaitMs = OPEN_WAIT_MS,
+    log = () => {},
   } = {},
 ) {
   // The panel is in view with a key's details open: B hands deck taps to it (minor 3).
@@ -783,7 +789,8 @@ export function createPanelApi(
   // The key B last asked to show (a hold opens the panel, then sends keyPicked): a panel that was not mounted yet
   // missed the post, so `get` hands it over once, while it is fresh.
   let picked = null;
-  // When the panel last said it is in view (0: hidden or never).
+  // Whether the panel last said it is in view, and when it last said so (0: hidden or never).
+  let viewOn = false;
   let viewAt = 0;
   const PICKED_FRESH_MS = 5000;
   let deckNow = null;
@@ -859,18 +866,31 @@ export function createPanelApi(
       sendSelect();
       return { ok: true };
     },
-    /** The panel says whether it is in view; a report older than PANEL_VIEW_TTL_MS counts as not in view. */
+    /** The panel says whether it is in view; it stays in view until it says otherwise or A hides it. */
     view: (on) => {
-      viewAt = on === true ? Date.now() : 0;
+      const now = Date.now();
+      if (on === true && viewOn && now - viewAt > PANEL_VIEW_GAP_MS)
+        log(`panel view: renewed after ${now - viewAt} ms of silence`);
+      viewOn = on === true;
+      viewAt = viewOn ? now : 0;
       return { ok: true };
     },
-    /** Whether the panel was last reported in view, recently. */
-    inView: () => viewAt > 0 && Date.now() - viewAt < PANEL_VIEW_TTL_MS,
+    /** Whether the panel last said it is in view. */
+    inView: () => viewOn,
     /** Milliseconds since the panel last said it is in view, null when it never did (or said it is hidden). */
-    viewAge: () => (viewAt > 0 ? Date.now() - viewAt : null),
-    /** Forgets the report, so the next press shows the panel again. */
-    forgetView: () => {
+    viewAge: () => (viewOn ? Date.now() - viewAt : null),
+    /** A hid the sidebar: forget the report, so the next press shows the panel, and give deck taps back to B at once. */
+    hidden: () => {
+      viewOn = false;
       viewAt = 0;
+      if (!selecting) return;
+      selecting = false;
+      sendSelect();
+    },
+    /** The panel tells about its own lifecycle, for the log; anything else is dropped. */
+    panelLog: (event) => {
+      if (PANEL_LOG_EVENTS.has(event)) log(`panel: ${event}`);
+      return { ok: true };
     },
     /** A new connection: B forgot the panel state with the old one. */
     resync: () => {
@@ -1018,12 +1038,14 @@ export default async function activate(orca) {
     onOpened: () => orca.panels?.post?.('panel.opened', {}),
     onKeyPicked: (key) => orca.panels?.post?.('deck.keyPicked', { key }),
     onHold: async () => ((await hideIfInView()) ? 'hidden' : 'show'),
+    log,
   });
   orca.panels?.handle?.('deck.get', () => panelApi.get());
   orca.panels?.handle?.('deck.assign', (input) => panelApi.assign(input ?? {}));
   orca.panels?.handle?.('deck.unmap', (input) => panelApi.unmap(input ?? {}));
   orca.panels?.handle?.('deck.panelSelect', (input) => panelApi.select(input?.on));
   orca.panels?.handle?.('deck.panelView', (input) => panelApi.view(input?.on));
+  orca.panels?.handle?.('deck.panelLog', (input) => panelApi.panelLog(input?.event));
   const seen = { status: 0, forwarded: 0, lastAt: 0, wokeAt: Date.now() };
   log(`worker started: plugin ${PLUGIN_VERSION}, ${bridge.status().state}`);
   // The event that woke a lazy worker arrives right after activate(); keep it even if B is down.
@@ -1036,10 +1058,10 @@ export default async function activate(orca) {
   });
   await bridge.ensure();
   updateItem();
-  /** With the panel in view, hides the right sidebar (and forgets the report, so the next press shows the panel). */
+  /** With the panel in view, hides the right sidebar (and tells the panel API, so the next press shows the panel). */
   const hideIfInView = async () => {
     if (!panelApi.inView() || !(await hideRightSidebar(orca, log))) return false;
-    panelApi.forgetView();
+    panelApi.hidden();
     return true;
   };
   // The status bar button, the shortcut and the palette toggle the Agent Deck panel: in view, they hide the right

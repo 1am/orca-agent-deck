@@ -173,7 +173,9 @@ export function makeRuntimeExec(opts: RuntimeExecOptions): Exec {
       if (hit) {
         // Stale data is served at once and refreshed in the background: a slow paired server
         // (a CLI spawn plus a network round trip) must not hold up every poll of the local panes.
-        if (now() - hit.at >= envInterval && !refreshing.has(key)) {
+        // A failure is retried on the next poll, so a server back after a glitch shows at once.
+        const due = hit.error !== undefined || now() - hit.at >= envInterval;
+        if (due && !refreshing.has(key)) {
           refreshing.add(key);
           void fetchEnv()
             .catch(() => {})

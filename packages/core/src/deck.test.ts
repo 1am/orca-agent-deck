@@ -1136,3 +1136,46 @@ describe('pane names', () => {
     expect(list.map((p) => p.title)).toEqual(['Terminal', 'Terminal']);
   });
 });
+
+it('a refresh that hangs gives up at its deadline: keys keep their last view, the next poll starts fresh', async () => {
+  const snap: Snapshot = {
+    panes: [pane('a:1')],
+    statuses: [{ paneKey: 'a:1', state: 'working', stateStartedAt: 0 }],
+    omittedHostIds: [],
+  };
+  let hang = false;
+  let release = () => {};
+  const late: Snapshot = { panes: [], statuses: [], omittedHostIds: [] };
+  const a: OrcaAdapter = {
+    ...fake(snap).a,
+    snapshot: async () => (hang ? new Promise<Snapshot>((r) => (release = () => r(late))) : snap),
+  };
+  const logged: string[] = [];
+  const store = new MappingStore();
+  const d = new DeckController(a, store, undefined, { autofill: false });
+  d.diag = (m) => logged.push(m);
+  d.refreshDeadlineMs = 50;
+  store.set('s1', {
+    mode: 'pinned',
+    pane: {
+      paneKey: 'a:1',
+      worktreeId: 'w',
+      tabId: 'a',
+      leafId: '1',
+      executionHostId: 'local',
+      lastKnown: {},
+    },
+  });
+  expect((await d.refresh(['s1'])).get('s1')?.state).toBe('working');
+  hang = true;
+  expect((await d.refresh(['s1'], { force: true })).get('s1')?.state).toBe('working');
+  expect(logged).toContain('refresh gave up after 50ms: keys keep their last view');
+  // The next poll does not queue behind the hung one.
+  hang = false;
+  expect((await d.refresh(['s1'], { force: true })).get('s1')?.state).toBe('working');
+  // The hung read ends late: what it read must not overwrite the newer snapshot.
+  release();
+  await new Promise((r) => setTimeout(r, 0));
+  expect((d as unknown as { snapshot: Snapshot }).snapshot.panes).toHaveLength(1);
+  expect(store.get('s1')?.pane?.paneKey).toBe('a:1');
+});

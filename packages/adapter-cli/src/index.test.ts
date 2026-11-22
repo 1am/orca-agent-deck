@@ -334,8 +334,9 @@ it('focusedPaneKey answers from the snapshot it just made, and reads again once 
   expect(calls.length).toBe(before + 4);
 });
 
-it('a failing host list keeps the last paired servers and marks them down instead of dropping them', async () => {
+it('a failing host list alone marks nothing down: the servers of the last list are still read', async () => {
   let hostsFail = false;
+  let envFails = false;
   const exec: Exec = async (args) => {
     const k = args.slice(0, 2).join(' ');
     if (k === 'host list') {
@@ -345,15 +346,24 @@ it('a failing host list keeps the last paired servers and marks them down instea
         result: { hosts: [{ id: 'E1', kind: 'environment', name: 'remote' }] },
       });
     }
+    if (args.includes('--environment') && envFails) throw new Error('remote_runtime_unavailable');
     return fixtureExec(args);
   };
   const a = new CliAdapter(exec);
-  expect((await a.snapshot()).omittedHostIds).toEqual([]);
+  const first = await a.snapshot();
+  expect(first.omittedHostIds).toEqual([]);
+  expect(first.panes.some((p) => p.hostId === 'env:E1')).toBe(true);
   hostsFail = true;
   const s = await a.snapshot();
-  expect(s.omittedHostIds).toContain('env:E1');
-  expect(s.downHostIds).toContain('env:E1');
-  expect(s.panes.some((p) => p.hostId === 'env:E1')).toBe(false);
+  expect(s.omittedHostIds).not.toContain('env:E1');
+  expect(s.downHostIds ?? []).not.toContain('env:E1');
+  expect(s.panes.some((p) => p.hostId === 'env:E1')).toBe(true);
+  // Only a server whose own read fails is down, and it is kept (marked), not dropped.
+  envFails = true;
+  const down = await a.snapshot();
+  expect(down.omittedHostIds).toContain('env:E1');
+  expect(down.downHostIds).toContain('env:E1');
+  expect(down.panes.some((p) => p.hostId === 'env:E1')).toBe(false);
 });
 
 /** Snapshot with one paired environment; each listing says which hosts it left out. */
